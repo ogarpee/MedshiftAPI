@@ -1,0 +1,186 @@
+:root {
+  --navy: #0b1f3a;
+  --gold: #d4af37;
+  --dark: #1c1c1c;
+  --white: #ffffff;
+  --off-white: #f8f6f1;
+  --muted: #6b7280;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--off-white);
+  color: var(--dark);
+  font-family: Poppins, Arial, sans-serif;
+}
+
+.admin-shell {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+aside {
+  background: var(--navy);
+  color: var(--white);
+  padding: 24px;
+}
+
+.medshift-logo {
+  color: var(--white);
+  display: inline-block;
+  font-family: Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin-bottom: 36px;
+}
+
+.medshift-logo span {
+  color: var(--gold);
+}
+
+nav {
+  display: grid;
+  gap: 8px;
+}
+
+nav a {
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.74);
+  font-weight: 600;
+  padding: 12px;
+  text-decoration: none;
+}
+
+nav a:first-child,
+nav a:hover {
+  background: rgba(212, 175, 55, 0.14);
+  color: var(--white);
+}
+
+.workspace {
+  padding: 32px;
+}
+
+header,
+.panel-title {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  margin: 10px 0 0;
+}
+
+button {
+  background: var(--gold);
+  border: 0;
+  border-radius: 8px;
+  color: var(--navy);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 12px 16px;
+}
+
+.metrics {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 28px 0;
+}
+
+.metrics article,
+.table-panel {
+  background: var(--white);
+  border: 1px solid rgba(11, 31, 58, 0.1);
+  border-radius: 8px;
+}
+
+.metrics article {
+  padding: 18px;
+}
+
+.metrics span {
+  color: var(--muted);
+  display: block;
+  font-size: 0.88rem;
+}
+
+.metrics strong {
+  display: block;
+  font-size: 2rem;
+  margin-top: 6px;
+}
+
+.table-panel {
+  overflow: hidden;
+}
+
+.panel-title {
+  padding: 18px;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-top: 1px solid rgba(11, 31, 58, 0.09);
+  padding: 14px 18px;
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.status-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.status-badge-gold {
+  background: rgba(212, 175, 55, 0.16);
+  color: #876800;
+}
+
+.status-badge-navy {
+  background: rgba(11, 31, 58, 0.1);
+  color: var(--navy);
+}
+
+@media (max-width: 760px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  aside {
+    display: none;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+}

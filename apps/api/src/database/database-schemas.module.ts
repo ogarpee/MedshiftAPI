@@ -1,0 +1,21 @@
+import { Module } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { FacilityProfile, FacilityProfileSchema } from "./schemas/facility-profile.schema";
+import { Review, ReviewSchema } from "./schemas/review.schema";
+import { Shift, ShiftSchema } from "./schemas/shift.schema";
+import { User, UserSchema } from "./schemas/user.schema";
+import { WorkerProfile, WorkerProfileSchema } from "./schemas/worker-profile.schema";
+
+@Module({
+  imports: [
+    MongooseModule.forFeature([
+      { name: User.name, schema: UserSchema },
+      { name: WorkerProfile.name, schema: WorkerProfileSchema },
+      { name: FacilityProfile.name, schema: FacilityProfileSchema },
+      { name: Shift.name, schema: ShiftSchema },
+      { name: Review.name, schema: ReviewSchema }
+    ])
+  ],
+  exports: [MongooseModule]
+})
+export class DatabaseSchemasModule {}

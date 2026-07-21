@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedShift — The Right Care. Right When It Matters.</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #0B1F3A;
+      --gold: #D4AF37;
+      --gold-light: #F5D98C;
+      --dark: #1C1C1C;
+      --white: #FFFFFF;
+      --off-white: #F8F6F1;
+      --text-muted: #6B7280;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: var(--white);
+      color: var(--dark);
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.2rem 5%;
+      background: rgba(11, 31, 58, 0.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(212,175,55,0.15);
+    }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      color: var(--white);
+      letter-spacing: -0.02em;
+    }
+    .nav-logo span { color: var(--gold); }
+    .nav-logo img {
+  height: 44px;
+  width: auto;
+  display: block;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.25));
+    }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--gold); }
+
+    .btn-nav {
+      background: var(--gold);
+      color: var(--navy);
+      border: none;
+      padding: 0.55rem 1.4rem;
+      border-radius: 6px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .btn-nav:hover { background: var(--gold-light); transform: translateY(-1px); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      background: var(--navy);
+      position: relative;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 60% at 70% 50%, rgba(212,175,55,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 80% at 100% 100%, rgba(212,175,55,0.05) 0%, transparent 60%);
+    }
+
+    /* heartbeat line */
+    .hero-line {
+      position: absolute; bottom: 80px; left: 0; right: 0;
+      height: 2px;
+      overflow: visible;
+      opacity: 0.2;
+    }
+    .hero-line svg { width: 100%; height: 60px; }
+
+    .hero-inner {
+      position: relative; z-index: 2;
+      width: 90%; max-width: 1200px;
+      margin: 0 auto;
+      padding-top: 6rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+
+    .hero-tag {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(212,175,55,0.15);
+      border: 1px solid rgba(212,175,55,0.3);
+      border-radius: 100px;
+      padding: 0.35rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--gold);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2.8rem, 5vw, 4.2rem);
+      line-height: 1.1;
+      color: var(--white);
+      margin-bottom: 0.4rem;
+    }
+    .hero h1 .gold { color: var(--gold); }
+
+    .hero-sub {
+      font-size: 1.05rem;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.7;
+      margin: 1.2rem 0 2.2rem;
+      max-width: 460px;
+    }
+
+    .hero-ctas { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 3rem; }
+
+    .btn-primary {
+      background: var(--gold);
+      color: var(--navy);
+      border: none;
+      padding: 0.85rem 1.8rem;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex; align-items: center; gap: 0.4rem;
+    }
+    .btn-primary:hover { background: var(--gold-light); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212,175,55,0.3); }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--white);
+      border: 2px solid rgba(255,255,255,0.3);
+      padding: 0.85rem 1.8rem;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: var(--gold); color: var(--gold); transform: translateY(-2px); }
+
+    .hero-trust {
+      display: flex; gap: 1.5rem; flex-wrap: wrap;
+    }
+    .trust-item {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+    }
+    .trust-item svg { color: var(--gold); flex-shrink: 0; }
+
+    .hero-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 16px;
+      padding: 2rem;
+      backdrop-filter: blur(10px);
+      animation: floatCard 4s ease-in-out infinite;
+    }
+
+    @keyframes floatCard {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .card-header {
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .card-avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; color: var(--navy); font-size: 1.1rem;
+    }
+    .card-name { font-weight: 600; color: var(--white); font-size: 0.95rem; }
+    .card-role { font-size: 0.78rem; color: rgba(255,255,255,0.5); }
+    .badge-available {
+      margin-left: auto;
+      background: rgba(34,197,94,0.2);
+      color: #4ade80;
+      border: 1px solid rgba(74,222,128,0.3);
+      border-radius: 100px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .shift-detail {
+      background: rgba(255,255,255,0.04);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+    }
+    .shift-label { font-size: 0.7rem; color: var(--gold); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+    .shift-value { font-size: 0.88rem; color: var(--white); font-weight: 500; }
+
+    .card-cta {
+      width: 100%;
+      background: var(--gold);
+      color: var(--navy);
+      border: none;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: all 0.2s;
+    }
+    .card-cta:hover { background: var(--gold-light); }
+
+    /* ── SECTION BASE ── */
+    section { padding: 6rem 5%; }
+
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.75rem;
+    }
+
+    h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(2rem, 3.5vw, 2.8rem);
+      color: var(--navy);
+      line-height: 1.2;
+      margin-bottom: 1rem;
+    }
+
+    .section-sub {
+      font-size: 1rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+      max-width: 540px;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how { background: var(--off-white); }
+    .how-inner { max-width: 1100px; margin: 0 auto; }
+    .how-header { text-align: center; margin-bottom: 4rem; }
+    .how-header .section-sub { margin: 0 auto; }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2rem;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 2.5rem; left: calc(16.66% + 1rem); right: calc(16.66% + 1rem);
+      height: 2px;
+      background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+      opacity: 0.4;
+    }
+
+    .step {
+      text-align: center;
+      padding: 2.5rem 2rem;
+      background: var(--white);
+      border-radius: 16px;
+      border: 1px solid rgba(11,31,58,0.08);
+      position: relative;
+      transition: transform 0.25s, box-shadow 0.25s;
+    }
+    .step:hover { transform: translateY(-6px); box-shadow: 0 20px 50px rgba(11,31,58,0.1); }
+
+    .step-num {
+      width: 3.5rem; height: 3.5rem;
+      border-radius: 50%;
+      background: var(--navy);
+      color: var(--gold);
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1.5rem;
+    }
+    .step h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.2rem;
+      color: var(--navy);
+      margin-bottom: 0.75rem;
+    }
+    .step p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── FOR FACILITIES ── */
+    .facilities {
+      background: var(--navy);
+      position: relative;
+      overflow: hidden;
+    }
+    .facilities::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 50% 80% at 100% 50%, rgba(212,175,55,0.07), transparent);
+    }
+    .facilities-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 5rem; align-items: center;
+      position: relative; z-index: 1;
+    }
+    .facilities h2 { color: var(--white); }
+    .facilities .section-sub { color: rgba(255,255,255,0.6); }
+
+    .feature-list { margin-top: 2rem; }
+    .feature-item {
+      display: flex; gap: 1rem; align-items: flex-start;
+      padding: 1rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .feature-item:last-child { border-bottom: none; }
+    .feature-icon {
+      width: 2.5rem; height: 2.5rem; border-radius: 8px;
+      background: rgba(212,175,55,0.15);
+      border: 1px solid rgba(212,175,55,0.25);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: var(--gold);
+    }
+    .feature-title { font-weight: 600; color: var(--white); font-size: 0.95rem; margin-bottom: 0.25rem; }
+    .feature-desc { font-size: 0.83rem; color: rgba(255,255,255,0.5); line-height: 1.5; }
+
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 14px;
+      padding: 1.8rem;
+      text-align: center;
+    }
+    .stat-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.4rem;
+      color: var(--gold);
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+    .stat-label { font-size: 0.78rem; color: rgba(255,255,255,0.5); }
+
+    /* ── FOR WORKERS ── */
+    .workers { background: var(--white); }
+    .workers-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 5rem; align-items: center;
+    }
+    .workers h2 { color: var(--navy); }
+
+    .perk-card {
+      background: var(--off-white);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      display: flex; gap: 1rem; align-items: flex-start;
+      border: 1px solid rgba(11,31,58,0.07);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .perk-card:hover { transform: translateX(6px); box-shadow: 4px 0 0 var(--gold); }
+    .perk-icon {
+      width: 2.8rem; height: 2.8rem; border-radius: 10px;
+      background: var(--navy);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; color: var(--gold);
+    }
+    .perk-title { font-weight: 600; color: var(--navy); font-size: 0.95rem; margin-bottom: 0.2rem; }
+    .perk-desc { font-size: 0.83rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* ── SIGNUP ── */
+    .signup {
+      background: var(--off-white);
+      border-top: 1px solid rgba(11,31,58,0.08);
+    }
+    .signup-inner { max-width: 800px; margin: 0 auto; text-align: center; }
+    .signup h2 { margin-bottom: 0.5rem; }
+    .signup .section-sub { margin: 0 auto 2.5rem; }
+
+    .signup-tabs {
+      display: flex; gap: 0; border-radius: 10px; overflow: hidden;
+      border: 2px solid var(--navy);
+      width: fit-content; margin: 0 auto 2.5rem;
+    }
+    .tab {
+      padding: 0.7rem 2rem;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 600;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      background: var(--white);
+      color: var(--navy);
+    }
+    .tab.active { background: var(--navy); color: var(--gold); }
+
+    .signup-form {
+      display: flex; gap: 0.75rem; max-width: 520px; margin: 0 auto;
+    }
+    .signup-form input {
+      flex: 1;
+      padding: 0.85rem 1.2rem;
+      border-radius: 8px;
+      border: 2px solid rgba(11,31,58,0.15);
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+      background: var(--white);
+    }
+    .signup-form input:focus { border-color: var(--gold); }
+    .signup-form input::placeholder { color: #9CA3AF; }
+
+    /* ── VALUES ── */
+    .values { background: var(--white); padding: 5rem 5%; }
+    .values-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+    .values-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-top: 3rem;
+    }
+    .value-card {
+      padding: 2rem 1.5rem;
+      border-radius: 14px;
+      border: 1px solid rgba(11,31,58,0.08);
+      transition: all 0.25s;
+    }
+    .value-card:hover { background: var(--navy); border-color: var(--navy); }
+    .value-card:hover .value-title { color: var(--white); }
+    .value-card:hover .value-desc { color: rgba(255,255,255,0.6); }
+    .value-card:hover .value-icon { background: rgba(212,175,55,0.2); color: var(--gold); }
+    .value-icon {
+      width: 3rem; height: 3rem; border-radius: 10px;
+      background: var(--off-white);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 1rem;
+      font-size: 1.3rem;
+      color: var(--navy);
+      transition: all 0.25s;
+    }
+    .value-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 1.05rem;
+      color: var(--navy);
+      margin-bottom: 0.5rem;
+      transition: color 0.25s;
+    }
+    .value-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; transition: color 0.25s; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--navy);
+      padding: 3rem 5%;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: gap;
+      border-top: 1px solid rgba(212,175,55,0.15);
+    }
+    .footer-logo {
+  height: 44px;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.2));
+}
+      font-family: 'Playfair Display', serif;
+      font-size: 1.3rem;
+      color: var(--white);
+    }
+    .footer-brand span { color: var(--gold); }
+    .footer-tag { font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem; }
+    .footer-links { display: flex; gap: 2rem; }
+    .footer-links a { color: rgba(255,255,255,0.5); font-size: 0.83rem; text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--gold); }
+    .footer-copy { font-size: 0.78rem; color: rgba(255,255,255,0.3); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-up { animation: fadeUp 0.7s ease forwards; }
+    .fade-up-2 { animation: fadeUp 0.7s 0.15s ease forwards; opacity: 0; }
+    .fade-up-3 { animation: fadeUp 0.7s 0.3s ease forwards; opacity: 0; }
+    .fade-up-4 { animation: fadeUp 0.7s 0.45s ease forwards; opacity: 0; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .hero-inner, .facilities-inner, .workers-inner { grid-template-columns: 1fr; gap: 3rem; }
+      .hero-card { display: none; }
+      .steps { grid-template-columns: 1fr; }
+      .steps::before { display: none; }
+      .values-grid { grid-template-columns: repeat(2, 1fr); }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .nav-links { display: none; }
+      footer { flex-direction: column; gap: 1.5rem; text-align: center; }
+      .footer-links { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+<div class="nav-logo">
+  <img src="images/logo.png" alt="MedShift Logo" />
+  <span>Med</span>Shift
+</div>
+  <div class="nav-links">
+    <a href="#workers">For Workers</a>
+    <a href="#facilities">For Facilities</a>
+    <a href="#how">How It Works</a>
+    <button class="btn-nav" onclick="document.getElementById('signup').scrollIntoView({behavior:'smooth'})">Join Now</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-tag fade-up">
+        <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+        Now accepting early access
+      </div>
+      <h1 class="fade-up-2">Fill Shifts.<br><span class="gold">Change Lives.</span></h1>
+      <p class="hero-sub fade-up-3">MedShift connects healthcare professionals with facilities that need care — fast, reliable, and on demand.</p>
+      <div class="hero-ctas fade-up-4">
+        <button class="btn-primary" onclick="document.getElementById('workers').scrollIntoView({behavior:'smooth'})">
+          Find Shifts →
+        </button>
+        <button class="btn-secondary" onclick="document.getElementById('facilities').scrollIntoView({behavior:'smooth'})">
+          Hire Staff
+        </button>
+      </div>
+      <div class="hero-trust fade-up-4">
+        <div class="trust-item">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Fill shifts in under 2 hours
+        </div>
+        <div class="trust-item">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          Verified professionals
+        </div>
+        <div class="trust-item">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Get paid
+        </div>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="card-header">
+        <div class="card-avatar">SJ</div>
+        <div>
+          <div class="card-name">Sarah J.</div>
+          <div class="card-role">HealthCare Assistant · ⭐ 4.9</div>
+        </div>
+        <div class="badge-available">Available</div>
+      </div>
+      <div class="shift-detail">
+        <div class="shift-label">Upcoming Shift</div>
+        <div class="shift-value">Long-term Care Home</div>
+      </div>
+      <div class="shift-detail">
+        <div class="shift-label">Date & Time</div>
+        <div class="shift-value">May 24 · 7:00 AM – 3:00 PM</div>
+      </div>
+      <div class="shift-detail">
+        <div class="shift-label">Location</div>
+        <div class="shift-value">Calgary, AB</div>
+      </div>
+      <button class="card-cta">View Shift Details</button>
+    </div>
+  </div>
+  <div class="hero-line">
+    <svg viewBox="0 0 1440 60" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polyline points="0,30 200,30 250,30 280,5 310,55 340,30 400,30 450,30 480,15 510,45 540,30 600,30 700,30 730,8 760,52 790,30 900,30 1000,30 1030,18 1060,42 1090,30 1200,30 1440,30" stroke="#D4AF37" stroke-width="2" fill="none"/>
+    </svg>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <div class="how-header">
+      <div class="section-label">Simple by design</div>
+      <h2>How MedShift Works</h2>
+      <p class="section-sub">Three steps between an open shift and a qualified professional walking through your door.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Post or Browse</h3>
+        <p>Facilities post open shifts in minutes. Workers browse available opportunities in their area and specialty.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Get Matched</h3>
+        <p>MedShift surfaces the right fit — verified credentials, proximity, and availability — instantly.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Shift Filled</h3>
+        <p>Confirm, show up, deliver care. Facilities get the coverage they need.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOR FACILITIES -->
+<section class="facilities" id="facilities">
+  <div class="facilities-inner">
+    <div>
+      <div class="section-label">For healthcare facilities</div>
+      <h2>Coverage you can count on.<br>Without the chaos.</h2>
+      <p class="section-sub" style="color:rgba(255,255,255,0.6)">Stop scrambling for last-minute coverage. MedShift gives you a vetted pool of local professionals ready to work — on your timeline.</p>
+      <div class="feature-list">
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <div>
+            <div class="feature-title">Fill urgent gaps in hours, not days</div>
+            <div class="feature-desc">Post a shift and have a qualified professional confirmed the same day.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <div>
+            <div class="feature-title">Verified, credentialed professionals</div>
+            <div class="feature-desc">Every worker is background-checked and credential-verified before they ever appear in your results.</div>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <div class="feature-title">No agency markups</div>
+            <div class="feature-desc">Transparent pricing. Pay workers directly through the platform — no middlemen, no surprises.</div>
+          </div>
+        </div>
+      </div>
+      <button class="btn-primary" style="margin-top:2rem" onclick="document.getElementById('signup').scrollIntoView({behavior:'smooth'})">Get Early Access →</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-num">&lt;2h</div>
+        <div class="stat-label">Average shift fill time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">100%</div>
+        <div class="stat-label">Credential verified</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">0</div>
+        <div class="stat-label">Agency markups</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">24/7</div>
+        <div class="stat-label">Platform availability</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOR WORKERS -->
+<section class="workers" id="workers">
+  <div class="workers-inner">
+    <div>
+      <div class="section-label">For healthcare professionals</div>
+      <h2>Work on your terms.<br>Get paid</h2>
+      <p class="section-sub">Your schedule, your choice. Pick up shifts that fit your life — no long-term commitments, no agencies taking a cut.</p>
+      <button class="btn-primary" style="margin-top:2rem;background:var(--navy);color:var(--gold)" onclick="document.getElementById('signup').scrollIntoView({behavior:'smooth'})">Join the Waitlist →</button>
+    </div>
+    <div>
+      <div class="perk-card">
+        <div class="perk-icon">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div>
+          <div class="perk-title">You choose your schedule</div>
+          <div class="perk-desc">Browse available shifts in your area and pick what works for you. No minimums, no obligations.</div>
+        </div>
+      </div>
+      <div class="perk-card">
+        <div class="perk-icon">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div>
+          <div class="perk-title">Get paid</div>
+          <div class="perk-desc">Finish your shift, get paid. No waiting weeks for a paycheque.</div>
+        </div>
+      </div>
+      <div class="perk-card">
+        <div class="perk-icon">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <div>
+          <div class="perk-title">Work where you want</div>
+          <div class="perk-desc">Filter by location, facility type, and shift length. Find opportunities near you.</div>
+        </div>
+      </div>
+      <div class="perk-card">
+        <div class="perk-icon">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <div>
+          <div class="perk-title">Build your reputation</div>
+          <div class="perk-desc">Earn ratings, get repeat requests from facilities you love, and grow your network.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SIGN UP -->
+<section class="signup" id="signup">
+  <div class="signup-inner">
+    <div class="section-label">Be first in line</div>
+    <h2>Join the MedShift Waitlist</h2>
+    <p class="section-sub">We're launching in Alberta first. Sign up and we'll notify you the moment your region goes live.</p>
+    <div class="signup-tabs">
+      <button class="tab active" id="tab-worker" onclick="switchTab('worker')">I'm a Healthcare Worker</button>
+      <button class="tab" id="tab-facility" onclick="switchTab('facility')">I'm a Facility</button>
+    </div>
+    <div class="signup-form">
+      <input type="email" id="email-input" placeholder="Enter your email address" />
+      <button class="btn-primary" onclick="handleSignup()">Get Early Access →</button>
+    </div>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:1rem">No spam. Unsubscribe anytime. 🔒</p>
+  </div>
+</section>
+
+<!-- VALUES -->
+<section class="values">
+  <div class="values-inner">
+    <div class="section-label">What we stand for</div>
+    <h2>Built on values that matter in healthcare</h2>
+    <div class="values-grid">
+      <div class="value-card">
+        <div class="value-icon">🤝</div>
+        <div class="value-title">Compassion</div>
+        <div class="value-desc">Every shift we fill improves patient care and a professional's livelihood.</div>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">🛡</div>
+        <div class="value-title">Reliability</div>
+        <div class="value-desc">Facilities and workers can count on MedShift to deliver, every time.</div>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">✦</div>
+        <div class="value-title">Integrity</div>
+        <div class="value-desc">Transparent pricing, honest matching, no hidden fees or surprises.</div>
+      </div>
+      <div class="value-card">
+        <div class="value-icon">⭐</div>
+        <div class="value-title">Excellence</div>
+        <div class="value-desc">We hold professionals and facilities to the highest standard of care.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div>
+    <div style="display:flex;align-items:center;gap:0.5rem;"><img src="images/logo.png" alt="MedShift Logo" class="footer-logo" /> <div class="footer-brand"><span>Med</span>Shift</div></div>
+    <div class="footer-tag">The right care. Right when it matters.</div>
+  </div>
+  <div class="footer-links">
+    <a href="#how">How It Works</a>
+    <a href="#workers">For Workers</a>
+    <a href="#facilities">For Facilities</a>
+    <a href="mailto:hello@medshift.ca">Contact</a>
+  </div>
+  <div class="footer-copy">© 2026 MedShift. All rights reserved.</div>
+</footer>
+
+<script>
+  let currentTab = 'worker';
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tab-worker').classList.toggle('active', tab === 'worker');
+    document.getElementById('tab-facility').classList.toggle('active', tab === 'facility');
+    document.getElementById('email-input').placeholder =
+      tab === 'worker' ? 'Enter your email address' : 'Enter your work email';
+  }
+
+  function handleSignup() {
+    const email = document.getElementById('email-input').value.trim();
+    if (!email || !email.includes('@')) {
+      alert('Please enter a valid email address.');
+      return;
+    }
+    alert(`Thanks for signing up as a ${currentTab === 'worker' ? 'healthcare worker' : 'facility'}! We'll be in touch soon.`);
+    document.getElementById('email-input').value = '';
+  }
+</script>
+
+</body>
+</html>
