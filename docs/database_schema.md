@@ -16,6 +16,15 @@ Stores authentication and base identity data for all platform users.
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['WORKER', 'FACILITY', 'ADMIN'], required: true },
   status: { type: String, enum: ['PENDING', 'ACTIVE', 'SUSPENDED'], default: 'PENDING' },
+  emailVerified: { type: Boolean, default: false },
+  emailVerifiedAt: Date,
+  emailVerificationTokenHash: String,
+  emailVerificationTokenExpiresAt: Date,
+  emailVerificationSentAt: Date,
+  passwordResetTokenHash: String,
+  passwordResetTokenExpiresAt: Date,
+  passwordResetSentAt: Date,
+  passwordChangedAt: Date,
   createdAt: Date,
   updatedAt: Date
 }
@@ -144,3 +153,6 @@ To ensure performance and scalability, the following indexes are critical:
 - **Geospatial**: `worker_profiles.location` (2dsphere) - For finding workers near a facility.
 - **Compound**: `shifts.status` + `shifts.startTime` - For fast querying of open/upcoming shifts.
 - **Unique**: `users.email` - For authentication.
+- **Sparse**: `users.emailVerificationTokenHash` - For verifying and rotating pending email verification links without scanning users.
+- **Sparse**: `users.passwordResetTokenHash` - For validating and rotating forgot-password reset links without scanning users.
+- **Compound**: `users.emailVerified` + `users.status` - For admin filtering and account activation queues.

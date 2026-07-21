@@ -17,6 +17,35 @@ export class User {
 
   @Prop({ enum: AccountStatus, default: AccountStatus.Pending })
   status!: AccountStatus;
+
+  @Prop({ default: false })
+  emailVerified!: boolean;
+
+  @Prop()
+  emailVerifiedAt?: Date;
+
+  @Prop({ index: true, sparse: true })
+  emailVerificationTokenHash?: string;
+
+  @Prop()
+  emailVerificationTokenExpiresAt?: Date;
+
+  @Prop()
+  emailVerificationSentAt?: Date;
+
+  @Prop({ index: true, sparse: true })
+  passwordResetTokenHash?: string;
+
+  @Prop()
+  passwordResetTokenExpiresAt?: Date;
+
+  @Prop()
+  passwordResetSentAt?: Date;
+
+  @Prop()
+  passwordChangedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+UserSchema.index({ emailVerified: 1, status: 1 });

@@ -23,8 +23,31 @@
 - [x] Implement JWT Auth module in NestJS.
 - [x] Create Role-Based Access Control (RBAC) guards for WORKER, FACILITY, ADMIN.
 - [x] Create login and registration endpoints.
+- [x] Update authentication story to include email verification requirements.
+- [x] Update authentication story to include forgot password and non-native action feedback requirements.
 
-### Story 2.2: User Profiles
+### Story 2.2: Email Verification
+- [x] Add email verification fields to the user schema.
+- [x] Generate and store hashed, expiring verification tokens during registration.
+- [x] Send verification emails through the notification service.
+- [x] Create endpoint to verify email tokens and activate eligible accounts.
+- [x] Create endpoint to resend verification emails with token rotation.
+- [x] Block login for unverified users with a verification-required response.
+- [x] Build verification confirmation, resend, and result states in the web auth flow.
+
+### Story 2.3: Forgot Password & Action Feedback
+- [x] Add password reset fields to the user schema.
+- [x] Generate and store hashed, expiring password reset tokens.
+- [x] Send password reset emails through the notification service.
+- [x] Create endpoint to request a password reset with account-enumeration-safe response text.
+- [x] Create endpoint to reset a password with token validation and token cleanup.
+- [x] Build forgot-password and reset-password pages in the web auth flow.
+- [x] Add a shared Next.js-compatible toast provider for web feedback.
+- [x] Replace any native `alert()`, `confirm()`, or blocking browser prompts with toast and inline UI feedback.
+- [x] Ensure all auth actions expose loading, success, and error states.
+- [x] Add password visibility toggles and position forgot-password recovery near the password field.
+
+### Story 2.4: User Profiles
 - [x] Create `WorkerProfile` CRUD endpoints (including GeoJSON location fields).
 - [x] Create `FacilityProfile` CRUD endpoints (including GeoJSON location fields).
 - [x] Build Frontend Registration/Login forms (Next.js).

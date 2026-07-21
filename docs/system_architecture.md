@@ -40,6 +40,8 @@ graph TD
     API_GW --> Shift
     API_GW --> Match
     
+    Auth --> DB
+    Auth --> Notify
     Shift --> DB
     Match --> DB
     Match --> Notify
@@ -72,12 +74,21 @@ The NestJS application follows a strict modular and layered architecture to enfo
 3. **Repositories (Data Access Layer)**: Abstract Mongoose/MongoDB interactions. Dependency Inversion Principle (DIP) is applied by depending on repository interfaces rather than concrete database implementations.
 
 ### Core Modules
-- **`AuthModule`**: Handles JWT authentication, RBAC (Role-Based Access Control) for Workers, Facilities, and Admins.
+- **`AuthModule`**: Handles registration, login, JWT authentication, email verification token creation/validation, verification resend flows, password reset token creation/validation, password updates, and RBAC (Role-Based Access Control) for Workers, Facilities, and Admins.
 - **`UserModule`**: Manages user profiles, credentials, and background check statuses.
 - **`FacilityModule`**: Manages facility profiles, billing setup, and locations.
 - **`ShiftModule`**: Manages shift lifecycle (creation, publishing, completion, cancellation).
 - **`MatchingModule`**: Uses geospatial queries (MongoDB `$near`) and worker availability to find matches.
-- **`NotificationModule`**: Adapters for Email (Resend) and Real-time (Socket.io). Open/Closed Principle (OCP) applies here: new notification channels (e.g., SMS) can be added without modifying existing code.
+- **`NotificationModule`**: Adapters for Email (Resend) and Real-time (Socket.io), including registration verification emails, password reset emails, welcome emails, and shift notifications. Open/Closed Principle (OCP) applies here: new notification channels (e.g., SMS) can be added without modifying existing code.
+
+### Authentication Flow
+1. **Register**: The API creates a `PENDING` user, stores a hashed email verification token with an expiration timestamp, and asks `NotificationModule` to send the verification link through Resend.
+2. **Verify Email**: The user opens the verification link; `AuthModule` validates the token hash and expiration, sets `emailVerified` to `true`, stores `emailVerifiedAt`, clears the token fields, and advances the account status when role-specific approvals allow it.
+3. **Login Gate**: Login rejects unverified users with a verification-required response so the web app can show a resend option instead of a generic failure.
+4. **Resend Verification**: The API rotates the token and sends a new verification email without exposing whether an email belongs to an account.
+5. **Forgot Password**: The API accepts an email address, returns a generic success response, and if the account exists, stores a hashed reset token with an expiration timestamp and asks `NotificationModule` to send a reset link.
+6. **Reset Password**: The API validates the reset token hash and expiration, updates the stored password hash, clears reset token fields, and returns a success response without issuing a session automatically.
+7. **Feedback Contract**: Auth endpoints should return stable machine-readable error codes for expected states such as `EMAIL_VERIFICATION_REQUIRED`, `PASSWORD_RESET_INVALID`, and `PASSWORD_RESET_EXPIRED` so the web app can show specific inline and toast feedback.
 
 ## 5. Frontend Architecture (Next.js)
 - **App Router & Server Components**: Leverages React Server Components (RSC) for initial page loads (SEO, performance) and Client Components for interactive pieces (e.g., Real-time shift boards).
@@ -85,6 +96,7 @@ The NestJS application follows a strict modular and layered architecture to enfo
 - **Component Design**: 
   - Dumb/Presentational components in `packages/ui-components`.
   - Smart/Container components in `apps/web/features/*`.
+- **Action Feedback**: Frontends must expose a shared toast/notification provider that works in Next.js client components. Use it for non-blocking success/error feedback and pair it with inline form messages for auth actions. Native browser `alert()`, `confirm()`, and blocking prompts are not permitted in product workflows.
 
 ## 6. Real-Time Infrastructure (Socket.io)
 - **Namespaces & Rooms**: Connections are organized by namespaces (e.g., `/shifts`) and rooms (e.g., `facility_123` or `geo_calgary`).

@@ -35,7 +35,17 @@
 2. **Get Matched**: The system automatically surfaces the right fit—incorporating verified credentials, proximity, and real-time availability.
 3. **Shift Filled**: Workers confirm the shift, show up, and deliver care. Facilities get immediate coverage.
 
-### 4.2 Facility Portal Requirements
+### 4.2 Authentication, Email Verification & Password Recovery
+- **Registration**: Workers and facilities can create accounts with email, password, and account type.
+- **Verification Email**: New registrations receive a time-limited verification link by email before their account can become active.
+- **Verified Login**: Users must verify their email address before accessing authenticated worker, facility, or admin workflows.
+- **Resend Verification**: Users can request a new verification email when the original link expires or is lost.
+- **Forgot Password**: Users can request a password reset email from the login flow without revealing whether the email exists.
+- **Reset Password**: Users can open a time-limited reset link, set a new password that satisfies password policy, and then sign in with the updated credentials.
+- **Status Handling**: Unverified accounts remain `PENDING`; successful email verification records the verification timestamp and allows the account to progress toward `ACTIVE` after any role-specific approval requirements.
+- **Action Feedback**: Every user-triggered auth action must provide clear success, loading, and error feedback through inline states and/or an app-level toast system. Native browser alerts are not allowed.
+
+### 4.3 Facility Portal Requirements
 - **Shift Creation**: Ability to post urgent and future shifts with details (Role, Date & Time, Location).
 - **Instant Matching & Notifications**: System uses Socket.io to notify facilities instantly when a worker matches and accepts a shift.
 - **Worker Verification**: Guarantee that all workers presented have 100% verified credentials and passed background checks.
@@ -45,20 +55,20 @@
   - Track credential verification statuses.
   - Review historical shift fulfillment and worker ratings.
 
-### 4.3 Worker App/Portal Requirements
+### 4.4 Worker App/Portal Requirements
 - **Shift Browsing & Filtering**: Filter shifts by location, facility type, and shift length. Find opportunities nearby.
 - **Flexible Scheduling**: No minimum shift obligations; workers choose when and where they work on their terms.
 - **Shift Details View**: View detailed shift cards (e.g., Facility Name, Date/Time [e.g. May 24 · 7:00 AM – 3:00 PM], Location, Pay).
 - **Fast Payouts**: Integration to ensure workers get paid quickly upon shift completion without waiting weeks.
 - **Reputation System**: Earn ratings (e.g., ⭐ 4.9) and receive repeat requests from preferred facilities, helping to build a professional network.
 
-### 4.4 Admin Dashboard Requirements
+### 4.5 Admin Dashboard Requirements
 - **User Management**: Approve, background-check, and verify worker credentials and facility registrations.
 - **Platform Monitoring**: Oversee active shifts, filled shifts, and resolve matching bottlenecks in real-time.
 - **Support & Dispute Resolution**: Tools to manage cancellations, disputes, or payout issues.
 - **Waitlist Management**: Manage early access signups generated from the public site.
 
-### 4.5 Public Marketing Site
+### 4.6 Public Marketing Site
 - **Landing Page**: Communicates the dual value proposition to Workers and Facilities.
 - **Early Access / Waitlist Form**: Captures email addresses, distinguishing between Workers and Facilities.
 - **Automated Emails**: Uses Resend to send confirmation emails and notifications upon waitlist signup and platform launch.
@@ -68,6 +78,7 @@
 - **Database Architecture**: MongoDB must be structured to handle rapid geospatial queries (for proximity matching) and robust user profile management (credentials, ratings).
 - **Security & Privacy**: Strict data protection for worker credentials, background checks, and payment information.
 - **Performance & Responsiveness**: Public site and Worker portal must be highly optimized for mobile devices (as workers will likely browse shifts on the go).
+- **User Feedback**: All portals must use consistent application UI feedback for actions such as submit, save, approve, reject, accept shift, resend email, and reset password. Use a Next.js-compatible toast library or equivalent app component; do not use native `alert()`, `confirm()`, or blocking browser prompts for product workflows.
 
 ## 6. Future Roadmap Considerations
 - Expansion beyond the initial Alberta launch to other provinces and regions.

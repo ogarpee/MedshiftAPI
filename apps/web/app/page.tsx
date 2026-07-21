@@ -345,9 +345,7 @@ export default function HomePage() {
       <footer className="marketing-footer">
         <div>
           <div className="footer-logo-row">
-            <div className="footer-brand">
-              <span>Med</span>Shift
-            </div>
+            <MedShiftLogo />
           </div>
           <div className="footer-tag">The right care. Right when it matters.</div>
         </div>

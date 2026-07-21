@@ -30,6 +30,16 @@ const checks = [
     includes: ["AuthModule", "ShiftsModule", "MatchingModule", "NotificationModule", "ReviewsModule", "AdminModule"]
   },
   {
+    name: "auth recovery and toast feedback are implemented",
+    file: "apps/web/app/auth/password-recovery-panel.tsx",
+    includes: ["forgot-password", "reset-password", "useToast", "Reset password"]
+  },
+  {
+    name: "api supports forgot and reset password endpoints",
+    file: "apps/api/src/auth/auth.controller.ts",
+    includes: ["forgot-password", "reset-password", "ForgotPasswordDto", "ResetPasswordDto"]
+  },
+  {
     name: "web responsive polish and reduced motion support exists",
     file: "apps/web/app/styles.css",
     includes: ["@media (max-width: 480px)", "prefers-reduced-motion", "backdrop-filter", "softPulse"]

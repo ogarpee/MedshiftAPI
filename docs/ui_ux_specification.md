@@ -33,9 +33,42 @@ Derived from the MedShift marketing site:
 - Capsule-shaped (`border-radius: 100px`), small font size (`0.7rem`), bold uppercase text.
 - Used to indicate shift status (OPEN, MATCHED, COMPLETED) or worker availability.
 
+### 2.4 Toasts & Action Feedback
+- Use a shared Next.js-compatible toast system, such as `sonner`, `react-hot-toast`, or an equivalent in-house component, for non-blocking action feedback.
+- Every user-triggered action must expose loading, success, and error states. Examples include registration, login, resend verification, forgot password, reset password, profile save, shift post, shift accept, credential approval, review submission, and waitlist signup.
+- Pair toasts with inline form messages when the user must correct input or understand a persistent auth state.
+- Do not use native `alert()`, `confirm()`, or blocking browser prompts in product workflows.
+- Toasts should use concise text, accessible live-region semantics, and MedShift visual styling aligned with the navy/gold palette.
+
 ## 3. Core User Journeys & Wireframe Specs
 
-### 3.1 Healthcare Professional (Worker) Portal
+### 3.1 Authentication, Email Verification & Password Recovery
+**Design Goal**: Keep sign-up fast while making the verification state clear and recoverable.
+
+1. **Registration Confirmation**:
+   - After registration, show a confirmation state that tells the user to check their inbox.
+   - Include the registered email address, a resend verification action, and a link back to sign in.
+2. **Login With Unverified Email**:
+   - When the API returns a verification-required response, show a clear inline message instead of a generic error.
+   - Provide a resend verification action from the same form state.
+3. **Verification Result Page**:
+   - Successful verification confirms the account is verified and provides a primary sign-in action.
+   - Expired or invalid links explain the issue and provide a resend verification action.
+4. **Forgot Password**:
+   - The login page includes a forgot-password link.
+   - The forgot-password page accepts an email address and always shows a generic confirmation after submit to avoid account enumeration.
+   - The confirmation state uses toast and inline feedback to tell the user to check their inbox if the account exists.
+5. **Reset Password**:
+   - Reset links open a dedicated reset-password page with token and email query parameters.
+   - The form requires a new password that satisfies password policy and a matching confirmation field.
+   - Successful reset shows a toast, clears the form, and provides a primary sign-in action.
+   - Invalid or expired links show inline recovery copy and a forgot-password action.
+6. **Visual Treatment**:
+   - Use the existing auth page split layout, MedShift logo, navy/gold palette, and restrained form states.
+   - Verification messages should be concise, accessible, and placed near the form action that resolves the issue.
+   - Password reset messages should avoid revealing whether an email address belongs to an account.
+
+### 3.2 Healthcare Professional (Worker) Portal
 **Design Goal**: Mobile-first, extremely fast, focused on discovering and accepting shifts with minimal friction.
 
 1. **Dashboard / Shift Board**:
@@ -49,7 +82,7 @@ Derived from the MedShift marketing site:
 3. **Profile & Credentials**:
    - Status indicators for credential verification (Pending vs. Verified).
 
-### 3.2 Healthcare Facility Portal
+### 3.3 Healthcare Facility Portal
 **Design Goal**: Desktop-optimized, clear oversight of staffing needs, focus on rapid shift creation.
 
 1. **Dashboard / Roster**:
@@ -61,7 +94,7 @@ Derived from the MedShift marketing site:
 3. **Worker Match View**:
    - When a worker accepts, facility views a concise "Worker Profile Card" (Avatar, Name, Role, Rating).
 
-### 3.3 Admin Dashboard
+### 3.4 Admin Dashboard
 **Design Goal**: Data-dense, analytical, focused on moderation and platform health.
 
 - **Data Tables**: Paginated, sortable tables for Users, Facilities, and Shifts.

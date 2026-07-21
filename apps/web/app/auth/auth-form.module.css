@@ -88,6 +88,53 @@
   padding: 10px 12px;
 }
 
+.passwordField {
+  display: grid;
+  position: relative;
+}
+
+.passwordField input {
+  padding-right: 76px;
+  width: 100%;
+}
+
+.passwordToggle {
+  align-items: center;
+  background: rgba(11, 31, 58, 0.06);
+  border: 0;
+  border-radius: 6px;
+  color: #0b1f3a;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 54px;
+  padding: 6px 10px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.passwordToggle:hover {
+  background: rgba(212, 175, 55, 0.2);
+}
+
+.passwordHelp {
+  color: #0b1f3a;
+  font-size: 0.82rem;
+  font-weight: 500;
+  justify-self: end;
+  text-decoration: none;
+}
+
+.passwordHelp:hover {
+  color: #876800;
+}
+
 .form input:focus,
 .form select:focus {
   border-color: #d4af37;
@@ -131,10 +178,93 @@
   font-weight: 500;
 }
 
+.alternateSeparator {
+  color: rgba(107, 114, 128, 0.65);
+  margin: 0 8px;
+}
+
 .message {
   color: #0b1f3a;
   font-weight: 500;
   margin: 18px 0 0;
+}
+
+.verificationNotice {
+  background: #ffffff;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.verificationNotice strong {
+  color: #0b1f3a;
+  font-size: 0.94rem;
+  font-weight: 500;
+}
+
+.verificationNotice span {
+  color: #6b7280;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.secondaryButton {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(11, 31, 58, 0.18);
+  border-radius: 8px;
+  color: #0b1f3a;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 44px;
+  padding: 9px 12px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.secondaryButton:hover {
+  border-color: #d4af37;
+  box-shadow: 0 8px 22px rgba(11, 31, 58, 0.08);
+  transform: translateY(-1px);
+}
+
+.secondaryButton:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
+
+.verificationActions {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.primaryLink {
+  align-items: center;
+  background: #d4af37;
+  border-radius: 8px;
+  color: #0b1f3a;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 50px;
+  padding: 10px 14px;
+  text-decoration: none;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.primaryLink:hover {
+  background: #f5d98c;
+  box-shadow: 0 10px 28px rgba(212, 175, 55, 0.28);
+  transform: translateY(-1px);
 }
 
 .summary {
@@ -197,15 +327,22 @@
   z-index: 1;
 }
 
-.sideBrand {
-  color: #ffffff;
-  font-family: Georgia, serif;
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 600;
+.sideBrandLogo {
+  align-items: center;
+  display: flex;
 }
 
-.sideBrand span {
-  color: #d4af37;
+.sideBrandLogo :global(.medshift-logo) {
+  color: #ffffff;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 600;
+  gap: 12px;
+}
+
+.sideBrandLogo :global(.medshift-logo-mark) {
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.18));
+  height: clamp(40px, 5vw, 54px);
+  width: clamp(40px, 5vw, 54px);
 }
 
 .sideCopy {

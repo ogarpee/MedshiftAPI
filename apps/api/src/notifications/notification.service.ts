@@ -18,6 +18,19 @@ type ShiftEmailPayload = {
   facilityName?: string;
 };
 
+type VerificationEmailPayload = {
+  email: string;
+  role: UserRole;
+  verificationUrl: string;
+  expiresInHours: number;
+};
+
+type PasswordResetEmailPayload = {
+  email: string;
+  resetUrl: string;
+  expiresInHours: number;
+};
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -32,6 +45,26 @@ export class NotificationService {
       subject: "Welcome to MedShift",
       text: `Welcome to MedShift. Your ${audience} account is ready for profile setup.`,
       html: `<p>Welcome to <strong>MedShift</strong>.</p><p>Your ${audience} account is ready for profile setup.</p>`
+    });
+  }
+
+  async sendEmailVerification(payload: VerificationEmailPayload) {
+    const audience = payload.role === UserRole.Worker ? "healthcare professional" : "facility partner";
+
+    await this.sendEmail({
+      to: payload.email,
+      subject: "Verify your MedShift email",
+      text: `Verify your MedShift ${audience} account: ${payload.verificationUrl}. This link expires in ${payload.expiresInHours} hours.`,
+      html: `<p>Welcome to <strong>MedShift</strong>.</p><p>Verify your ${audience} account with the link below. It expires in ${payload.expiresInHours} hours.</p><p><a href="${payload.verificationUrl}">Verify email address</a></p>`
+    });
+  }
+
+  async sendPasswordReset(payload: PasswordResetEmailPayload) {
+    await this.sendEmail({
+      to: payload.email,
+      subject: "Reset your MedShift password",
+      text: `Reset your MedShift password: ${payload.resetUrl}. This link expires in ${payload.expiresInHours} hour.`,
+      html: `<p>Reset your <strong>MedShift</strong> password with the link below.</p><p>This link expires in ${payload.expiresInHours} hour.</p><p><a href="${payload.resetUrl}">Reset password</a></p>`
     });
   }
 

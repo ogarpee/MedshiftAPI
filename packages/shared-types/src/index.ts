@@ -76,6 +76,7 @@ export interface AuthResponse {
     email: string;
     role: UserRole;
     status: AccountStatus;
+    emailVerified: boolean;
   };
 }
 
