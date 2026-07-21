@@ -36,15 +36,23 @@
   justify-content: space-between;
 }
 
-.brand a {
-  color: #0b1f3a;
-  font-family: Georgia, serif;
-  font-size: 1.5rem;
-  font-weight: 500;
-  text-decoration: none;
+.brandLogo {
+  display: inline-flex;
 }
 
-.brand a span {
+.brandLogo :global(.medshift-logo) {
+  color: #0b1f3a;
+  font-size: 1.35rem;
+  font-weight: 600;
+  gap: 10px;
+}
+
+.brandLogo :global(.medshift-logo-mark) {
+  height: 34px;
+  width: 34px;
+}
+
+.brandLogo :global(.medshift-logo-wordmark span) {
   color: #d4af37;
 }
 
@@ -88,13 +96,58 @@
   padding: 10px 12px;
 }
 
+.form input:disabled {
+  background: rgba(255, 255, 255, 0.62);
+  color: #6b7280;
+}
+
+.otpGroup {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.otpGroup input {
+  aspect-ratio: 1;
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  min-height: 48px;
+  padding: 0;
+  text-align: center;
+}
+
+.registrationActions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.inlineButton {
+  background: transparent;
+  border: 0;
+  color: #0b1f3a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  padding: 0;
+}
+
+.inlineButton:hover {
+  color: #876800;
+}
+
 .passwordField {
   display: grid;
   position: relative;
 }
 
 .passwordField input {
-  padding-right: 76px;
+  padding-right: 54px;
   width: 100%;
 }
 
@@ -107,16 +160,14 @@
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 500;
   justify-content: center;
-  min-height: 32px;
-  min-width: 54px;
-  padding: 6px 10px;
+  min-height: 34px;
+  padding: 0;
   position: absolute;
   right: 8px;
   top: 50%;
   transform: translateY(-50%);
+  width: 34px;
 }
 
 .passwordToggle:hover {

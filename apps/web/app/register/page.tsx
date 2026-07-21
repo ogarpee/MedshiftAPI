@@ -5,7 +5,7 @@ export default function RegisterPage() {
     <AuthForm
       mode="register"
       eyebrow="Create access"
-      heading="Start with the right account"
+      heading="Create your MedShift account"
       supportingCopy="Choose whether you are joining as a healthcare worker or facility, then complete your profile after signup."
       submitLabel="Create account"
       aside={

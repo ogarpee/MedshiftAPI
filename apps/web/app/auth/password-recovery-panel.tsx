@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { useToast } from "../toast-provider";
 import styles from "./auth-form.module.css";
@@ -85,9 +86,9 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
     <main className={styles.authPage}>
       <section className={styles.panel}>
         <div className={styles.brand}>
-          <Link href="/" aria-label="MedShift home">
-            <span>Med</span>Shift
-          </Link>
+          <div className={styles.brandLogo}>
+            <MedShiftLogo href="/" />
+          </div>
           <span className={styles.badge}>{isReset ? "Reset password" : "Account recovery"}</span>
         </div>
 
@@ -124,7 +125,7 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
                     onClick={() => setIsPasswordVisible((current) => !current)}
                     type="button"
                   >
-                    {isPasswordVisible ? "Hide" : "Show"}
+                    {isPasswordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
                   </button>
                 </span>
               </label>
@@ -144,7 +145,7 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
                     onClick={() => setIsConfirmPasswordVisible((current) => !current)}
                     type="button"
                   >
-                    {isConfirmPasswordVisible ? "Hide" : "Show"}
+                    {isConfirmPasswordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
                   </button>
                 </span>
               </label>

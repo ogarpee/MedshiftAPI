@@ -2,12 +2,15 @@ import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { AuthRequest } from "./auth-request";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
+import { CompleteRegistrationDto } from "./dto/complete-registration.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { StartRegistrationDto } from "./dto/start-registration.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyRegistrationOtpDto } from "./dto/verify-registration-otp.dto";
 import { Req } from "@nestjs/common";
 
 @Controller("auth")
@@ -17,6 +20,21 @@ export class AuthController {
   @Post("register")
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  @Post("register/start")
+  startRegistration(@Body() dto: StartRegistrationDto) {
+    return this.authService.startRegistration(dto);
+  }
+
+  @Post("register/verify-otp")
+  verifyRegistrationOtp(@Body() dto: VerifyRegistrationOtpDto) {
+    return this.authService.verifyRegistrationOtp(dto);
+  }
+
+  @Post("register/complete")
+  completeRegistration(@Body() dto: CompleteRegistrationDto) {
+    return this.authService.completeRegistration(dto);
   }
 
   @Post("login")

@@ -40,6 +40,16 @@ const checks = [
     includes: ["forgot-password", "reset-password", "ForgotPasswordDto", "ResetPasswordDto"]
   },
   {
+    name: "registration uses email OTP and completion endpoints",
+    file: "apps/api/src/auth/auth.controller.ts",
+    includes: ["register/start", "register/verify-otp", "register/complete"]
+  },
+  {
+    name: "web registration includes OTP input step",
+    file: "apps/web/app/auth/auth-form.tsx",
+    includes: ["registrationStep", "otpDigits", "Verify code", "register/complete"]
+  },
+  {
     name: "web responsive polish and reduced motion support exists",
     file: "apps/web/app/styles.css",
     includes: ["@media (max-width: 480px)", "prefers-reduced-motion", "backdrop-filter", "softPulse"]

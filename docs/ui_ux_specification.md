@@ -46,8 +46,9 @@ Derived from the MedShift marketing site:
 **Design Goal**: Keep sign-up fast while making the verification state clear and recoverable.
 
 1. **Registration Confirmation**:
-   - After registration, show a confirmation state that tells the user to check their inbox.
-   - Include the registered email address, a resend verification action, and a link back to sign in.
+   - The first registration step asks for email only.
+   - The second step shows six OTP input boxes for the email verification code and a resend action.
+   - The final step collects password and account type, then completes the account and signs the user in.
 2. **Login With Unverified Email**:
    - When the API returns a verification-required response, show a clear inline message instead of a generic error.
    - Provide a resend verification action from the same form state.

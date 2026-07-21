@@ -46,6 +46,10 @@
 - [x] Replace any native `alert()`, `confirm()`, or blocking browser prompts with toast and inline UI feedback.
 - [x] Ensure all auth actions expose loading, success, and error states.
 - [x] Add password visibility toggles and position forgot-password recovery near the password field.
+- [x] Add the shared MedShift brand logo to all auth form-card brand headers.
+- [x] Use icon-library controls for password visibility toggles.
+- [x] Replace registration with email, OTP verification, and account-completion steps.
+- [x] Auto-verify completed registration OTP input and hide alternate sign-in link during OTP entry.
 
 ### Story 2.4: User Profiles
 - [x] Create `WorkerProfile` CRUD endpoints (including GeoJSON location fields).

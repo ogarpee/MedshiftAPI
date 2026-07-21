@@ -30,7 +30,27 @@ Stores authentication and base identity data for all platform users.
 }
 ```
 
-### 2.2 Worker Profiles Collection
+### 2.2 Registration Attempts Collection
+Stores temporary OTP state before a user account is created.
+
+```javascript
+// Collection: registration_attempts
+{
+  _id: ObjectId,
+  email: { type: String, unique: true, required: true },
+  otpHash: { type: String, required: true },
+  otpExpiresAt: Date,
+  otpSentAt: Date,
+  otpAttempts: { type: Number, default: 0 },
+  verifiedAt: Date,
+  completionTokenHash: String,
+  completionTokenExpiresAt: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+### 2.3 Worker Profiles Collection
 Stores specific information about healthcare professionals.
 
 ```javascript
@@ -69,7 +89,7 @@ Stores specific information about healthcare professionals.
 }
 ```
 
-### 2.3 Facility Profiles Collection
+### 2.4 Facility Profiles Collection
 Stores information about healthcare facilities posting shifts.
 
 ```javascript
@@ -103,7 +123,7 @@ Stores information about healthcare facilities posting shifts.
 }
 ```
 
-### 2.4 Shifts Collection
+### 2.5 Shifts Collection
 The core operational data model representing a unit of work.
 
 ```javascript
@@ -131,7 +151,7 @@ The core operational data model representing a unit of work.
 }
 ```
 
-### 2.5 Reviews Collection
+### 2.6 Reviews Collection
 Handles the dual-rating system (Facility rates Worker, Worker rates Facility).
 
 ```javascript
@@ -156,3 +176,5 @@ To ensure performance and scalability, the following indexes are critical:
 - **Sparse**: `users.emailVerificationTokenHash` - For verifying and rotating pending email verification links without scanning users.
 - **Sparse**: `users.passwordResetTokenHash` - For validating and rotating forgot-password reset links without scanning users.
 - **Compound**: `users.emailVerified` + `users.status` - For admin filtering and account activation queues.
+- **Unique**: `registration_attempts.email` - For rotating a single active registration OTP attempt per email.
+- **Sparse**: `registration_attempts.completionTokenHash` - For validating completed OTP registration sessions.

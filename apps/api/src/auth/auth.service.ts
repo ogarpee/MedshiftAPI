@@ -2,23 +2,32 @@ import { BadRequestException, ConflictException, Injectable, UnauthorizedExcepti
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectModel } from "@nestjs/mongoose";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { Model } from "mongoose";
 import { AccountStatus, AuthResponse, AuthTokenPayload } from "@medshift/shared-types";
+import { RegistrationAttempt, RegistrationAttemptDocument } from "../database/schemas/registration-attempt.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
 import { NotificationService } from "../notifications/notification.service";
+import { CompleteRegistrationDto } from "./dto/complete-registration.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { StartRegistrationDto } from "./dto/start-registration.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyRegistrationOtpDto } from "./dto/verify-registration-otp.dto";
 import { PasswordService } from "./password.service";
 
 const verificationTokenExpiresInHours = 24;
 const verificationTokenExpiresInMs = verificationTokenExpiresInHours * 60 * 60 * 1000;
 const passwordResetTokenExpiresInHours = 1;
 const passwordResetTokenExpiresInMs = passwordResetTokenExpiresInHours * 60 * 60 * 1000;
+const registrationOtpExpiresInMinutes = 10;
+const registrationOtpExpiresInMs = registrationOtpExpiresInMinutes * 60 * 1000;
+const registrationCompletionTokenExpiresInMinutes = 20;
+const registrationCompletionTokenExpiresInMs = registrationCompletionTokenExpiresInMinutes * 60 * 1000;
+const maxRegistrationOtpAttempts = 5;
 
 interface VerificationRequiredResponse {
   emailVerificationRequired: true;
@@ -50,15 +59,140 @@ interface PasswordResetResponse {
   message: string;
 }
 
+interface RegistrationOtpResponse {
+  email: string;
+  message: string;
+  registrationOtpRequired: true;
+}
+
+interface RegistrationOtpVerificationResponse {
+  email: string;
+  message: string;
+  registrationToken: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    @InjectModel(RegistrationAttempt.name) private readonly registrationAttempts: Model<RegistrationAttemptDocument>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly passwordService: PasswordService,
     private readonly notificationService: NotificationService
   ) {}
+
+  async startRegistration(dto: StartRegistrationDto): Promise<RegistrationOtpResponse> {
+    const email = dto.email.toLowerCase().trim();
+    const existingUser = await this.users.exists({ email });
+
+    if (existingUser) {
+      throw new ConflictException("An account with this email already exists");
+    }
+
+    const otp = randomInt(100000, 1000000).toString();
+
+    const attempt = (await this.registrationAttempts.findOne({ email }).exec()) ?? new this.registrationAttempts({ email });
+    attempt.otpHash = this.hashToken(otp);
+    attempt.otpExpiresAt = new Date(Date.now() + registrationOtpExpiresInMs);
+    attempt.otpSentAt = new Date();
+    attempt.otpAttempts = 0;
+    attempt.verifiedAt = undefined;
+    attempt.completionTokenHash = undefined;
+    attempt.completionTokenExpiresAt = undefined;
+    await attempt.save();
+
+    await this.notificationService.sendRegistrationOtp({
+      email,
+      otp,
+      expiresInMinutes: registrationOtpExpiresInMinutes
+    });
+
+    return {
+      email,
+      message: "We sent a verification code to your email.",
+      registrationOtpRequired: true
+    };
+  }
+
+  async verifyRegistrationOtp(dto: VerifyRegistrationOtpDto): Promise<RegistrationOtpVerificationResponse> {
+    const email = dto.email.toLowerCase().trim();
+    const attempt = await this.registrationAttempts.findOne({ email }).exec();
+
+    if (!attempt || attempt.otpExpiresAt.getTime() < Date.now()) {
+      throw new BadRequestException({
+        code: "REGISTRATION_OTP_EXPIRED",
+        message: "This registration code has expired. Request a new code."
+      });
+    }
+
+    if (attempt.otpAttempts >= maxRegistrationOtpAttempts) {
+      throw new BadRequestException({
+        code: "REGISTRATION_OTP_LOCKED",
+        message: "Too many incorrect codes. Request a new code."
+      });
+    }
+
+    if (attempt.otpHash !== this.hashToken(dto.otp)) {
+      attempt.otpAttempts += 1;
+      await attempt.save();
+      throw new BadRequestException({
+        code: "REGISTRATION_OTP_INVALID",
+        message: "Enter the 6-digit code we sent to your email."
+      });
+    }
+
+    const registrationToken = randomBytes(32).toString("base64url");
+    attempt.verifiedAt = new Date();
+    attempt.completionTokenHash = this.hashToken(registrationToken);
+    attempt.completionTokenExpiresAt = new Date(Date.now() + registrationCompletionTokenExpiresInMs);
+    await attempt.save();
+
+    return {
+      email,
+      message: "Email verified. Complete your account details.",
+      registrationToken
+    };
+  }
+
+  async completeRegistration(dto: CompleteRegistrationDto): Promise<AuthResponse> {
+    const email = dto.email.toLowerCase().trim();
+    const existingUser = await this.users.exists({ email });
+
+    if (existingUser) {
+      throw new ConflictException("An account with this email already exists");
+    }
+
+    const attempt = await this.registrationAttempts.findOne({ email, completionTokenHash: this.hashToken(dto.registrationToken) }).exec();
+
+    if (!attempt || !attempt.verifiedAt) {
+      throw new BadRequestException({
+        code: "REGISTRATION_SESSION_INVALID",
+        message: "Verify your email before completing registration."
+      });
+    }
+
+    if (!attempt.completionTokenExpiresAt || attempt.completionTokenExpiresAt.getTime() < Date.now()) {
+      throw new BadRequestException({
+        code: "REGISTRATION_SESSION_EXPIRED",
+        message: "This registration session expired. Request a new code."
+      });
+    }
+
+    const user = await this.users.create({
+      email,
+      passwordHash: await this.passwordService.hash(dto.password),
+      role: dto.role,
+      status: AccountStatus.Active,
+      emailVerified: true,
+      emailVerifiedAt: new Date()
+    });
+
+    await this.registrationAttempts.deleteOne({ _id: attempt._id }).exec();
+    await this.notificationService.sendWelcomeEmail(user.email, user.role);
+
+    return this.toAuthResponse(user);
+  }
 
   async register(dto: RegisterDto): Promise<VerificationRequiredResponse> {
     const email = dto.email.toLowerCase().trim();

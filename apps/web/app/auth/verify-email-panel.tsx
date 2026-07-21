@@ -101,9 +101,9 @@ export function VerifyEmailPanel() {
     <main className={styles.authPage}>
       <section className={styles.panel}>
         <div className={styles.brand}>
-          <Link href="/" aria-label="MedShift home">
-            <span>Med</span>Shift
-          </Link>
+          <div className={styles.brandLogo}>
+            <MedShiftLogo href="/" />
+          </div>
           <span className={styles.badge}>Email verification</span>
         </div>
 

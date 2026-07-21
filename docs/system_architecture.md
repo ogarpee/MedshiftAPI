@@ -82,13 +82,15 @@ The NestJS application follows a strict modular and layered architecture to enfo
 - **`NotificationModule`**: Adapters for Email (Resend) and Real-time (Socket.io), including registration verification emails, password reset emails, welcome emails, and shift notifications. Open/Closed Principle (OCP) applies here: new notification channels (e.g., SMS) can be added without modifying existing code.
 
 ### Authentication Flow
-1. **Register**: The API creates a `PENDING` user, stores a hashed email verification token with an expiration timestamp, and asks `NotificationModule` to send the verification link through Resend.
-2. **Verify Email**: The user opens the verification link; `AuthModule` validates the token hash and expiration, sets `emailVerified` to `true`, stores `emailVerifiedAt`, clears the token fields, and advances the account status when role-specific approvals allow it.
-3. **Login Gate**: Login rejects unverified users with a verification-required response so the web app can show a resend option instead of a generic failure.
-4. **Resend Verification**: The API rotates the token and sends a new verification email without exposing whether an email belongs to an account.
-5. **Forgot Password**: The API accepts an email address, returns a generic success response, and if the account exists, stores a hashed reset token with an expiration timestamp and asks `NotificationModule` to send a reset link.
-6. **Reset Password**: The API validates the reset token hash and expiration, updates the stored password hash, clears reset token fields, and returns a success response without issuing a session automatically.
-7. **Feedback Contract**: Auth endpoints should return stable machine-readable error codes for expected states such as `EMAIL_VERIFICATION_REQUIRED`, `PASSWORD_RESET_INVALID`, and `PASSWORD_RESET_EXPIRED` so the web app can show specific inline and toast feedback.
+1. **Start Registration**: The API accepts an email address, stores a hashed six-digit OTP with an expiration timestamp, and asks `NotificationModule` to send the code through Resend.
+2. **Verify Registration OTP**: The API validates the OTP hash and expiration, marks the registration attempt verified, and returns a short-lived registration completion token.
+3. **Complete Registration**: The API validates the completion token, creates the user with password and account type, marks `emailVerified` as `true`, clears the registration attempt, and returns a JWT session.
+4. **Legacy Email Links**: Existing email verification token handling remains available for pending accounts created before the OTP flow.
+5. **Login Gate**: Login rejects unverified users with a verification-required response so the web app can show a resend option instead of a generic failure.
+6. **Resend Verification**: The API rotates the token and sends a new verification email without exposing whether an email belongs to an account.
+7. **Forgot Password**: The API accepts an email address, returns a generic success response, and if the account exists, stores a hashed reset token with an expiration timestamp and asks `NotificationModule` to send a reset link.
+8. **Reset Password**: The API validates the reset token hash and expiration, updates the stored password hash, clears reset token fields, and returns a success response without issuing a session automatically.
+9. **Feedback Contract**: Auth endpoints should return stable machine-readable error codes for expected states such as `EMAIL_VERIFICATION_REQUIRED`, `REGISTRATION_OTP_INVALID`, `PASSWORD_RESET_INVALID`, and `PASSWORD_RESET_EXPIRED` so the web app can show specific inline and toast feedback.
 
 ## 5. Frontend Architecture (Next.js)
 - **App Router & Server Components**: Leverages React Server Components (RSC) for initial page loads (SEO, performance) and Client Components for interactive pieces (e.g., Real-time shift boards).

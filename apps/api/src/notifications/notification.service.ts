@@ -31,6 +31,12 @@ type PasswordResetEmailPayload = {
   expiresInHours: number;
 };
 
+type RegistrationOtpEmailPayload = {
+  email: string;
+  otp: string;
+  expiresInMinutes: number;
+};
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -65,6 +71,15 @@ export class NotificationService {
       subject: "Reset your MedShift password",
       text: `Reset your MedShift password: ${payload.resetUrl}. This link expires in ${payload.expiresInHours} hour.`,
       html: `<p>Reset your <strong>MedShift</strong> password with the link below.</p><p>This link expires in ${payload.expiresInHours} hour.</p><p><a href="${payload.resetUrl}">Reset password</a></p>`
+    });
+  }
+
+  async sendRegistrationOtp(payload: RegistrationOtpEmailPayload) {
+    await this.sendEmail({
+      to: payload.email,
+      subject: "Your MedShift registration code",
+      text: `Your MedShift registration code is ${payload.otp}. This code expires in ${payload.expiresInMinutes} minutes.`,
+      html: `<p>Your <strong>MedShift</strong> registration code is:</p><p><strong>${payload.otp}</strong></p><p>This code expires in ${payload.expiresInMinutes} minutes.</p>`
     });
   }
 

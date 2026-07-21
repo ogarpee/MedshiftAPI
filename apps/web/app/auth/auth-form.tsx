@@ -1,13 +1,15 @@
 "use client";
 
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { AccountStatus, UserRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { useToast } from "../toast-provider";
 import styles from "./auth-form.module.css";
 
 type AuthMode = "login" | "register";
+type RegistrationStep = "email" | "otp" | "complete";
 
 interface AuthUser {
   id: string;
@@ -23,6 +25,8 @@ interface AuthApiResult {
   email?: string;
   emailVerificationRequired?: boolean;
   message?: string | string[];
+  registrationOtpRequired?: boolean;
+  registrationToken?: string;
   user?: AuthUser;
 }
 
@@ -37,10 +41,15 @@ interface AuthFormProps {
 
 export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportingCopy }: AuthFormProps) {
   const { notify } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
+  const lastSubmittedOtpRef = useRef("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [role, setRole] = useState<UserRole>(UserRole.Worker);
+  const [registrationStep, setRegistrationStep] = useState<RegistrationStep>("email");
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+  const [registrationToken, setRegistrationToken] = useState("");
   const [message, setMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
   const [verificationEmail, setVerificationEmail] = useState("");
@@ -50,6 +59,26 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
 
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
   const endpoint = useMemo(() => `${apiUrl}/auth/${mode}`, [apiUrl, mode]);
+  const otp = otpDigits.join("");
+  const isOtpStep = mode === "register" && registrationStep === "otp";
+  const isSubmitDisabled = isSubmitting || (isOtpStep && otp.length !== 6);
+  const submitText =
+    mode === "register"
+      ? registrationStep === "email"
+        ? "Send verification code"
+        : registrationStep === "otp"
+          ? "Verify code"
+          : submitLabel
+      : submitLabel;
+
+  useEffect(() => {
+    if (!isOtpStep || isSubmitting || otp.length !== 6 || lastSubmittedOtpRef.current === otp) {
+      return;
+    }
+
+    lastSubmittedOtpRef.current = otp;
+    formRef.current?.requestSubmit();
+  }, [isOtpStep, isSubmitting, otp]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,15 +89,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     setUser(null);
 
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          ...(mode === "register" ? { role } : {})
-        })
-      });
+      const response = await submitAuthStep();
 
       const result = await readAuthResponse(response);
 
@@ -90,11 +111,28 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
         return;
       }
 
+      if (mode === "register" && result.registrationOtpRequired) {
+        setRegistrationStep("otp");
+        setOtpDigits(["", "", "", "", "", ""]);
+        lastSubmittedOtpRef.current = "";
+        setMessage(formatAuthError(result));
+        notify("Verification code sent.", "success");
+        return;
+      }
+
+      if (mode === "register" && result.registrationToken) {
+        setRegistrationToken(result.registrationToken);
+        setRegistrationStep("complete");
+        setMessage(formatAuthError(result));
+        notify("Email verified. Complete your account.", "success");
+        return;
+      }
+
       if (result.accessToken && result.user) {
         window.localStorage.setItem("medshift.accessToken", result.accessToken);
         setUser(result.user);
-        setMessage(mode === "login" ? "Signed in successfully." : "Account verified. Complete your profile next.");
-        notify(mode === "login" ? "Signed in successfully." : "Account verified.", "success");
+        setMessage(mode === "login" ? "Signed in successfully." : "Registration complete. Complete your profile next.");
+        notify(mode === "login" ? "Signed in successfully." : "Registration complete.", "success");
       }
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Check that the API server is running and NEXT_PUBLIC_API_URL is correct.";
@@ -103,6 +141,38 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function submitAuthStep() {
+    if (mode === "login") {
+      return fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+    }
+
+    if (registrationStep === "email") {
+      return fetch(`${apiUrl}/auth/register/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+    }
+
+    if (registrationStep === "otp") {
+      return fetch(`${apiUrl}/auth/register/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp })
+      });
+    }
+
+    return fetch(`${apiUrl}/auth/register/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, registrationToken, role })
+    });
   }
 
   async function handleResendVerification() {
@@ -118,7 +188,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     setResendMessage("");
 
     try {
-      const response = await fetch(`${apiUrl}/auth/resend-verification`, {
+      const response = await fetch(mode === "register" ? `${apiUrl}/auth/register/start` : `${apiUrl}/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: targetEmail })
@@ -136,54 +206,113 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     }
   }
 
+  function handleOtpChange(index: number, value: string, target: HTMLInputElement) {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const nextDigits = [...otpDigits];
+    nextDigits[index] = digit;
+    setOtpDigits(nextDigits);
+
+    if (digit) {
+      const nextInput = target.parentElement?.children.item(index + 1) as HTMLInputElement | null;
+      nextInput?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Backspace" || otpDigits[index]) {
+      return;
+    }
+
+    const previousInput = event.currentTarget.parentElement?.children.item(index - 1) as HTMLInputElement | null;
+    previousInput?.focus();
+  }
+
+  function handleOtpPaste(event: ClipboardEvent<HTMLInputElement>) {
+    const pastedValue = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+
+    if (!pastedValue) {
+      return;
+    }
+
+    event.preventDefault();
+    setOtpDigits(Array.from({ length: 6 }, (_, index) => pastedValue[index] ?? ""));
+  }
+
   return (
     <main className={`${styles.authPage} ${mode === "register" ? styles.registerPage : ""}`}>
       <section className={styles.panel}>
         <div className={styles.brand}>
-          <Link href="/" aria-label="MedShift home">
-            <span>Med</span>Shift
-          </Link>
+          <div className={styles.brandLogo}>
+            <MedShiftLogo href="/" />
+          </div>
           <span className={styles.badge}>{eyebrow}</span>
         </div>
 
         <div className={styles.heading}>
           <h1>{heading}</h1>
-          <p>{supportingCopy}</p>
+          <p>{mode === "register" ? getRegistrationStepCopy(registrationStep, email, supportingCopy) : supportingCopy}</p>
         </div>
 
-        <form className={styles.form} onSubmit={handleSubmit}>
-          <label>
-            Email
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
-          </label>
-
-          <label>
-            Password
-            <span className={styles.passwordField}>
+        <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
+          {mode === "register" && registrationStep === "otp" ? (
+            <div className={styles.otpGroup} aria-label="Verification code">
+              {otpDigits.map((digit, index) => (
+                <input
+                  inputMode="numeric"
+                  key={index}
+                  maxLength={1}
+                  onChange={(event) => handleOtpChange(index, event.target.value, event.currentTarget)}
+                  onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                  onPaste={handleOtpPaste}
+                  pattern="[0-9]*"
+                  required
+                  type="text"
+                  value={digit}
+                />
+              ))}
+            </div>
+          ) : (
+            <label>
+              Email
               <input
-                value={password}
-                minLength={8}
-                onChange={(event) => setPassword(event.target.value)}
-                type={isPasswordVisible ? "text" : "password"}
+                disabled={mode === "register" && registrationStep === "complete"}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
                 required
               />
-              <button
-                aria-label={isPasswordVisible ? "Hide password" : "Show password"}
-                className={styles.passwordToggle}
-                onClick={() => setIsPasswordVisible((current) => !current)}
-                type="button"
-              >
-                {isPasswordVisible ? "Hide" : "Show"}
-              </button>
-            </span>
-            {mode === "login" ? (
-              <Link className={styles.passwordHelp} href="/forgot-password">
-                Forgot password?
-              </Link>
-            ) : null}
-          </label>
+            </label>
+          )}
 
-          {mode === "register" ? (
+          {mode === "login" || registrationStep === "complete" ? (
+            <label>
+              Password
+              <span className={styles.passwordField}>
+                <input
+                  value={password}
+                  minLength={8}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type={isPasswordVisible ? "text" : "password"}
+                  required
+                />
+                <button
+                  aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+                  className={styles.passwordToggle}
+                  onClick={() => setIsPasswordVisible((current) => !current)}
+                  type="button"
+                >
+                  {isPasswordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
+                </button>
+              </span>
+              {mode === "login" ? (
+                <Link className={styles.passwordHelp} href="/forgot-password">
+                  Forgot password?
+                </Link>
+              ) : null}
+            </label>
+          ) : null}
+
+          {mode === "register" && registrationStep === "complete" ? (
             <label>
               Account type
               <select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
@@ -193,22 +322,44 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
             </label>
           ) : null}
 
-          <button className={styles.submit} type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Working..." : submitLabel}
+          <button className={styles.submit} type="submit" disabled={isSubmitDisabled}>
+            {isSubmitting ? "Working..." : submitText}
           </button>
         </form>
 
-        <div className={styles.alternate}>
-          {mode === "login" ? (
-            <>
-              New to MedShift? <Link href="/register">Create an account</Link>
-            </>
-          ) : (
-            <>
-              Already have an account? <Link href="/login">Sign in</Link>
-            </>
-          )}
-        </div>
+        {mode === "register" && registrationStep === "otp" ? (
+          <div className={styles.registrationActions}>
+            <button className={styles.inlineButton} onClick={handleResendVerification} type="button" disabled={isResending}>
+              {isResending ? "Sending..." : "Resend code"}
+            </button>
+            <button
+              className={styles.inlineButton}
+              onClick={() => {
+                setRegistrationStep("email");
+                setOtpDigits(["", "", "", "", "", ""]);
+                lastSubmittedOtpRef.current = "";
+                setMessage("");
+              }}
+              type="button"
+            >
+              Change email
+            </button>
+          </div>
+        ) : null}
+
+        {!isOtpStep ? (
+          <div className={styles.alternate}>
+            {mode === "login" ? (
+              <>
+                New to MedShift? <Link href="/register">Create an account</Link>
+              </>
+            ) : (
+              <>
+                Already have an account? <Link href="/login">Sign in</Link>
+              </>
+            )}
+          </div>
+        ) : null}
 
         {message ? <p className={styles.message}>{message}</p> : null}
         {verificationEmail ? (
@@ -275,4 +426,16 @@ function formatAuthError(result: AuthApiResult) {
   }
 
   return result.message ?? "Unable to continue";
+}
+
+function getRegistrationStepCopy(step: RegistrationStep, email: string, fallback: string) {
+  if (step === "email") {
+    return "Enter your email address and we will send a 6-digit verification code.";
+  }
+
+  if (step === "otp") {
+    return `Enter the 6-digit code sent to ${email}.`;
+  }
+
+  return fallback;
 }

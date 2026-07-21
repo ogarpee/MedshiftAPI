@@ -36,8 +36,8 @@
 3. **Shift Filled**: Workers confirm the shift, show up, and deliver care. Facilities get immediate coverage.
 
 ### 4.2 Authentication, Email Verification & Password Recovery
-- **Registration**: Workers and facilities can create accounts with email, password, and account type.
-- **Verification Email**: New registrations receive a time-limited verification link by email before their account can become active.
+- **Registration**: Workers and facilities start registration with email only, verify a time-limited one-time passcode (OTP), then complete registration with password and account type.
+- **Verification Email**: New registrations receive a time-limited OTP by email before account details can be completed.
 - **Verified Login**: Users must verify their email address before accessing authenticated worker, facility, or admin workflows.
 - **Resend Verification**: Users can request a new verification email when the original link expires or is lost.
 - **Forgot Password**: Users can request a password reset email from the login flow without revealing whether the email exists.
