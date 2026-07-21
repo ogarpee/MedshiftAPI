@@ -8,6 +8,7 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "uat:smoke": "node scripts/uat-smoke.mjs",
     "api:dev": "pnpm --filter @medshift/api dev",
     "web:dev": "pnpm --filter @medshift/web dev",
     "admin:dev": "pnpm --filter @medshift/admin dev"

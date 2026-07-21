@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@medshift/shared-types": "workspace:*",
     "@medshift/ui-components": "workspace:*",
     "next": "^15.1.3",
     "react": "^19.0.0",

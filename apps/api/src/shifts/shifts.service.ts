@@ -5,6 +5,10 @@ import { ShiftStatus, UserRole } from "@medshift/shared-types";
 import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
+import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
+import { User, UserDocument } from "../database/schemas/user.schema";
+import { NotificationService } from "../notifications/notification.service";
+import { ShiftsGateway } from "../realtime/shifts.gateway";
 import { CreateShiftDto } from "./dto/create-shift.dto";
 import { UpdateShiftDto } from "./dto/update-shift.dto";
 
@@ -12,7 +16,11 @@ import { UpdateShiftDto } from "./dto/update-shift.dto";
 export class ShiftsService {
   constructor(
     @InjectModel(Shift.name) private readonly shifts: Model<ShiftDocument>,
-    @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>
+    @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>,
+    @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
+    @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    private readonly notificationService: NotificationService,
+    private readonly shiftsGateway: ShiftsGateway
   ) {}
 
   async create(currentUser: AuthUser, dto: CreateShiftDto) {
@@ -29,7 +37,10 @@ export class ShiftsService {
       status: ShiftStatus.Open
     });
 
-    return this.serialize(shift);
+    const serialized = this.serialize(shift);
+    this.shiftsGateway.emitShiftCreated(serialized);
+
+    return serialized;
   }
 
   async findAll(currentUser: AuthUser) {
@@ -84,10 +95,36 @@ export class ShiftsService {
     return { deleted: true };
   }
 
+  async accept(currentUser: AuthUser, id: string) {
+    const worker = await this.resolveWorkerForAccept(currentUser);
+
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException("Shift not found");
+    }
+
+    const shift = await this.shifts
+      .findOneAndUpdate(
+        { _id: id, status: ShiftStatus.Open },
+        { status: ShiftStatus.Matched, matchedWorkerId: worker._id },
+        { new: true }
+      )
+      .exec();
+
+    if (!shift) {
+      throw new BadRequestException("Shift is not available for acceptance");
+    }
+
+    const serialized = this.serialize(shift);
+    this.shiftsGateway.emitShiftAccepted(shift.facilityId.toString(), serialized);
+    await this.sendShiftConfirmation(shift, worker);
+
+    return serialized;
+  }
+
   async metrics(currentUser: AuthUser) {
     const shifts = await this.findAll(currentUser);
     const now = Date.now();
-    const activeStatuses = new Set([ShiftStatus.Open, ShiftStatus.Matched, ShiftStatus.InProgress]);
+    const activeStatuses = new Set<ShiftStatus>([ShiftStatus.Open, ShiftStatus.Matched, ShiftStatus.InProgress]);
     const activeShifts = shifts.filter((shift) => activeStatuses.has(shift.status)).length;
     const upcomingShifts = shifts.filter((shift) => new Date(shift.startTime).getTime() > now).length;
     const completedShifts = shifts.filter((shift) => shift.status === ShiftStatus.Completed).length;
@@ -120,6 +157,37 @@ export class ShiftsService {
     }
 
     return facility;
+  }
+
+  private async resolveWorkerForAccept(currentUser: AuthUser): Promise<WorkerProfileDocument> {
+    if (currentUser.role !== UserRole.Worker) {
+      throw new ForbiddenException("Only workers can accept shifts");
+    }
+
+    const worker = await this.workerProfiles.findOne({ userId: currentUser.sub }).exec();
+
+    if (!worker) {
+      throw new NotFoundException("Worker profile is required before accepting shifts");
+    }
+
+    return worker;
+  }
+
+  private async sendShiftConfirmation(shift: ShiftDocument, worker: WorkerProfileDocument) {
+    const facility = await this.facilityProfiles.findById(shift.facilityId).exec();
+    const [workerUser, facilityUser] = await Promise.all([
+      this.users.findById(worker.userId).exec(),
+      facility ? this.users.findById(facility.userId).exec() : Promise.resolve(null)
+    ]);
+
+    await this.notificationService.sendShiftConfirmation({
+      workerEmail: workerUser?.email,
+      facilityEmail: facilityUser?.email,
+      facilityName: facility?.name,
+      roleRequired: shift.roleRequired,
+      startTime: shift.startTime,
+      endTime: shift.endTime
+    });
   }
 
   private async findFacility(id: string): Promise<FacilityProfileDocument> {

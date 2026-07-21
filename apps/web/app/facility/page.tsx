@@ -26,6 +26,17 @@ const demoShifts: ShiftSummary[] = [
     status: ShiftStatus.Matched,
     location: { type: "Point", coordinates: [-114.0719, 51.0447] },
     description: "Evening medication pass"
+  },
+  {
+    id: "demo-3",
+    facilityId: "demo-facility",
+    roleRequired: ClinicalRole.Lpn,
+    startTime: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    endTime: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
+    hourlyRate: 44,
+    status: ShiftStatus.Completed,
+    location: { type: "Point", coordinates: [-114.0719, 51.0447] },
+    description: "Post-shift review ready"
   }
 ];
 
@@ -38,12 +49,14 @@ export default function FacilityDashboardPage() {
   const [endTime, setEndTime] = useState("");
   const [hourlyRate, setHourlyRate] = useState("36");
   const [description, setDescription] = useState("");
+  const [reviewRatings, setReviewRatings] = useState<Record<string, number>>({});
+  const [reviewComments, setReviewComments] = useState<Record<string, string>>({});
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
   const metrics: ShiftMetrics = useMemo(() => {
     const now = Date.now();
-    const activeStatuses = new Set([ShiftStatus.Open, ShiftStatus.Matched, ShiftStatus.InProgress]);
+    const activeStatuses = new Set<ShiftStatus>([ShiftStatus.Open, ShiftStatus.Matched, ShiftStatus.InProgress]);
 
     return {
       activeShifts: shifts.filter((shift) => activeStatuses.has(shift.status)).length,
@@ -119,6 +132,28 @@ export default function FacilityDashboardPage() {
     setDescription("");
   }
 
+  async function submitReview(shift: ShiftSummary) {
+    const rating = reviewRatings[shift.id] ?? 5;
+    const comment = reviewComments[shift.id] ?? "";
+    const token = window.localStorage.getItem("medshift.accessToken");
+
+    if (!token || shift.id.startsWith("demo-")) {
+      setMessage(`Preview review submitted with ${rating} stars.`);
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/reviews/shifts/${shift.id}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ rating, comment })
+    });
+
+    setMessage(response.ok ? "Worker review submitted." : "Review could not be submitted for this shift.");
+  }
+
   return (
     <main className="facility-page">
       <nav className="facility-nav">
@@ -171,6 +206,29 @@ export default function FacilityDashboardPage() {
                   <StatusBadge tone={shift.status === ShiftStatus.Open ? "gold" : "green"}>{shift.status}</StatusBadge>
                   <strong>${shift.hourlyRate}/hr</strong>
                 </div>
+                {shift.status === ShiftStatus.Completed ? (
+                  <form className="review-inline-form" onSubmit={(event) => { event.preventDefault(); void submitReview(shift); }}>
+                    <div className="star-row" aria-label="Worker rating">
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <button
+                          className={(reviewRatings[shift.id] ?? 5) >= rating ? "active" : ""}
+                          key={rating}
+                          type="button"
+                          onClick={() => setReviewRatings((current) => ({ ...current, [shift.id]: rating }))}
+                          aria-label={`${rating} star rating`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      value={reviewComments[shift.id] ?? ""}
+                      onChange={(event) => setReviewComments((current) => ({ ...current, [shift.id]: event.target.value }))}
+                      placeholder="Add worker feedback"
+                    />
+                    <button type="submit">Submit review</button>
+                  </form>
+                ) : null}
               </article>
             ))}
           </div>

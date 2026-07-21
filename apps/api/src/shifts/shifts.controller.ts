@@ -19,6 +19,12 @@ export class ShiftsController {
     return this.shiftsService.create(request.user, dto);
   }
 
+  @Roles(UserRole.Worker)
+  @Post(":id/accept")
+  accept(@Req() request: AuthRequest, @Param("id") id: string) {
+    return this.shiftsService.accept(request.user, id);
+  }
+
   @Roles(UserRole.Facility, UserRole.Admin)
   @Get()
   findAll(@Req() request: AuthRequest) {

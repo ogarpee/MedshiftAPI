@@ -45,43 +45,43 @@
 **Goal**: Broadcast shifts in real-time and allow workers to accept them based on proximity.
 
 ### Story 4.1: Geospatial Matching API
-- [/] Implement `2dsphere` query in NestJS to find shifts near a worker's location.
-- [/] Create endpoint for workers to browse open shifts in their designated radius.
+- [x] Implement `2dsphere` query in NestJS to find shifts near a worker's location.
+- [x] Create endpoint for workers to browse open shifts in their designated radius.
 
 ### Story 4.2: Real-time Socket.io Integration
-- [/] Setup Socket.io Gateway in NestJS (`WebSocket` module).
-- [/] Emit `shift.created` event when a facility posts a shift to nearby workers.
-- [/] Emit `shift.accepted` event to the facility when a worker accepts.
-- [/] Implement WebSocket client in Next.js.
+- [x] Setup Socket.io Gateway in NestJS (`WebSocket` module).
+- [x] Emit `shift.created` event when a facility posts a shift to nearby workers.
+- [x] Emit `shift.accepted` event to the facility when a worker accepts.
+- [x] Implement WebSocket client in Next.js.
 
 ### Story 4.3: Worker Dashboard UI
-- [/] Build UI for workers to browse shifts (List/Map view toggle).
-- [/] Build detailed Shift Card UI.
-- [/] Build UI and flow for "Accept Shift" button.
+- [x] Build UI for workers to browse shifts (List/Map view toggle).
+- [x] Build detailed Shift Card UI.
+- [x] Build UI and flow for "Accept Shift" button.
 
 ## Sprint 5: Notifications & Admin Dashboard
 **Goal**: Send transactional emails and provide oversight tools for admins.
 
 ### Story 5.1: Email Notifications
-- [ ] Integrate Resend API in a `NotificationModule`.
-- [ ] Send welcome emails upon waitlist/registration.
-- [ ] Send shift confirmation emails.
+- [x] Integrate Resend API in a `NotificationModule`.
+- [x] Send welcome emails upon waitlist/registration.
+- [x] Send shift confirmation emails.
 
 ### Story 5.2: Admin Dashboard
-- [ ] Build UI data tables to view all Users, Facilities, and Shifts.
-- [ ] Build UI for verifying Worker credentials (approve/reject documents).
-- [ ] Add system health charts (e.g., active socket connections, shift fulfillment rates).
+- [x] Build UI data tables to view all Users, Facilities, and Shifts.
+- [x] Build UI for verifying Worker credentials (approve/reject documents).
+- [x] Add system health charts (e.g., active socket connections, shift fulfillment rates).
 
 ## Sprint 6: Reviews, Polish & Launch Prep
 **Goal**: Implement the dual-review system and finalize UI/UX.
 
 ### Story 6.1: Review System
-- [ ] Implement Review endpoints (Facility rates Worker, Worker rates Facility).
-- [ ] Build UI for submitting ratings after a shift is completed.
-- [ ] Update worker/facility average rating calculations.
+- [x] Implement Review endpoints (Facility rates Worker, Worker rates Facility).
+- [x] Build UI for submitting ratings after a shift is completed.
+- [x] Update worker/facility average rating calculations.
 
 ### Story 6.2: Final UI Polish
-- [ ] Apply MedShift design system (Navy/Gold palette, Playfair/Poppins fonts).
-- [ ] Add glassmorphism effects and micro-animations to components.
-- [ ] Ensure mobile responsiveness across all portals, especially Worker app.
-- [ ] End-to-end user acceptance testing.
+- [x] Apply MedShift design system (Navy/Gold palette, Playfair/Poppins fonts).
+- [x] Add glassmorphism effects and micro-animations to components.
+- [x] Ensure mobile responsiveness across all portals, especially Worker app.
+- [x] End-to-end user acceptance testing.

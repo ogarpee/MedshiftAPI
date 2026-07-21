@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { UserRole } from "@medshift/shared-types";
+import { MedShiftLogo } from "@medshift/ui-components";
 
 type SignupType = "worker" | "facility";
 
@@ -79,7 +81,7 @@ export default function HomePage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
 
-  function handleSignup() {
+  async function handleSignup() {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
@@ -87,18 +89,27 @@ export default function HomePage() {
       return;
     }
 
-    setMessage(
-      `Thanks for signing up as a ${signupType === "worker" ? "healthcare worker" : "facility"}! We'll be in touch soon.`
-    );
-    setEmail("");
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/waitlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          role: signupType === "worker" ? UserRole.Worker : UserRole.Facility
+        })
+      });
+    } finally {
+      setMessage(
+        `Thanks for signing up as a ${signupType === "worker" ? "healthcare worker" : "facility"}! We'll be in touch soon.`
+      );
+      setEmail("");
+    }
   }
 
   return (
     <main className="marketing-page">
       <nav className="marketing-nav">
-        <a className="nav-logo" href="#top" aria-label="MedShift home">
-          <span>Med</span>Shift
-        </a>
+        <MedShiftLogo href="#top" />
         <div className="nav-links">
           <a href="#workers">For Workers</a>
           <a href="#facilities">For Facilities</a>

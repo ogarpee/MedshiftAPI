@@ -4,6 +4,7 @@ import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { AccountStatus, AuthResponse, AuthTokenPayload } from "@medshift/shared-types";
 import { User, UserDocument } from "../database/schemas/user.schema";
+import { NotificationService } from "../notifications/notification.service";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { PasswordService } from "./password.service";
@@ -13,7 +14,8 @@ export class AuthService {
   constructor(
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
     private readonly jwtService: JwtService,
-    private readonly passwordService: PasswordService
+    private readonly passwordService: PasswordService,
+    private readonly notificationService: NotificationService
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -30,6 +32,8 @@ export class AuthService {
       role: dto.role,
       status: AccountStatus.Pending
     });
+
+    await this.notificationService.sendWelcomeEmail(user.email, user.role);
 
     return this.toAuthResponse(user);
   }

@@ -7,6 +7,9 @@
   --off-white: #f8f6f1;
   --muted: #6b7280;
   --green: #4ade80;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.44);
+  --soft-shadow: 0 20px 50px rgba(11, 31, 58, 0.1);
 }
 
 * {
@@ -32,6 +35,11 @@ html {
   scroll-behavior: smooth;
 }
 
+:focus-visible {
+  outline: 3px solid rgba(212, 175, 55, 0.72);
+  outline-offset: 3px;
+}
+
 .marketing-page {
   background: var(--white);
   color: var(--dark);
@@ -50,6 +58,13 @@ html {
   right: 0;
   top: 0;
   z-index: 100;
+}
+
+.marketing-nav,
+.facility-nav,
+.worker-nav,
+.topbar {
+  box-shadow: 0 12px 30px rgba(11, 31, 58, 0.12);
 }
 
 .nav-logo {
@@ -264,6 +279,18 @@ html {
   padding: 2rem;
 }
 
+.hero-card,
+.shift-board,
+.facility-board,
+.facility-metrics article,
+.worker-earnings,
+.shift-detail-panel,
+.worker-shift-card,
+.map-preview,
+.auth-panel {
+  box-shadow: var(--soft-shadow);
+}
+
 @keyframes floatCard {
   0%,
   100% {
@@ -432,8 +459,9 @@ html {
 }
 
 .step {
-  background: var(--white);
-  border: 1px solid rgba(11, 31, 58, 0.08);
+  backdrop-filter: blur(14px);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 16px;
   padding: 2.5rem 2rem;
   position: relative;
@@ -564,6 +592,7 @@ html {
 }
 
 .stat-card {
+  backdrop-filter: blur(12px);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(212, 175, 55, 0.2);
   border-radius: 14px;
@@ -596,8 +625,9 @@ html {
 
 .perk-card {
   align-items: flex-start;
-  background: var(--off-white);
-  border: 1px solid rgba(11, 31, 58, 0.07);
+  backdrop-filter: blur(14px);
+  background: rgba(248, 246, 241, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 14px;
   display: flex;
   gap: 1rem;
@@ -733,6 +763,8 @@ html {
 }
 
 .value-card {
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid rgba(11, 31, 58, 0.08);
   border-radius: 14px;
   padding: 2rem 1.5rem;
@@ -946,13 +978,25 @@ html {
 }
 
 .medshift-logo {
+  align-items: center;
   color: var(--white);
+  display: inline-flex;
   font-family: Georgia, serif;
   font-size: 1.5rem;
   font-weight: 700;
+  gap: 10px;
+  line-height: 1;
+  text-decoration: none;
 }
 
-.medshift-logo span {
+.medshift-logo-mark {
+  display: block;
+  flex: 0 0 auto;
+  height: 36px;
+  width: 36px;
+}
+
+.medshift-logo-wordmark span {
   color: var(--gold);
 }
 
@@ -1025,6 +1069,16 @@ html {
   font-weight: 500;
   padding: 12px 18px;
   text-decoration: none;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.button-primary:hover,
+.early-access button:hover,
+.review-inline-form > button:hover,
+.worker-review-form > button:hover {
+  background: var(--gold-light);
+  box-shadow: 0 10px 24px rgba(212, 175, 55, 0.24);
+  transform: translateY(-1px);
 }
 
 .shift-board {
@@ -1336,8 +1390,9 @@ html {
 .facility-metrics article,
 .facility-board,
 .post-shift-modal {
-  background: var(--white);
-  border: 1px solid rgba(11, 31, 58, 0.1);
+  backdrop-filter: blur(16px);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 8px;
 }
 
@@ -1389,6 +1444,12 @@ html {
 .facility-shift-row {
   border-bottom: 1px solid rgba(11, 31, 58, 0.08);
   padding: 18px;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.facility-shift-row:hover {
+  background: rgba(255, 255, 255, 0.52);
+  transform: translateY(-1px);
 }
 
 .facility-shift-row:last-child {
@@ -1484,6 +1545,362 @@ html {
   grid-column: 1 / -1;
 }
 
+.worker-page {
+  background: var(--off-white);
+  color: var(--dark);
+  min-height: 100vh;
+}
+
+.worker-nav {
+  align-items: center;
+  background: var(--navy);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.22);
+  display: flex;
+  justify-content: space-between;
+  padding: 18px clamp(20px, 5vw, 72px);
+}
+
+.worker-nav a {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.92rem;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.worker-shell {
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: clamp(24px, 5vw, 56px) clamp(18px, 4vw, 40px);
+}
+
+.worker-header {
+  align-items: stretch;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 230px;
+}
+
+.worker-header h1 {
+  color: var(--navy);
+  font-family: Georgia, serif;
+  font-size: clamp(2.2rem, 5vw, 4.4rem);
+  line-height: 1;
+  margin: 12px 0 8px;
+}
+
+.worker-header p,
+.worker-toolbar span,
+.worker-shift-card small,
+.worker-shift-card em,
+.shift-detail-panel p,
+.shift-detail-list dt {
+  color: var(--muted);
+}
+
+.worker-header p {
+  line-height: 1.7;
+  margin: 0;
+}
+
+.worker-earnings,
+.shift-detail-panel,
+.worker-shift-card,
+.map-preview {
+  backdrop-filter: blur(16px);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+}
+
+.worker-earnings {
+  display: grid;
+  padding: 18px;
+}
+
+.worker-earnings span,
+.worker-earnings small {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.worker-earnings strong {
+  align-self: center;
+  color: var(--navy);
+  font-size: 2.4rem;
+  font-weight: 500;
+}
+
+.worker-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 28px 0 18px;
+}
+
+.segmented-control {
+  background: rgba(11, 31, 58, 0.08);
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, 84px);
+  min-height: 42px;
+  padding: 4px;
+}
+
+.segmented-control button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--navy);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.segmented-control button.active {
+  background: var(--white);
+  box-shadow: 0 8px 22px rgba(11, 31, 58, 0.08);
+}
+
+.worker-grid {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.worker-shift-list {
+  display: grid;
+  gap: 12px;
+}
+
+.worker-shift-card {
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 18px;
+  text-align: left;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  width: 100%;
+}
+
+.worker-shift-card:hover,
+.worker-shift-card.active {
+  border-color: rgba(212, 175, 55, 0.58);
+  box-shadow: 0 16px 34px rgba(11, 31, 58, 0.08);
+  transform: translateY(-1px);
+}
+
+.worker-shift-card.active {
+  animation: softPulse 0.55s ease;
+}
+
+@keyframes softPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(212, 175, 55, 0);
+  }
+
+  55% {
+    box-shadow: 0 0 0 5px rgba(212, 175, 55, 0.12);
+  }
+
+  100% {
+    box-shadow: 0 16px 34px rgba(11, 31, 58, 0.08);
+  }
+}
+
+.worker-shift-card span,
+.worker-shift-card strong,
+.worker-shift-card small,
+.worker-shift-card em {
+  display: block;
+  font-style: normal;
+}
+
+.worker-shift-card span {
+  color: var(--navy);
+  font-size: 0.92rem;
+}
+
+.worker-shift-card strong {
+  color: var(--navy);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.shift-map-panel {
+  min-height: 420px;
+}
+
+.map-preview {
+  background:
+    linear-gradient(rgba(11, 31, 58, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 31, 58, 0.06) 1px, transparent 1px),
+    var(--white);
+  background-size: 44px 44px;
+  min-height: 420px;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-preview::after {
+  background: rgba(11, 31, 58, 0.08);
+  content: "";
+  height: 120px;
+  left: -10%;
+  position: absolute;
+  right: -10%;
+  top: 48%;
+  transform: rotate(-9deg);
+}
+
+.map-pin {
+  background: var(--gold);
+  border: 4px solid var(--white);
+  border-radius: 999px;
+  box-shadow: 0 12px 26px rgba(11, 31, 58, 0.22);
+  cursor: pointer;
+  height: 30px;
+  position: absolute;
+  width: 30px;
+  z-index: 2;
+}
+
+.map-pin.active {
+  background: var(--green);
+  outline: 5px solid rgba(74, 222, 128, 0.18);
+  transform: scale(1.08);
+}
+
+.shift-detail-panel {
+  display: grid;
+  gap: 20px;
+  padding: 22px;
+  position: sticky;
+  top: 18px;
+}
+
+.shift-detail-panel h2 {
+  color: var(--navy);
+  font-family: Georgia, serif;
+  font-size: 2rem;
+  line-height: 1.05;
+  margin: 12px 0 10px;
+}
+
+.shift-detail-panel p {
+  line-height: 1.7;
+  margin: 0;
+}
+
+.shift-detail-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.shift-detail-list div {
+  align-items: center;
+  border-bottom: 1px solid rgba(11, 31, 58, 0.08);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 12px;
+}
+
+.shift-detail-list dt,
+.shift-detail-list dd {
+  margin: 0;
+}
+
+.shift-detail-list dd {
+  color: var(--navy);
+  font-weight: 500;
+  text-align: right;
+}
+
+.shift-detail-panel .auth-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.review-inline-form,
+.worker-review-form {
+  border-top: 1px solid rgba(11, 31, 58, 0.08);
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding-top: 14px;
+  width: 100%;
+}
+
+.review-inline-form {
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+}
+
+.worker-review-form {
+  background: rgba(11, 31, 58, 0.04);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.star-row {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.star-row button {
+  background: transparent;
+  border: 0;
+  color: rgba(11, 31, 58, 0.24);
+  cursor: pointer;
+  font-size: 1.2rem;
+  height: 34px;
+  line-height: 1;
+  padding: 0;
+  width: 28px;
+}
+
+.star-row button.active {
+  color: var(--gold);
+}
+
+.star-row button:hover {
+  color: var(--gold-light);
+  transform: translateY(-1px);
+}
+
+.review-inline-form input,
+.worker-review-form textarea {
+  border: 1px solid rgba(11, 31, 58, 0.16);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+  min-height: 42px;
+  padding: 10px 12px;
+}
+
+.worker-review-form textarea {
+  resize: vertical;
+}
+
+.review-inline-form > button,
+.worker-review-form > button {
+  background: var(--gold);
+  border: 0;
+  border-radius: 8px;
+  color: var(--navy);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  min-height: 42px;
+  padding: 10px 14px;
+}
+
 @media (max-width: 760px) {
   .auth-page {
     grid-template-columns: 1fr;
@@ -1494,6 +1911,7 @@ html {
   }
 
   .topbar-links,
+  .marketing-footer,
   .facility-header,
   .facility-shift-row {
     align-items: flex-start;
@@ -1508,5 +1926,84 @@ html {
   .facility-shift-status {
     align-items: start;
     justify-items: start;
+  }
+
+  .facility-board-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .facility-shift-row {
+    display: grid;
+  }
+
+  .review-inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .worker-header,
+  .worker-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .worker-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .segmented-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .shift-detail-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 480px) {
+  .marketing-nav,
+  .facility-nav,
+  .worker-nav {
+    padding: 14px 16px;
+  }
+
+  .medshift-logo {
+    font-size: 1.22rem;
+  }
+
+  .medshift-logo-mark {
+    height: 32px;
+    width: 32px;
+  }
+
+  .worker-shell,
+  .facility-shell {
+    padding-inline: 14px;
+  }
+
+  .worker-earnings strong,
+  .facility-metrics strong {
+    font-size: 1.7rem;
+  }
+
+  .shift-detail-list div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .shift-detail-list dd {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
   }
 }
