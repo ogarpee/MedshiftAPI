@@ -9,11 +9,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": {
-      "@medshift/shared-types": ["packages/shared-types/src/index.ts"],
-      "@medshift/ui-components": ["packages/ui-components/src/index.ts"]
-    }
+    "isolatedModules": true
   }
 }

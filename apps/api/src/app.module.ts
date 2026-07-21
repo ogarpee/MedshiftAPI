@@ -4,6 +4,9 @@ import { MongooseModule } from "@nestjs/mongoose";
 import { validateConfig } from "./config/validate-config";
 import { DatabaseSchemasModule } from "./database/database-schemas.module";
 import { HealthController } from "./health/health.controller";
+import { AuthModule } from "./auth/auth.module";
+import { ProfilesModule } from "./profiles/profiles.module";
+import { ShiftsModule } from "./shifts/shifts.module";
 
 @Module({
   imports: [
@@ -17,7 +20,10 @@ import { HealthController } from "./health/health.controller";
         uri: config.getOrThrow<string>("MONGODB_URI")
       })
     }),
-    DatabaseSchemasModule
+    DatabaseSchemasModule,
+    AuthModule,
+    ProfilesModule,
+    ShiftsModule
   ],
   controllers: [HealthController]
 })

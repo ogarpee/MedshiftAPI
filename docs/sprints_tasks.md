@@ -20,44 +20,44 @@
 **Goal**: Allow workers, facilities, and admins to register, login, and manage profiles.
 
 ### Story 2.1: Authentication API (NestJS)
-- [/] Implement JWT Auth module in NestJS.
-- [/] Create Role-Based Access Control (RBAC) guards for WORKER, FACILITY, ADMIN.
-- [/] Create login and registration endpoints.
+- [x] Implement JWT Auth module in NestJS.
+- [x] Create Role-Based Access Control (RBAC) guards for WORKER, FACILITY, ADMIN.
+- [x] Create login and registration endpoints.
 
 ### Story 2.2: User Profiles
-- [/] Create `WorkerProfile` CRUD endpoints (including GeoJSON location fields).
-- [/] Create `FacilityProfile` CRUD endpoints (including GeoJSON location fields).
-- [/] Build Frontend Registration/Login forms (Next.js).
+- [x] Create `WorkerProfile` CRUD endpoints (including GeoJSON location fields).
+- [x] Create `FacilityProfile` CRUD endpoints (including GeoJSON location fields).
+- [x] Build Frontend Registration/Login forms (Next.js).
 
 ## Sprint 3: Shift Management (Facility Side)
 **Goal**: Facilities can create, update, and list their shifts.
 
 ### Story 3.1: Shift API
-- [ ] Implement Shift CRUD endpoints in NestJS.
-- [ ] Enforce business rules (required fields: `roleRequired`, `startTime`, `endTime`, `hourlyRate`).
+- [x] Implement Shift CRUD endpoints in NestJS.
+- [x] Enforce business rules (required fields: `roleRequired`, `startTime`, `endTime`, `hourlyRate`).
 
 ### Story 3.2: Facility Dashboard UI
-- [ ] Build UI modal to post a new shift (Role dropdown, Date/Time picker).
-- [ ] Build Dashboard UI to list active and upcoming shifts.
-- [ ] Display dashboard metrics (fill times, active shifts).
+- [x] Build UI modal to post a new shift (Role dropdown, Date/Time picker).
+- [x] Build Dashboard UI to list active and upcoming shifts.
+- [x] Display dashboard metrics (fill times, active shifts).
 
 ## Sprint 4: Matching Engine & Real-Time Communications
 **Goal**: Broadcast shifts in real-time and allow workers to accept them based on proximity.
 
 ### Story 4.1: Geospatial Matching API
-- [ ] Implement `2dsphere` query in NestJS to find shifts near a worker's location.
-- [ ] Create endpoint for workers to browse open shifts in their designated radius.
+- [/] Implement `2dsphere` query in NestJS to find shifts near a worker's location.
+- [/] Create endpoint for workers to browse open shifts in their designated radius.
 
 ### Story 4.2: Real-time Socket.io Integration
-- [ ] Setup Socket.io Gateway in NestJS (`WebSocket` module).
-- [ ] Emit `shift.created` event when a facility posts a shift to nearby workers.
-- [ ] Emit `shift.accepted` event to the facility when a worker accepts.
-- [ ] Implement WebSocket client in Next.js.
+- [/] Setup Socket.io Gateway in NestJS (`WebSocket` module).
+- [/] Emit `shift.created` event when a facility posts a shift to nearby workers.
+- [/] Emit `shift.accepted` event to the facility when a worker accepts.
+- [/] Implement WebSocket client in Next.js.
 
 ### Story 4.3: Worker Dashboard UI
-- [ ] Build UI for workers to browse shifts (List/Map view toggle).
-- [ ] Build detailed Shift Card UI.
-- [ ] Build UI and flow for "Accept Shift" button.
+- [/] Build UI for workers to browse shifts (List/Map view toggle).
+- [/] Build detailed Shift Card UI.
+- [/] Build UI and flow for "Accept Shift" button.
 
 ## Sprint 5: Notifications & Admin Dashboard
 **Goal**: Send transactional emails and provide oversight tools for admins.

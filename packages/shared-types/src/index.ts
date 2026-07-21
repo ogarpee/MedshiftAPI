@@ -50,3 +50,38 @@ export interface Address {
   postalCode?: string;
   country: string;
 }
+
+export interface AuthTokenPayload {
+  sub: string;
+  email: string;
+  role: UserRole;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  user: {
+    id: string;
+    email: string;
+    role: UserRole;
+    status: AccountStatus;
+  };
+}
+
+export interface ShiftSummary {
+  id: string;
+  facilityId: string;
+  roleRequired: ClinicalRole;
+  startTime: string;
+  endTime: string;
+  hourlyRate: number;
+  status: ShiftStatus;
+  location: GeoPoint;
+  description?: string;
+}
+
+export interface ShiftMetrics {
+  activeShifts: number;
+  upcomingShifts: number;
+  completedShifts: number;
+  averageFillTimeMinutes: number | null;
+}
