@@ -40,6 +40,15 @@ export const BackgroundCheckStatus = {
 
 export type BackgroundCheckStatus = (typeof BackgroundCheckStatus)[keyof typeof BackgroundCheckStatus];
 
+export const OnboardingStatus = {
+  Incomplete: "INCOMPLETE",
+  PendingReview: "PENDING_REVIEW",
+  Approved: "APPROVED",
+  Rejected: "REJECTED"
+} as const;
+
+export type OnboardingStatus = (typeof OnboardingStatus)[keyof typeof OnboardingStatus];
+
 export const ShiftStatus = {
   Open: "OPEN",
   Matched: "MATCHED",
@@ -129,4 +138,10 @@ export interface ReviewSummary {
   rating: number;
   comment?: string;
   createdAt?: string;
+}
+
+export interface OnboardingState {
+  completedAt?: string | Date;
+  verificationStatus: OnboardingStatus;
+  rejectedReason?: string;
 }

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { ClinicalRole, ShiftMetrics, ShiftStatus, ShiftSummary } from "@medshift/shared-types";
-import { MedShiftLogo, StatusBadge } from "@medshift/ui-components";
+import { DashboardShell, StatusBadge } from "@medshift/ui-components";
 
 const demoShifts: ShiftSummary[] = [
   {
@@ -73,9 +73,20 @@ export default function FacilityDashboardPage() {
       return;
     }
 
-    fetch(`${apiUrl}/shifts`, {
+    fetch(`${apiUrl}/facility-profiles/onboarding-status`, {
       headers: { Authorization: `Bearer ${token}` }
     })
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((status: { completed?: boolean }) => {
+        if (!status.completed) {
+          window.location.assign("/facility/onboarding");
+          return Promise.reject();
+        }
+
+        return fetch(`${apiUrl}/shifts`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      })
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((result: ShiftSummary[]) => setShifts(result))
       .catch(() => setMessage("Showing dashboard preview until your facility profile is connected."));
@@ -83,17 +94,46 @@ export default function FacilityDashboardPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const trimmedDescription = description.trim();
+    const startTimestamp = new Date(startTime).getTime();
+    const endTimestamp = new Date(endTime).getTime();
+    const rate = Number(hourlyRate);
+
+    if (!startTime || Number.isNaN(startTimestamp)) {
+      setMessage("Choose a valid shift start date and time.");
+      return;
+    }
+
+    if (!endTime || Number.isNaN(endTimestamp)) {
+      setMessage("Choose a valid shift end date and time.");
+      return;
+    }
+
+    if (endTimestamp <= startTimestamp) {
+      setMessage("Shift end time must be after the start time.");
+      return;
+    }
+
+    if (!Number.isFinite(rate) || rate <= 0) {
+      setMessage("Enter a valid hourly rate greater than 0.");
+      return;
+    }
+
+    if (trimmedDescription.length < 12) {
+      setMessage("Add a shift description with at least 12 characters.");
+      return;
+    }
 
     const draftShift: ShiftSummary = {
       id: `draft-${Date.now()}`,
       facilityId: "current-facility",
       roleRequired,
-      startTime: new Date(startTime).toISOString(),
-      endTime: new Date(endTime).toISOString(),
-      hourlyRate: Number(hourlyRate),
+      startTime: new Date(startTimestamp).toISOString(),
+      endTime: new Date(endTimestamp).toISOString(),
+      hourlyRate: rate,
       status: ShiftStatus.Open,
       location: { type: "Point", coordinates: [-114.0719, 51.0447] },
-      description
+      description: trimmedDescription
     };
 
     const token = window.localStorage.getItem("medshift.accessToken");
@@ -111,7 +151,7 @@ export default function FacilityDashboardPage() {
           endTime: draftShift.endTime,
           hourlyRate: draftShift.hourlyRate,
           location: draftShift.location,
-          description
+          description: trimmedDescription
         })
       });
 
@@ -134,7 +174,7 @@ export default function FacilityDashboardPage() {
 
   async function submitReview(shift: ShiftSummary) {
     const rating = reviewRatings[shift.id] ?? 5;
-    const comment = reviewComments[shift.id] ?? "";
+    const comment = (reviewComments[shift.id] ?? "").trim();
     const token = window.localStorage.getItem("medshift.accessToken");
 
     if (!token || shift.id.startsWith("demo-")) {
@@ -155,21 +195,30 @@ export default function FacilityDashboardPage() {
   }
 
   return (
-    <main className="facility-page">
-      <nav className="facility-nav">
-        <MedShiftLogo />
-        <a href="/login">Login</a>
-      </nav>
-
+    <DashboardShell
+      actions={
+        <button className="button-primary" type="button" onClick={() => setIsModalOpen(true)}>
+          Post shift
+        </button>
+      }
+      className="facility-page"
+      eyebrow={<StatusBadge tone="navy">Facility roster</StatusBadge>}
+      navItems={[
+        { label: "Roster", href: "/facility", active: true },
+        { label: "Onboarding", href: "/facility/onboarding" },
+        { label: "Post shifts", href: "/facility#post-shift" },
+        { label: "Reviews", href: "/facility#reviews" },
+        { label: "Worker portal", href: "/worker" }
+      ]}
+      title="Shift command centre"
+      userLabel="Facility workspace"
+    >
       <section className="facility-shell">
         <header className="facility-header">
           <div>
-            <StatusBadge tone="navy">Facility roster</StatusBadge>
-            <h1>Shift command centre</h1>
+            <h2>Coverage overview</h2>
+            <p>Track active shifts, fill status, and completed shift reviews.</p>
           </div>
-          <button className="button-primary" type="button" onClick={() => setIsModalOpen(true)}>
-            Post shift
-          </button>
         </header>
 
         <section className="facility-metrics" aria-label="Dashboard metrics">
@@ -222,6 +271,8 @@ export default function FacilityDashboardPage() {
                       ))}
                     </div>
                     <input
+                      maxLength={280}
+                      name={`review-${shift.id}`}
                       value={reviewComments[shift.id] ?? ""}
                       onChange={(event) => setReviewComments((current) => ({ ...current, [shift.id]: event.target.value }))}
                       placeholder="Add worker feedback"
@@ -237,7 +288,7 @@ export default function FacilityDashboardPage() {
 
       {isModalOpen ? (
         <div className="modal-backdrop" role="presentation">
-          <section className="post-shift-modal" role="dialog" aria-modal="true" aria-labelledby="post-shift-title">
+          <section className="post-shift-modal" id="post-shift" role="dialog" aria-modal="true" aria-labelledby="post-shift-title">
             <div className="modal-heading">
               <h2 id="post-shift-title">Post a shift</h2>
               <button type="button" onClick={() => setIsModalOpen(false)} aria-label="Close post shift modal">
@@ -247,7 +298,13 @@ export default function FacilityDashboardPage() {
             <form className="post-shift-form" onSubmit={handleSubmit}>
               <label>
                 Role
-                <select value={roleRequired} onChange={(event) => setRoleRequired(event.target.value as ClinicalRole)}>
+                <select
+                  aria-label="Clinical role"
+                  name="roleRequired"
+                  required
+                  value={roleRequired}
+                  onChange={(event) => setRoleRequired(event.target.value as ClinicalRole)}
+                >
                   <option value={ClinicalRole.Hca}>HCA</option>
                   <option value={ClinicalRole.Rn}>RN</option>
                   <option value={ClinicalRole.Lpn}>LPN</option>
@@ -256,26 +313,60 @@ export default function FacilityDashboardPage() {
               </label>
               <label>
                 Start
-                <input value={startTime} onChange={(event) => setStartTime(event.target.value)} type="datetime-local" required />
+                <input
+                  name="startTime"
+                  onChange={(event) => setStartTime(event.target.value)}
+                  placeholder="Select start date and time"
+                  required
+                  type="datetime-local"
+                  value={startTime}
+                />
               </label>
               <label>
                 End
-                <input value={endTime} onChange={(event) => setEndTime(event.target.value)} type="datetime-local" required />
+                <input
+                  name="endTime"
+                  onChange={(event) => setEndTime(event.target.value)}
+                  placeholder="Select end date and time"
+                  required
+                  type="datetime-local"
+                  value={endTime}
+                />
               </label>
               <label>
                 Hourly rate
-                <input value={hourlyRate} onChange={(event) => setHourlyRate(event.target.value)} min="0" type="number" required />
+                <input
+                  inputMode="decimal"
+                  max="250"
+                  min="1"
+                  name="hourlyRate"
+                  onChange={(event) => setHourlyRate(event.target.value)}
+                  placeholder="45.00"
+                  required
+                  step="0.01"
+                  type="number"
+                  value={hourlyRate}
+                />
               </label>
               <label className="wide-field">
                 Description
-                <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
+                <textarea
+                  maxLength={240}
+                  minLength={12}
+                  name="description"
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Describe the unit, responsibilities, and shift notes"
+                  required
+                  rows={3}
+                  value={description}
+                />
               </label>
               <button className="auth-submit wide-field" type="submit">Publish to network</button>
             </form>
           </section>
         </div>
       ) : null}
-    </main>
+    </DashboardShell>
   );
 }
 

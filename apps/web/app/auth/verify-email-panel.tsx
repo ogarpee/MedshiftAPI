@@ -66,10 +66,11 @@ export function VerifyEmailPanel() {
 
   async function handleResend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
 
-    if (!email) {
-      setResendMessage("Enter your email address first.");
-      notify("Enter your email address first.", "error");
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      setResendMessage("Enter a valid email address first.");
+      notify("Enter a valid email address first.", "error");
       return;
     }
 
@@ -80,7 +81,7 @@ export function VerifyEmailPanel() {
       const response = await fetch(`${apiUrl}/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: normalizedEmail })
       });
       const result = await readVerificationResponse(response);
 
@@ -122,7 +123,16 @@ export function VerifyEmailPanel() {
           <form className={styles.form} onSubmit={handleResend}>
             <label>
               Email
-              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
+              <input
+                autoComplete="email"
+                maxLength={254}
+                name="email"
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="name@example.com"
+                required
+                type="email"
+                value={email}
+              />
             </label>
             <button className={styles.submit} type="submit" disabled={isResending}>
               {isResending ? "Sending..." : "Resend verification email"}
@@ -176,4 +186,8 @@ function formatVerificationMessage(result: VerifyEmailResult, fallback: string) 
   }
 
   return result.message ?? fallback;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }

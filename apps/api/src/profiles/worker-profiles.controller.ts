@@ -31,6 +31,12 @@ export class WorkerProfilesController {
     return this.workerProfilesService.findMe(request.user);
   }
 
+  @Roles(UserRole.Worker)
+  @Get("onboarding-status")
+  getOnboardingStatus(@Req() request: AuthRequest) {
+    return this.workerProfilesService.getOnboardingStatus(request.user);
+  }
+
   @Roles(UserRole.Worker, UserRole.Admin)
   @Get(":id")
   findOne(@Req() request: AuthRequest, @Param("id") id: string) {

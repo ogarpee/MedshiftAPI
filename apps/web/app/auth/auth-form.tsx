@@ -2,14 +2,14 @@
 
 import { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { CircleCheck, Eye, EyeOff } from "lucide-react";
 import { AccountStatus, UserRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { useToast } from "../toast-provider";
 import styles from "./auth-form.module.css";
 
 type AuthMode = "login" | "register";
-type RegistrationStep = "email" | "otp" | "complete";
+type RegistrationStep = "email" | "otp" | "complete" | "success";
 
 interface AuthUser {
   id: string;
@@ -28,6 +28,10 @@ interface AuthApiResult {
   registrationOtpRequired?: boolean;
   registrationToken?: string;
   user?: AuthUser;
+}
+
+interface OnboardingRouteStatus {
+  completed?: boolean;
 }
 
 interface AuthFormProps {
@@ -56,12 +60,17 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const adminUrl = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001", []);
   const endpoint = useMemo(() => `${apiUrl}/auth/${mode}`, [apiUrl, mode]);
   const otp = otpDigits.join("");
   const isOtpStep = mode === "register" && registrationStep === "otp";
+  const isRegistrationSuccess = mode === "register" && registrationStep === "success";
   const isSubmitDisabled = isSubmitting || (isOtpStep && otp.length !== 6);
+  const profileHref = role === UserRole.Facility ? "/facility/onboarding" : "/worker/onboarding";
+  const profileLabel = role === UserRole.Facility ? "Proceed to facility profile" : "Proceed to worker profile";
   const submitText =
     mode === "register"
       ? registrationStep === "email"
@@ -82,6 +91,14 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validationMessage = validateAuthForm();
+
+    if (validationMessage) {
+      setMessage(validationMessage);
+      notify(validationMessage, "error");
+      return;
+    }
+
     setIsSubmitting(true);
     setMessage("");
     setResendMessage("");
@@ -130,9 +147,24 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
 
       if (result.accessToken && result.user) {
         window.localStorage.setItem("medshift.accessToken", result.accessToken);
+        window.localStorage.setItem("medshift.authUser", JSON.stringify(result.user));
         setUser(result.user);
-        setMessage(mode === "login" ? "Signed in successfully." : "Registration complete. Complete your profile next.");
-        notify(mode === "login" ? "Signed in successfully." : "Registration complete.", "success");
+        if (mode === "login") {
+          setMessage("");
+          setIsRedirecting(true);
+          const redirectHref = await getPostLoginHref(result.user.role, {
+            accessToken: result.accessToken,
+            adminUrl,
+            apiUrl
+          });
+          window.location.replace(redirectHref);
+          return;
+        }
+        if (mode === "register") {
+          notify("Registration complete.", "success");
+          setRegistrationStep("success");
+          setPassword("");
+        }
       }
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Check that the API server is running and NEXT_PUBLIC_API_URL is correct.";
@@ -144,11 +176,13 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   }
 
   async function submitAuthStep() {
+    const normalizedEmail = email.trim().toLowerCase();
+
     if (mode === "login") {
       return fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: normalizedEmail, password })
       });
     }
 
@@ -156,7 +190,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
       return fetch(`${apiUrl}/auth/register/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email: normalizedEmail, role })
       });
     }
 
@@ -164,23 +198,29 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
       return fetch(`${apiUrl}/auth/register/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp })
+        body: JSON.stringify({ email: normalizedEmail, otp })
       });
     }
 
     return fetch(`${apiUrl}/auth/register/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, registrationToken, role })
+      body: JSON.stringify({ email: normalizedEmail, password, registrationToken, role })
     });
   }
 
   async function handleResendVerification() {
-    const targetEmail = verificationEmail || email;
+    const targetEmail = (verificationEmail || email).trim().toLowerCase();
 
-    if (!targetEmail) {
-      setResendMessage("Enter your email address first.");
-      notify("Enter your email address first.", "error");
+    if (!targetEmail || !isValidEmail(targetEmail)) {
+      setResendMessage("Enter a valid email address first.");
+      notify("Enter a valid email address first.", "error");
+      return;
+    }
+
+    if (mode === "register" && role === UserRole.Facility && !isFacilityWorkEmail(targetEmail)) {
+      setResendMessage("Use your facility work email address to register a facility account.");
+      notify("Use your facility work email address to register a facility account.", "error");
       return;
     }
 
@@ -191,7 +231,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
       const response = await fetch(mode === "register" ? `${apiUrl}/auth/register/start` : `${apiUrl}/auth/resend-verification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: targetEmail })
+        body: JSON.stringify(mode === "register" ? { email: targetEmail, role } : { email: targetEmail })
       });
       const result = await readAuthResponse(response);
 
@@ -238,6 +278,32 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     setOtpDigits(Array.from({ length: 6 }, (_, index) => pastedValue[index] ?? ""));
   }
 
+  function validateAuthForm() {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      return "Enter a valid email address.";
+    }
+
+    if (mode === "register" && role === UserRole.Facility && !isFacilityWorkEmail(normalizedEmail)) {
+      return "Use your facility work email address to register a facility account.";
+    }
+
+    if (mode === "register" && registrationStep === "otp" && !/^\d{6}$/.test(otp)) {
+      return "Enter the 6-digit verification code.";
+    }
+
+    if (mode === "register" && registrationStep === "success") {
+      return "";
+    }
+
+    if ((mode === "login" || registrationStep === "complete") && password.length < 8) {
+      return "Password must be at least 8 characters.";
+    }
+
+    return "";
+  }
+
   return (
     <main className={`${styles.authPage} ${mode === "register" ? styles.registerPage : ""}`}>
       <section className={styles.panel}>
@@ -249,83 +315,129 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
         </div>
 
         <div className={styles.heading}>
-          <h1>{heading}</h1>
+          <h1>{isRegistrationSuccess ? "Congratulations" : heading}</h1>
           <p>{mode === "register" ? getRegistrationStepCopy(registrationStep, email, supportingCopy) : supportingCopy}</p>
         </div>
 
-        <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
-          {mode === "register" && registrationStep === "otp" ? (
-            <div className={styles.otpGroup} aria-label="Verification code">
-              {otpDigits.map((digit, index) => (
-                <input
-                  inputMode="numeric"
-                  key={index}
-                  maxLength={1}
-                  onChange={(event) => handleOtpChange(index, event.target.value, event.currentTarget)}
-                  onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                  onPaste={handleOtpPaste}
-                  pattern="[0-9]*"
-                  required
-                  type="text"
-                  value={digit}
-                />
-              ))}
+        {isRegistrationSuccess ? (
+          <div className={styles.completionCard}>
+            <div className={styles.completionMark} aria-hidden="true">
+              <CircleCheck size={24} />
             </div>
-          ) : (
-            <label>
-              Email
-              <input
-                disabled={mode === "register" && registrationStep === "complete"}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                type="email"
-                required
-              />
-            </label>
-          )}
+            <div>
+              <strong>{user?.email ?? email}</strong>
+              <span>{role === UserRole.Facility ? "Facility account created" : "Worker account created"}</span>
+            </div>
+            <ul>
+              {role === UserRole.Facility ? (
+                <>
+                  <li>Complete your facility profile with care setting, address, and operating details.</li>
+                  <li>MedShift will review your facility registration before live shift posting is enabled.</li>
+                </>
+              ) : (
+                <>
+                  <li>Complete your worker profile with location, clinical role, and availability.</li>
+                  <li>Upload credentials and background-check details so MedShift can verify you for live shifts.</li>
+                </>
+              )}
+            </ul>
+            <Link className={styles.primaryLink} href={profileHref}>
+              {profileLabel}
+            </Link>
+          </div>
+        ) : (
+          <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
+            {mode === "register" && registrationStep === "email" ? (
+              <label>
+                Account type
+                <select
+                  aria-label="Account type"
+                  name="accountType"
+                  required
+                  value={role}
+                  onChange={(event) => setRole(event.target.value as UserRole)}
+                >
+                  <option value={UserRole.Worker}>Healthcare worker</option>
+                  <option value={UserRole.Facility}>Facility</option>
+                </select>
+              </label>
+            ) : null}
 
-          {mode === "login" || registrationStep === "complete" ? (
-            <label>
-              Password
-              <span className={styles.passwordField}>
+            {mode === "register" && registrationStep === "otp" ? (
+              <div className={styles.otpGroup} aria-label="Verification code">
+                {otpDigits.map((digit, index) => (
+                  <input
+                    inputMode="numeric"
+                    key={index}
+                    maxLength={1}
+                    name={`otp-${index + 1}`}
+                    onChange={(event) => handleOtpChange(index, event.target.value, event.currentTarget)}
+                    onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                    onPaste={handleOtpPaste}
+                    pattern="[0-9]*"
+                    placeholder="0"
+                    required
+                    type="text"
+                    aria-label={`Verification code digit ${index + 1}`}
+                    autoComplete={index === 0 ? "one-time-code" : "off"}
+                    value={digit}
+                  />
+                ))}
+              </div>
+            ) : (
+              <label>
+                {mode === "register" && role === UserRole.Facility ? "Work email" : "Email"}
                 <input
-                  value={password}
-                  minLength={8}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type={isPasswordVisible ? "text" : "password"}
+                  disabled={mode === "register" && registrationStep === "complete"}
+                  value={email}
+                  autoComplete="email"
+                  maxLength={254}
+                  name="email"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder={mode === "register" && role === UserRole.Facility ? "name@facility.ca" : "name@example.com"}
+                  type="email"
                   required
                 />
-                <button
-                  aria-label={isPasswordVisible ? "Hide password" : "Show password"}
-                  className={styles.passwordToggle}
-                  onClick={() => setIsPasswordVisible((current) => !current)}
-                  type="button"
-                >
-                  {isPasswordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
-                </button>
-              </span>
-              {mode === "login" ? (
-                <Link className={styles.passwordHelp} href="/forgot-password">
-                  Forgot password?
-                </Link>
-              ) : null}
-            </label>
-          ) : null}
+              </label>
+            )}
 
-          {mode === "register" && registrationStep === "complete" ? (
-            <label>
-              Account type
-              <select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
-                <option value={UserRole.Worker}>Healthcare worker</option>
-                <option value={UserRole.Facility}>Facility</option>
-              </select>
-            </label>
-          ) : null}
+            {mode === "login" || registrationStep === "complete" ? (
+              <label>
+                Password
+                <span className={styles.passwordField}>
+                  <input
+                    value={password}
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    maxLength={128}
+                    minLength={8}
+                    name="password"
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder={mode === "login" ? "Enter your password" : "Create a password"}
+                    type={isPasswordVisible ? "text" : "password"}
+                    required
+                  />
+                  <button
+                    aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+                    className={styles.passwordToggle}
+                    onClick={() => setIsPasswordVisible((current) => !current)}
+                    type="button"
+                  >
+                    {isPasswordVisible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
+                  </button>
+                </span>
+                {mode === "login" ? (
+                  <Link className={styles.passwordHelp} href="/forgot-password">
+                    Forgot password?
+                  </Link>
+                ) : null}
+              </label>
+            ) : null}
 
-          <button className={styles.submit} type="submit" disabled={isSubmitDisabled}>
-            {isSubmitting ? "Working..." : submitText}
-          </button>
-        </form>
+            <button className={styles.submit} type="submit" disabled={isSubmitDisabled || isRedirecting}>
+              {isRedirecting ? "Opening your workspace..." : isSubmitting ? "Working..." : submitText}
+            </button>
+          </form>
+        )}
 
         {mode === "register" && registrationStep === "otp" ? (
           <div className={styles.registrationActions}>
@@ -347,7 +459,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
           </div>
         ) : null}
 
-        {!isOtpStep ? (
+        {!isOtpStep && !isRegistrationSuccess ? (
           <div className={styles.alternate}>
             {mode === "login" ? (
               <>
@@ -372,7 +484,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
             {resendMessage ? <span>{resendMessage}</span> : null}
           </div>
         ) : null}
-        {user ? (
+        {user && mode !== "login" && !isRegistrationSuccess ? (
           <div className={styles.summary}>
             <strong>{user.email}</strong>
             <span>{user.role}</span>
@@ -437,5 +549,68 @@ function getRegistrationStepCopy(step: RegistrationStep, email: string, fallback
     return `Enter the 6-digit code sent to ${email}.`;
   }
 
+  if (step === "success") {
+    return "Your account is created and your email is verified. Complete your profile so MedShift can finish role-specific verification.";
+  }
+
   return fallback;
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isFacilityWorkEmail(email: string) {
+  const domain = email.split("@")[1] ?? "";
+  const personalDomains = new Set([
+    "gmail.com",
+    "googlemail.com",
+    "yahoo.com",
+    "hotmail.com",
+    "outlook.com",
+    "live.com",
+    "icloud.com",
+    "aol.com",
+    "proton.me",
+    "protonmail.com"
+  ]);
+
+  return Boolean(domain) && !personalDomains.has(domain);
+}
+
+function getDashboardHref(role: UserRole, adminUrl: string) {
+  if (role === UserRole.Facility) {
+    return "/facility";
+  }
+
+  if (role === UserRole.Admin) {
+    return adminUrl;
+  }
+
+  return "/worker";
+}
+
+async function getPostLoginHref(role: UserRole, options: { accessToken: string; adminUrl: string; apiUrl: string }) {
+  if (role === UserRole.Admin) {
+    return options.adminUrl;
+  }
+
+  const dashboardHref = getDashboardHref(role, options.adminUrl);
+  const onboardingHref = role === UserRole.Facility ? "/facility/onboarding" : "/worker/onboarding";
+  const statusPath = role === UserRole.Facility ? "facility-profiles/onboarding-status" : "worker-profiles/onboarding-status";
+
+  try {
+    const response = await fetch(`${options.apiUrl}/${statusPath}`, {
+      headers: { Authorization: `Bearer ${options.accessToken}` }
+    });
+
+    if (!response.ok) {
+      return onboardingHref;
+    }
+
+    const status = (await response.json()) as OnboardingRouteStatus;
+    return status.completed ? dashboardHref : onboardingHref;
+  } catch {
+    return dashboardHref;
+  }
 }

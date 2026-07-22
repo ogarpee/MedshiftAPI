@@ -1,23 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { UserRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 
 type SignupType = "worker" | "facility";
 
+type StoredAuthUser = {
+  email: string;
+  role: UserRole;
+};
+
 const steps = [
   {
     title: "Post or Browse",
-    copy: "Facilities post open shifts in minutes. Workers browse available opportunities in their area and specialty."
+    copy: "Facilities post open shifts in minutes. Workers browse available opportunities in their area and specialty.",
+    icon: <CalendarIcon />,
+    label: "Shift intake",
+    detail: "RN · Tonight · Calgary",
+    meta: ["Role", "Time", "Location"]
   },
   {
     title: "Get Matched",
-    copy: "MedShift surfaces the right fit - verified credentials, proximity, and availability - instantly."
+    copy: "MedShift surfaces the right fit - verified credentials, proximity, and availability - instantly.",
+    icon: <NetworkIcon />,
+    label: "Matching engine",
+    detail: "Credential + proximity score",
+    meta: ["Verified", "Nearby", "Available"]
   },
   {
     title: "Shift Filled",
-    copy: "Confirm, show up, deliver care. Facilities get the coverage they need."
+    copy: "Confirm, show up, deliver care. Facilities get the coverage they need.",
+    icon: <CheckIcon />,
+    label: "Confirmed care",
+    detail: "Sarah J. accepted",
+    meta: ["Notified", "Confirmed", "Covered"]
   }
 ];
 
@@ -80,11 +97,42 @@ export default function HomePage() {
   const [signupType, setSignupType] = useState<SignupType>("worker");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [authUser, setAuthUser] = useState<StoredAuthUser | null>(null);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const dashboardHref = useMemo(() => getDashboardHref(authUser?.role), [authUser?.role]);
+  const userInitials = useMemo(() => getUserInitials(authUser?.email), [authUser?.email]);
 
-  async function handleSignup() {
-    const trimmedEmail = email.trim();
+  useEffect(() => {
+    const accessToken = window.localStorage.getItem("medshift.accessToken");
+    const storedUser = window.localStorage.getItem("medshift.authUser");
 
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+    if (!accessToken) {
+      setHasCheckedAuth(true);
+      return;
+    }
+
+    if (!storedUser) {
+      const tokenUser = readUserFromToken(accessToken);
+      setAuthUser(tokenUser);
+      setHasCheckedAuth(true);
+      return;
+    }
+
+    try {
+      setAuthUser(JSON.parse(storedUser) as StoredAuthUser);
+    } catch {
+      window.localStorage.removeItem("medshift.authUser");
+    } finally {
+      setHasCheckedAuth(true);
+    }
+  }, []);
+
+  async function handleSignup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail || !isValidEmail(trimmedEmail)) {
       setMessage("Please enter a valid email address.");
       return;
     }
@@ -106,6 +154,13 @@ export default function HomePage() {
     }
   }
 
+  function handleLogout() {
+    window.localStorage.removeItem("medshift.accessToken");
+    window.localStorage.removeItem("medshift.authUser");
+    setAuthUser(null);
+    setIsProfileMenuOpen(false);
+  }
+
   return (
     <main className="marketing-page">
       <nav className="marketing-nav">
@@ -114,8 +169,41 @@ export default function HomePage() {
           <a href="#workers">For Workers</a>
           <a href="#facilities">For Facilities</a>
           <a href="#how">How It Works</a>
-          <a href="/login">Login</a>
-          <a className="btn-nav" href="#signup">Join Now</a>
+          {!hasCheckedAuth ? (
+            <span className="nav-auth-placeholder" aria-hidden="true" />
+          ) : authUser ? (
+            <div className="nav-profile">
+              <button
+                aria-expanded={isProfileMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Open profile menu"
+                className="nav-profile-button"
+                onClick={() => setIsProfileMenuOpen((current) => !current)}
+                type="button"
+              >
+                <span className="nav-profile-avatar">{userInitials}</span>
+              </button>
+              {isProfileMenuOpen ? (
+                <div className="nav-profile-menu" role="menu">
+                  <div className="nav-profile-summary">
+                    <strong>{authUser.email}</strong>
+                    <span>{formatRole(authUser.role)}</span>
+                  </div>
+                  <a href={dashboardHref} role="menuitem">
+                    Go to dashboard
+                  </a>
+                  <button onClick={handleLogout} role="menuitem" type="button">
+                    Logout
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <a href="/login">Login</a>
+              <a className="btn-nav" href="#signup">Join Now</a>
+            </>
+          )}
         </div>
       </nav>
 
@@ -201,9 +289,26 @@ export default function HomePage() {
           <div className="steps">
             {steps.map((step, index) => (
               <article className="step" key={step.title}>
-                <div className="step-num">{index + 1}</div>
-                <h3>{step.title}</h3>
-                <p>{step.copy}</p>
+                <div className="step-connector" aria-hidden="true">→</div>
+                <div className="step-visual">
+                  <div className="step-icon">{step.icon}</div>
+                  <div>
+                    <span>{step.label}</span>
+                    <strong>{step.detail}</strong>
+                  </div>
+                </div>
+                <div className="step-meta">
+                  {step.meta.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
+                <div className="step-copy">
+                  <div className="step-num">{index + 1}</div>
+                  <div>
+                    <h3>{step.title}</h3>
+                    <p>{step.copy}</p>
+                  </div>
+                </div>
               </article>
             ))}
           </div>
@@ -305,17 +410,18 @@ export default function HomePage() {
           </div>
           <form
             className="signup-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              handleSignup();
-            }}
+            onSubmit={handleSignup}
           >
             <input
               aria-label="Email address"
+              autoComplete="email"
+              maxLength={254}
+              name="email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder={signupType === "worker" ? "name@example.com" : "name@facility.ca"}
+              required
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder={signupType === "worker" ? "Enter your email address" : "Enter your work email"}
             />
             <button className="btn-primary" type="submit">
               Get Early Access →
@@ -420,4 +526,83 @@ function PinIcon() {
       <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   );
+}
+
+function NetworkIcon() {
+  return (
+    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="6" cy="7" r="3" />
+      <circle cx="18" cy="7" r="3" />
+      <circle cx="12" cy="17" r="3" />
+      <path d="M8.6 9.1l2 4.1M15.4 9.1l-2 4.1M9 7h6" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function getDashboardHref(role?: UserRole) {
+  if (role === UserRole.Facility) {
+    return "/facility";
+  }
+
+  if (role === UserRole.Admin) {
+    return process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001";
+  }
+
+  return "/worker";
+}
+
+function getUserInitials(email?: string) {
+  if (!email) {
+    return "MS";
+  }
+
+  return email
+    .split("@")[0]
+    .split(/[._-]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "MS";
+}
+
+function formatRole(role: UserRole) {
+  return role.charAt(0) + role.slice(1).toLowerCase();
+}
+
+function readUserFromToken(accessToken: string): StoredAuthUser | null {
+  try {
+    const payload = JSON.parse(decodeBase64Url(accessToken.split(".")[1] ?? "")) as Partial<StoredAuthUser>;
+
+    if (!payload.email || !isKnownRole(payload.role)) {
+      return null;
+    }
+
+    return {
+      email: payload.email,
+      role: payload.role
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isKnownRole(role: unknown): role is UserRole {
+  return role === UserRole.Worker || role === UserRole.Facility || role === UserRole.Admin;
+}
+
+function decodeBase64Url(value: string) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return window.atob(base64);
 }

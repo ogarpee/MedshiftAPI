@@ -297,6 +297,49 @@
   margin-top: 22px;
 }
 
+.completionCard {
+  background: #ffffff;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 18px;
+}
+
+.completionMark {
+  align-items: center;
+  background: rgba(212, 175, 55, 0.18);
+  border-radius: 999px;
+  color: #0b1f3a;
+  display: inline-flex;
+  height: 46px;
+  justify-content: center;
+  width: 46px;
+}
+
+.completionCard strong {
+  color: #0b1f3a;
+  display: block;
+  font-size: 1rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.completionCard span,
+.completionCard li {
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.completionCard ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .primaryLink {
   align-items: center;
   background: #d4af37;

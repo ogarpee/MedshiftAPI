@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument } from "mongoose";
+import { UserRole } from "@medshift/shared-types";
 
 export type RegistrationAttemptDocument = HydratedDocument<RegistrationAttempt>;
 
@@ -7,6 +8,9 @@ export type RegistrationAttemptDocument = HydratedDocument<RegistrationAttempt>;
 export class RegistrationAttempt {
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   email!: string;
+
+  @Prop({ required: true, enum: [UserRole.Worker, UserRole.Facility] })
+  role!: UserRole;
 
   @Prop({ required: true })
   otpHash!: string;

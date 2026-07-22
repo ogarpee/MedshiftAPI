@@ -38,6 +38,7 @@ Stores temporary OTP state before a user account is created.
 {
   _id: ObjectId,
   email: { type: String, unique: true, required: true },
+  role: { type: String, enum: ['WORKER', 'FACILITY'], required: true },
   otpHash: { type: String, required: true },
   otpExpiresAt: Date,
   otpSentAt: Date,
@@ -64,12 +65,13 @@ Stores specific information about healthcare professionals.
   title: { type: String, enum: ['HCA', 'RN', 'LPN', 'PSW'], required: true }, // Healthcare Assistant, Registered Nurse, etc.
   credentials: [{
     type: { type: String },
-    documentUrl: String,
+    documentUrl: String, // Cloudinary secure_url from worker credential upload
     isVerified: { type: Boolean, default: false },
     verifiedAt: Date
   }],
   backgroundCheck: {
     status: { type: String, enum: ['PENDING', 'PASSED', 'FAILED'], default: 'PENDING' },
+    consentedAt: Date,
     completedAt: Date
   },
   location: {
@@ -78,7 +80,14 @@ Stores specific information about healthcare professionals.
   },
   preferences: {
     maxDistanceKm: { type: Number, default: 25 },
+    availableDays: [{ type: String, enum: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'] }],
+    preferredShiftTypes: [{ type: String, enum: ['DAY', 'EVENING', 'NIGHT', 'WEEKEND'] }],
     preferredFacilities: [{ type: ObjectId, ref: 'facility_profiles' }]
+  },
+  onboarding: {
+    completedAt: Date,
+    verificationStatus: { type: String, enum: ['INCOMPLETE', 'PENDING_REVIEW', 'APPROVED', 'REJECTED'], default: 'INCOMPLETE' },
+    rejectedReason: String
   },
   stats: {
     averageRating: { type: Number, default: 0 },
@@ -112,9 +121,21 @@ Stores information about healthcare facilities posting shifts.
   },
   contactPerson: {
     name: String,
-    phone: String
+    phone: String,
+    email: String
   },
   billingStatus: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'INACTIVE' },
+  readiness: {
+    billingContactEmail: String,
+    paymentMethodLabel: String,
+    staffingContactConfirmed: { type: Boolean, default: false },
+    acceptedTermsAt: Date
+  },
+  onboarding: {
+    completedAt: Date,
+    verificationStatus: { type: String, enum: ['INCOMPLETE', 'PENDING_REVIEW', 'APPROVED', 'REJECTED'], default: 'INCOMPLETE' },
+    rejectedReason: String
+  },
   stats: {
     averageRating: { type: Number, default: 0 }
   },

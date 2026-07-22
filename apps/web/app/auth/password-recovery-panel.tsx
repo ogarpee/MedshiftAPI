@@ -39,6 +39,14 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+      const emailMessage = "Enter a valid email address.";
+      setMessage(emailMessage);
+      notify(emailMessage, "error");
+      return;
+    }
 
     if (isReset && password !== confirmPassword) {
       const mismatchMessage = "Passwords must match.";
@@ -60,7 +68,7 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       const response = await fetch(`${apiUrl}/auth/${isReset ? "reset-password" : "forgot-password"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isReset ? { email, token, password } : { email })
+        body: JSON.stringify(isReset ? { email: normalizedEmail, token, password } : { email: normalizedEmail })
       });
       const result = await readPasswordRecoveryResponse(response);
       const resultMessage = formatPasswordRecoveryMessage(result);
@@ -104,7 +112,16 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
         <form className={styles.form} onSubmit={handleSubmit}>
           <label>
             Email
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
+            <input
+              autoComplete="email"
+              maxLength={254}
+              name="email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@example.com"
+              required
+              type="email"
+              value={email}
+            />
           </label>
 
           {isReset ? (
@@ -114,8 +131,12 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
                 <span className={styles.passwordField}>
                   <input
                     value={password}
+                    autoComplete="new-password"
+                    maxLength={128}
                     minLength={8}
+                    name="newPassword"
                     onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Create a new password"
                     type={isPasswordVisible ? "text" : "password"}
                     required
                   />
@@ -134,8 +155,12 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
                 <span className={styles.passwordField}>
                   <input
                     value={confirmPassword}
+                    autoComplete="new-password"
+                    maxLength={128}
                     minLength={8}
+                    name="confirmPassword"
                     onChange={(event) => setConfirmPassword(event.target.value)}
+                    placeholder="Confirm your new password"
                     type={isConfirmPasswordVisible ? "text" : "password"}
                     required
                   />
@@ -214,4 +239,8 @@ function formatPasswordRecoveryMessage(result: PasswordRecoveryResult) {
   }
 
   return result.message ?? "Unable to continue";
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }

@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-import { AccountStatus, BackgroundCheckStatus, ShiftStatus } from "@medshift/shared-types";
+import { AccountStatus, BackgroundCheckStatus, OnboardingStatus, ShiftStatus } from "@medshift/shared-types";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
+import { NotificationService } from "../notifications/notification.service";
 import { ShiftsGateway } from "../realtime/shifts.gateway";
+import { ReviewOnboardingDto } from "./dto/review-onboarding.dto";
 
 @Injectable()
 export class AdminService {
@@ -15,6 +17,7 @@ export class AdminService {
     @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>,
     @InjectModel(Shift.name) private readonly shifts: Model<ShiftDocument>,
+    private readonly notificationService: NotificationService,
     private readonly shiftsGateway: ShiftsGateway
   ) {}
 
@@ -54,14 +57,19 @@ export class AdminService {
   }
 
   async verificationQueue() {
-    const workers = await this.workerProfiles.find().sort({ createdAt: -1 }).lean().exec();
+    const [workers, facilities] = await Promise.all([
+      this.workerProfiles.find().sort({ createdAt: -1 }).lean().exec(),
+      this.facilityProfiles.find().sort({ createdAt: -1 }).lean().exec()
+    ]);
 
-    return workers
-      .filter((worker) =>
-        worker.backgroundCheck?.status !== BackgroundCheckStatus.Passed ||
-        worker.credentials.some((credential) => !credential.isVerified)
-      )
-      .map((worker) => this.serializeLean(worker));
+    return {
+      workers: workers
+        .filter((worker) => this.isWorkerPendingReview(worker))
+        .map((worker) => this.serializeLean(worker)),
+      facilities: facilities
+        .filter((facility) => this.isFacilityPendingReview(facility))
+        .map((facility) => this.serializeLean(facility))
+    };
   }
 
   async reviewCredential(workerId: string, credentialIndex: number, approved: boolean) {
@@ -85,6 +93,84 @@ export class AdminService {
     return this.serializeDocument(await worker.save());
   }
 
+  async reviewWorkerOnboarding(workerId: string, dto: ReviewOnboardingDto) {
+    if (!Types.ObjectId.isValid(workerId)) {
+      throw new NotFoundException("Worker profile not found");
+    }
+
+    const worker = await this.workerProfiles.findById(workerId).exec();
+
+    if (!worker) {
+      throw new NotFoundException("Worker profile not found");
+    }
+
+    const user = await this.users.findById(worker.userId).exec();
+
+    if (!user) {
+      throw new NotFoundException("Worker user not found");
+    }
+
+    const now = new Date();
+    worker.onboarding.verificationStatus = dto.approved ? OnboardingStatus.Approved : OnboardingStatus.Rejected;
+    worker.onboarding.rejectedReason = dto.approved ? undefined : dto.rejectedReason;
+
+    if (dto.approved) {
+      worker.credentials.forEach((credential) => {
+        credential.isVerified = true;
+        credential.verifiedAt = credential.verifiedAt ?? now;
+      });
+      worker.backgroundCheck.status = BackgroundCheckStatus.Passed;
+      worker.backgroundCheck.completedAt = worker.backgroundCheck.completedAt ?? now;
+      user.status = AccountStatus.Active;
+    } else {
+      worker.backgroundCheck.status = BackgroundCheckStatus.Failed;
+      user.status = AccountStatus.Pending;
+    }
+
+    const [savedWorker] = await Promise.all([worker.save(), user.save()]);
+    await this.notificationService.sendOnboardingReviewResult({
+      approved: dto.approved,
+      email: user.email,
+      rejectedReason: dto.rejectedReason,
+      role: user.role
+    });
+
+    return this.serializeDocument(savedWorker);
+  }
+
+  async reviewFacilityOnboarding(facilityId: string, dto: ReviewOnboardingDto) {
+    if (!Types.ObjectId.isValid(facilityId)) {
+      throw new NotFoundException("Facility profile not found");
+    }
+
+    const facility = await this.facilityProfiles.findById(facilityId).exec();
+
+    if (!facility) {
+      throw new NotFoundException("Facility profile not found");
+    }
+
+    const user = await this.users.findById(facility.userId).exec();
+
+    if (!user) {
+      throw new NotFoundException("Facility user not found");
+    }
+
+    facility.onboarding.verificationStatus = dto.approved ? OnboardingStatus.Approved : OnboardingStatus.Rejected;
+    facility.onboarding.rejectedReason = dto.approved ? undefined : dto.rejectedReason;
+    facility.billingStatus = dto.approved ? "ACTIVE" : "INACTIVE";
+    user.status = dto.approved ? AccountStatus.Active : AccountStatus.Pending;
+
+    const [savedFacility] = await Promise.all([facility.save(), user.save()]);
+    await this.notificationService.sendOnboardingReviewResult({
+      approved: dto.approved,
+      email: user.email,
+      rejectedReason: dto.rejectedReason,
+      role: user.role
+    });
+
+    return this.serializeFacilityDocument(savedFacility);
+  }
+
   private computeMetrics(
     users: Array<User & { _id: Types.ObjectId }>,
     workers: Array<WorkerProfile & { _id: Types.ObjectId }>,
@@ -93,6 +179,8 @@ export class AdminService {
   ) {
     const activeStatuses = new Set<ShiftStatus>([ShiftStatus.Open, ShiftStatus.Matched, ShiftStatus.InProgress]);
     const verifiedWorkers = workers.filter((worker) => worker.backgroundCheck?.status === BackgroundCheckStatus.Passed).length;
+    const pendingWorkerApprovals = workers.filter((worker) => this.isWorkerPendingReview(worker)).length;
+    const pendingFacilityApprovals = facilities.filter((facility) => this.isFacilityPendingReview(facility)).length;
     const completedShifts = shifts.filter((shift) => shift.status === ShiftStatus.Completed).length;
 
     return {
@@ -102,7 +190,7 @@ export class AdminService {
       activeShifts: shifts.filter((shift) => activeStatuses.has(shift.status)).length,
       openShifts: shifts.filter((shift) => shift.status === ShiftStatus.Open).length,
       completedShifts,
-      pendingApprovals: users.filter((user) => user.status === AccountStatus.Pending).length,
+      pendingApprovals: users.filter((user) => user.status === AccountStatus.Pending).length + pendingWorkerApprovals + pendingFacilityApprovals,
       verifiedWorkerRate: workers.length ? Math.round((verifiedWorkers / workers.length) * 100) : 0,
       activeSocketConnections: this.shiftsGateway.getActiveConnectionCount(),
       averageFillTimeMinutes: null
@@ -113,6 +201,24 @@ export class AdminService {
     const object = document.toObject({ versionKey: false });
 
     return this.serializeLean(object);
+  }
+
+  private serializeFacilityDocument(document: FacilityProfileDocument) {
+    const object = document.toObject({ versionKey: false });
+
+    return this.serializeLean(object);
+  }
+
+  private isWorkerPendingReview(worker: Pick<WorkerProfile, "backgroundCheck" | "credentials" | "onboarding">) {
+    return (
+      worker.onboarding?.verificationStatus === OnboardingStatus.PendingReview ||
+      worker.backgroundCheck?.status !== BackgroundCheckStatus.Passed ||
+      worker.credentials.some((credential) => !credential.isVerified)
+    );
+  }
+
+  private isFacilityPendingReview(facility: Pick<FacilityProfile, "onboarding">) {
+    return facility.onboarding?.verificationStatus === OnboardingStatus.PendingReview;
   }
 
   private serializeLean<T extends { _id: Types.ObjectId; passwordHash?: string }>(object: T) {

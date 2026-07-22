@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Schema as MongooseSchema, Types } from "mongoose";
-import { FacilityType } from "@medshift/shared-types";
+import { FacilityType, OnboardingStatus } from "@medshift/shared-types";
 
 export type FacilityProfileDocument = HydratedDocument<FacilityProfile>;
 
@@ -38,12 +38,42 @@ class ContactPerson {
 
   @Prop()
   phone?: string;
+
+  @Prop()
+  email?: string;
 }
 
 @Schema({ _id: false })
 class FacilityStats {
   @Prop({ default: 0 })
   averageRating!: number;
+}
+
+@Schema({ _id: false })
+class Readiness {
+  @Prop()
+  billingContactEmail?: string;
+
+  @Prop()
+  paymentMethodLabel?: string;
+
+  @Prop({ default: false })
+  staffingContactConfirmed!: boolean;
+
+  @Prop()
+  acceptedTermsAt?: Date;
+}
+
+@Schema({ _id: false })
+class Onboarding {
+  @Prop()
+  completedAt?: Date;
+
+  @Prop({ enum: OnboardingStatus, default: OnboardingStatus.Incomplete })
+  verificationStatus!: OnboardingStatus;
+
+  @Prop()
+  rejectedReason?: string;
 }
 
 @Schema({ collection: "facility_profiles", timestamps: true })
@@ -68,6 +98,12 @@ export class FacilityProfile {
 
   @Prop({ enum: ["ACTIVE", "INACTIVE"], default: "INACTIVE" })
   billingStatus!: "ACTIVE" | "INACTIVE";
+
+  @Prop({ type: Readiness, default: () => ({}) })
+  readiness!: Readiness;
+
+  @Prop({ type: Onboarding, default: () => ({}) })
+  onboarding!: Onboarding;
 
   @Prop({ type: FacilityStats, default: () => ({}) })
   stats!: FacilityStats;

@@ -37,6 +37,13 @@ type RegistrationOtpEmailPayload = {
   expiresInMinutes: number;
 };
 
+type OnboardingReviewEmailPayload = {
+  approved: boolean;
+  email: string;
+  rejectedReason?: string;
+  role: UserRole;
+};
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -45,12 +52,16 @@ export class NotificationService {
 
   async sendWelcomeEmail(email: string, role: UserRole) {
     const audience = role === UserRole.Worker ? "healthcare professional" : "facility partner";
+    const nextStep =
+      role === UserRole.Worker
+        ? "Complete your worker profile and upload your credentials so MedShift can verify you for live shifts."
+        : "Complete your facility profile so MedShift can review your registration before live shift posting is enabled.";
 
     await this.sendEmail({
       to: email,
       subject: "Welcome to MedShift",
-      text: `Welcome to MedShift. Your ${audience} account is ready for profile setup.`,
-      html: `<p>Welcome to <strong>MedShift</strong>.</p><p>Your ${audience} account is ready for profile setup.</p>`
+      text: `Welcome to MedShift. Your ${audience} account is ready. ${nextStep}`,
+      html: `<p>Welcome to <strong>MedShift</strong>.</p><p>Your ${audience} account is ready.</p><p>${nextStep}</p>`
     });
   }
 
@@ -80,6 +91,26 @@ export class NotificationService {
       subject: "Your MedShift registration code",
       text: `Your MedShift registration code is ${payload.otp}. This code expires in ${payload.expiresInMinutes} minutes.`,
       html: `<p>Your <strong>MedShift</strong> registration code is:</p><p><strong>${payload.otp}</strong></p><p>This code expires in ${payload.expiresInMinutes} minutes.</p>`
+    });
+  }
+
+  async sendOnboardingReviewResult(payload: OnboardingReviewEmailPayload) {
+    const audience = payload.role === UserRole.Worker ? "worker" : "facility";
+    const destination = payload.role === UserRole.Worker ? "worker shift board" : "facility roster";
+    const subject = payload.approved ? "MedShift onboarding approved" : "MedShift onboarding needs updates";
+    const rejectedReason = payload.rejectedReason ? ` Reason: ${payload.rejectedReason}` : "";
+    const text = payload.approved
+      ? `Your MedShift ${audience} onboarding is approved. You can now access the live ${destination}.`
+      : `Your MedShift ${audience} onboarding needs updates before approval.${rejectedReason}`;
+    const html = payload.approved
+      ? `<p>Your MedShift <strong>${audience}</strong> onboarding is approved.</p><p>You can now access the live ${destination}.</p>`
+      : `<p>Your MedShift <strong>${audience}</strong> onboarding needs updates before approval.</p>${payload.rejectedReason ? `<p>${payload.rejectedReason}</p>` : ""}`;
+
+    await this.sendEmail({
+      to: payload.email,
+      subject,
+      text,
+      html
     });
   }
 

@@ -4,7 +4,7 @@ import { JwtService } from "@nestjs/jwt";
 import { InjectModel } from "@nestjs/mongoose";
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import { Model } from "mongoose";
-import { AccountStatus, AuthResponse, AuthTokenPayload } from "@medshift/shared-types";
+import { AccountStatus, AuthResponse, AuthTokenPayload, UserRole } from "@medshift/shared-types";
 import { RegistrationAttempt, RegistrationAttemptDocument } from "../database/schemas/registration-attempt.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
 import { NotificationService } from "../notifications/notification.service";
@@ -28,6 +28,19 @@ const registrationOtpExpiresInMs = registrationOtpExpiresInMinutes * 60 * 1000;
 const registrationCompletionTokenExpiresInMinutes = 20;
 const registrationCompletionTokenExpiresInMs = registrationCompletionTokenExpiresInMinutes * 60 * 1000;
 const maxRegistrationOtpAttempts = 5;
+const personalEmailDomains = new Set([
+  "aol.com",
+  "gmail.com",
+  "hotmail.com",
+  "icloud.com",
+  "live.com",
+  "me.com",
+  "msn.com",
+  "outlook.com",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com"
+]);
 
 interface VerificationRequiredResponse {
   emailVerificationRequired: true;
@@ -84,15 +97,18 @@ export class AuthService {
 
   async startRegistration(dto: StartRegistrationDto): Promise<RegistrationOtpResponse> {
     const email = dto.email.toLowerCase().trim();
+    this.validateRegistrationRole(dto.role);
+    this.validateFacilityWorkEmail(dto.role, email);
     const existingUser = await this.users.exists({ email });
 
     if (existingUser) {
       throw new ConflictException("An account with this email already exists");
     }
 
-    const otp = randomInt(100000, 1000000).toString();
+    const otp = this.createRegistrationOtp();
 
     const attempt = (await this.registrationAttempts.findOne({ email }).exec()) ?? new this.registrationAttempts({ email });
+    attempt.role = dto.role;
     attempt.otpHash = this.hashToken(otp);
     attempt.otpExpiresAt = new Date(Date.now() + registrationOtpExpiresInMs);
     attempt.otpSentAt = new Date();
@@ -179,10 +195,19 @@ export class AuthService {
       });
     }
 
+    if (attempt.role !== dto.role) {
+      throw new BadRequestException({
+        code: "REGISTRATION_ROLE_MISMATCH",
+        message: "Start registration again to change account type."
+      });
+    }
+
+    this.validateFacilityWorkEmail(attempt.role, email);
+
     const user = await this.users.create({
       email,
       passwordHash: await this.passwordService.hash(dto.password),
-      role: dto.role,
+      role: attempt.role,
       status: AccountStatus.Active,
       emailVerified: true,
       emailVerifiedAt: new Date()
@@ -383,6 +408,34 @@ export class AuthService {
 
   private hashToken(token: string) {
     return createHash("sha256").update(token).digest("hex");
+  }
+
+  private createRegistrationOtp() {
+    return this.config.get<string>("NODE_ENV") === "production" ? randomInt(100000, 1000000).toString() : "123456";
+  }
+
+  private validateRegistrationRole(role: UserRole) {
+    if (role !== UserRole.Worker && role !== UserRole.Facility) {
+      throw new BadRequestException({
+        code: "REGISTRATION_ROLE_INVALID",
+        message: "Choose worker or facility account type."
+      });
+    }
+  }
+
+  private validateFacilityWorkEmail(role: UserRole, email: string) {
+    if (role !== UserRole.Facility) {
+      return;
+    }
+
+    const domain = email.split("@")[1]?.toLowerCase();
+
+    if (!domain || !domain.includes(".") || personalEmailDomains.has(domain)) {
+      throw new BadRequestException({
+        code: "FACILITY_WORK_EMAIL_REQUIRED",
+        message: "Facility registration requires a work email address."
+      });
+    }
   }
 
   private buildVerificationUrl(email: string, token: string) {

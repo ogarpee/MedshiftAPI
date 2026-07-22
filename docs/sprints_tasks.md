@@ -10,6 +10,7 @@
 - [x] Setup `apps/admin` (Next.js - Admin Dashboard).
 - [x] Setup `packages/shared-types` (TypeScript interfaces/enums).
 - [x] Setup `packages/ui-components` (React UI library).
+- [x] Add a helper script to start the API and web development servers together.
 
 ### Story 1.2: Database & Core Config
 - [x] Configure MongoDB connection in NestJS (Mongoose).
@@ -50,6 +51,8 @@
 - [x] Use icon-library controls for password visibility toggles.
 - [x] Replace registration with email, OTP verification, and account-completion steps.
 - [x] Auto-verify completed registration OTP input and hide alternate sign-in link during OTP entry.
+- [x] Require facility work email during registration and use 123456 as non-production OTP.
+- [x] Replace post-registration form repeat with congratulations and profile-completion guidance.
 
 ### Story 2.4: User Profiles
 - [x] Create `WorkerProfile` CRUD endpoints (including GeoJSON location fields).
@@ -85,6 +88,7 @@
 - [x] Build UI for workers to browse shifts (List/Map view toggle).
 - [x] Build detailed Shift Card UI.
 - [x] Build UI and flow for "Accept Shift" button.
+- [x] Replace worker dashboard placeholder map with Mapbox shift pins and remove cross-portal navigation.
 
 ## Sprint 5: Notifications & Admin Dashboard
 **Goal**: Send transactional emails and provide oversight tools for admins.
@@ -92,6 +96,7 @@
 ### Story 5.1: Email Notifications
 - [x] Integrate Resend API in a `NotificationModule`.
 - [x] Send welcome emails upon waitlist/registration.
+- [x] Verify completed registrations send welcome emails before returning the session.
 - [x] Send shift confirmation emails.
 
 ### Story 5.2: Admin Dashboard
@@ -112,3 +117,63 @@
 - [x] Add glassmorphism effects and micro-animations to components.
 - [x] Ensure mobile responsiveness across all portals, especially Worker app.
 - [x] End-to-end user acceptance testing.
+- [x] Improve the public site "How MedShift Works" section with an illustrative flow diagram.
+- [x] Add placeholders and strengthen validation for all web form fields.
+- [x] Replace public homepage login/join links with an authenticated profile menu when a user is signed in.
+
+## Sprint 7: Role-Based Onboarding & Verification
+**Goal**: Make registration actionable by routing users to the right dashboard and providing full onboarding for healthcare workers and facilities.
+
+### Story 7.1: Role-Based Auth Routing
+- [x] Redirect successful web sign-ins to the correct dashboard based on returned user role.
+- [x] Remove transient success banner from login before dashboard/onboarding redirect.
+- [x] Add configurable admin dashboard URL support for admin sign-in redirects.
+- [x] Add regression coverage for worker, facility, and admin login route selection.
+- [x] Document the standard dashboard shell with sidebar navigation, topbar, and main content area.
+- [x] Implement the shared dashboard shell across worker, facility, and admin dashboards.
+- [x] Refine dashboard shell with fixed sidebar, polished topbar, and modern content workspace.
+- [x] Refine dashboard topbar with compact height, notification control, avatar, and contextual in-content controls.
+
+### Story 7.2: Shared Onboarding Status
+- [x] Add shared onboarding status types for `INCOMPLETE`, `PENDING_REVIEW`, `APPROVED`, and `REJECTED`.
+- [x] Extend worker and facility profile schemas with onboarding completion and verification status fields.
+- [x] Expose authenticated onboarding status endpoints for worker and facility users.
+- [x] Gate shift acceptance and shift posting when onboarding is incomplete or not approved.
+
+### Story 7.3: Worker Onboarding
+- [x] Build worker profile completion UI for legal name, clinical role, location/radius, and availability preferences.
+- [x] Build credential upload UI with document type, file metadata, and pending verification feedback.
+- [x] Capture background-check consent and show review/approval status.
+- [x] Route newly registered worker users from registration success to worker onboarding.
+- [x] Route returning incomplete worker users to onboarding before the shift board.
+- [x] Replace worker dashboard onboarding redirect/nav links with an in-content completion banner.
+
+### Story 7.4: Facility Onboarding
+- [x] Build facility profile completion UI for facility name, care setting, address/geolocation, and primary contact.
+- [x] Build billing/readiness setup UI and status feedback.
+- [x] Submit completed facility registrations into the admin verification queue.
+- [x] Route newly registered facility users from registration success to facility onboarding.
+- [x] Route returning incomplete facility users to onboarding before shift posting.
+
+### Story 7.5: Admin Verification Operations
+- [x] Add admin queue filters for worker credential review and facility registration review.
+- [x] Add approve/reject actions that update onboarding verification status and rejected reason.
+- [x] Send notification emails when onboarding verification is approved or rejected.
+- [x] Add UAT coverage for complete worker and facility onboarding flows.
+
+### Story 7.6: Onboarding Experience Refinement
+- [x] Redesign worker and facility onboarding into distinct step-based layouts with logical completion flow.
+- [x] Save each onboarding step as a draft so users can leave and resume later.
+- [x] Add Mapbox-powered location preview/selection areas to onboarding location steps.
+- [x] Update docs and UAT coverage for step drafts and Mapbox onboarding location UX.
+- [x] Move onboarding out of the shared dashboard shell into standalone focused setup layouts.
+- [x] Remove onboarding topbars and refine the setup flow into a full-screen professional layout.
+- [x] Align onboarding rail and step card heights and pin step actions to the bottom.
+- [x] Improve onboarding rail readability and pin only the rail save-draft button to the bottom.
+- [x] Fix onboarding Mapbox rendering with a public-token Mapbox GL map and resilient fallback.
+- [x] Add Cloudinary-backed worker credential file upload during onboarding.
+- [x] Load web public env values from monorepo root and web app env files for Mapbox and Cloudinary.
+- [x] Expand onboarding Mapbox panels to fill the available location-step container height.
+- [x] Route login directly to role onboarding when profile completion is required.
+- [x] Polish onboarding left rail logo, status chip, and active step spacing.
+- [x] Add green completed onboarding step states and improve step indicator spacing.

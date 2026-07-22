@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-import { ShiftStatus, UserRole } from "@medshift/shared-types";
+import { OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
 import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
@@ -139,14 +139,20 @@ export class ShiftsService {
 
   private async resolveFacilityForCreate(currentUser: AuthUser, facilityId?: string): Promise<FacilityProfileDocument> {
     if (currentUser.role === UserRole.Admin && facilityId) {
-      return this.findFacility(facilityId);
+      const facility = await this.findFacility(facilityId);
+      this.assertOnboardingApproved(facility.onboarding, "Facility onboarding must be approved before posting shifts");
+
+      return facility;
     }
 
     if (currentUser.role !== UserRole.Facility) {
       throw new ForbiddenException("Only facilities can post shifts");
     }
 
-    return this.resolveCurrentFacility(currentUser);
+    const facility = await this.resolveCurrentFacility(currentUser);
+    this.assertOnboardingApproved(facility.onboarding, "Facility onboarding must be approved before posting shifts");
+
+    return facility;
   }
 
   private async resolveCurrentFacility(currentUser: AuthUser): Promise<FacilityProfileDocument> {
@@ -170,7 +176,18 @@ export class ShiftsService {
       throw new NotFoundException("Worker profile is required before accepting shifts");
     }
 
+    this.assertOnboardingApproved(worker.onboarding, "Worker onboarding must be approved before accepting shifts");
+
     return worker;
+  }
+
+  private assertOnboardingApproved(onboarding: { verificationStatus?: OnboardingStatus } | undefined, message: string) {
+    if (onboarding?.verificationStatus !== OnboardingStatus.Approved) {
+      throw new ForbiddenException({
+        code: "ONBOARDING_APPROVAL_REQUIRED",
+        message
+      });
+    }
   }
 
   private async sendShiftConfirmation(shift: ShiftDocument, worker: WorkerProfileDocument) {

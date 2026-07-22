@@ -5,6 +5,7 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { AdminService } from "./admin.service";
 import { ReviewCredentialDto } from "./dto/review-credential.dto";
+import { ReviewOnboardingDto } from "./dto/review-onboarding.dto";
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.Admin)
@@ -44,5 +45,15 @@ export class AdminController {
     @Body() dto: ReviewCredentialDto
   ) {
     return this.adminService.reviewCredential(workerId, credentialIndex, dto.approved);
+  }
+
+  @Patch("worker-profiles/:workerId/onboarding")
+  reviewWorkerOnboarding(@Param("workerId") workerId: string, @Body() dto: ReviewOnboardingDto) {
+    return this.adminService.reviewWorkerOnboarding(workerId, dto);
+  }
+
+  @Patch("facility-profiles/:facilityId/onboarding")
+  reviewFacilityOnboarding(@Param("facilityId") facilityId: string, @Body() dto: ReviewOnboardingDto) {
+    return this.adminService.reviewFacilityOnboarding(facilityId, dto);
   }
 }

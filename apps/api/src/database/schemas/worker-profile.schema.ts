@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Schema as MongooseSchema, Types } from "mongoose";
-import { BackgroundCheckStatus, ClinicalRole } from "@medshift/shared-types";
+import { BackgroundCheckStatus, ClinicalRole, OnboardingStatus } from "@medshift/shared-types";
 
 export type WorkerProfileDocument = HydratedDocument<WorkerProfile>;
 
@@ -25,6 +25,9 @@ class BackgroundCheck {
   status!: BackgroundCheckStatus;
 
   @Prop()
+  consentedAt?: Date;
+
+  @Prop()
   completedAt?: Date;
 }
 
@@ -42,6 +45,12 @@ class WorkerPreferences {
   @Prop({ default: 25 })
   maxDistanceKm!: number;
 
+  @Prop({ type: [String], default: [] })
+  availableDays!: string[];
+
+  @Prop({ type: [String], default: [] })
+  preferredShiftTypes!: string[];
+
   @Prop({ type: [{ type: MongooseSchema.Types.ObjectId, ref: "FacilityProfile" }], default: [] })
   preferredFacilities!: Types.ObjectId[];
 }
@@ -53,6 +62,18 @@ class WorkerStats {
 
   @Prop({ default: 0 })
   totalShiftsCompleted!: number;
+}
+
+@Schema({ _id: false })
+class Onboarding {
+  @Prop()
+  completedAt?: Date;
+
+  @Prop({ enum: OnboardingStatus, default: OnboardingStatus.Incomplete })
+  verificationStatus!: OnboardingStatus;
+
+  @Prop()
+  rejectedReason?: string;
 }
 
 @Schema({ collection: "worker_profiles", timestamps: true })
@@ -83,6 +104,9 @@ export class WorkerProfile {
 
   @Prop({ type: WorkerPreferences, default: () => ({}) })
   preferences!: WorkerPreferences;
+
+  @Prop({ type: Onboarding, default: () => ({}) })
+  onboarding!: Onboarding;
 
   @Prop({ type: WorkerStats, default: () => ({}) })
   stats!: WorkerStats;

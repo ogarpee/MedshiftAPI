@@ -31,6 +31,12 @@ export class FacilityProfilesController {
     return this.facilityProfilesService.findMe(request.user);
   }
 
+  @Roles(UserRole.Facility)
+  @Get("onboarding-status")
+  getOnboardingStatus(@Req() request: AuthRequest) {
+    return this.facilityProfilesService.getOnboardingStatus(request.user);
+  }
+
   @Roles(UserRole.Facility, UserRole.Admin)
   @Get(":id")
   findOne(@Req() request: AuthRequest, @Param("id") id: string) {

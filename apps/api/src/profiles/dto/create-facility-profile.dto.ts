@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsEnum, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsBoolean, IsDateString, IsEmail, IsEnum, IsOptional, IsString, ValidateNested } from "class-validator";
 import { FacilityType } from "@medshift/shared-types";
 import { GeoPointDto } from "./geo-point.dto";
 
@@ -33,6 +33,28 @@ class ContactPersonDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+}
+
+class FacilityReadinessDto {
+  @IsOptional()
+  @IsEmail()
+  billingContactEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentMethodLabel?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  staffingContactConfirmed?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  acceptedTermsAt?: string;
 }
 
 export class CreateFacilityProfileDto {
@@ -56,4 +78,13 @@ export class CreateFacilityProfileDto {
   @ValidateNested()
   @Type(() => ContactPersonDto)
   contactPerson?: ContactPersonDto;
+
+  @IsOptional()
+  @IsEnum(["ACTIVE", "INACTIVE"])
+  billingStatus?: "ACTIVE" | "INACTIVE";
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FacilityReadinessDto)
+  readiness?: FacilityReadinessDto;
 }

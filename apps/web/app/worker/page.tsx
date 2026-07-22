@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ClinicalRole, FacilityType, MatchedShiftSummary, ShiftStatus } from "@medshift/shared-types";
-import { MedShiftLogo, StatusBadge } from "@medshift/ui-components";
+import { ClinicalRole, FacilityType, MatchedShiftSummary, OnboardingStatus, ShiftStatus } from "@medshift/shared-types";
+import { DashboardShell, StatusBadge } from "@medshift/ui-components";
 import type { Socket } from "socket.io-client";
+import { ShiftMap } from "./shift-map";
 
 type ViewMode = "list" | "map";
+type WorkerOnboardingStatus = {
+  completed?: boolean;
+  nextStep?: string;
+  verificationStatus?: OnboardingStatus;
+};
 
 const demoShifts: MatchedShiftSummary[] = [
   {
@@ -69,11 +75,13 @@ const demoShifts: MatchedShiftSummary[] = [
 
 export default function WorkerDashboardPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedShiftId, setSelectedShiftId] = useState(demoShifts[0]?.id ?? "");
   const [shifts, setShifts] = useState<MatchedShiftSummary[]>(demoShifts);
   const [message, setMessage] = useState("");
   const [isAccepting, setIsAccepting] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState<WorkerOnboardingStatus | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
 
@@ -95,10 +103,23 @@ export default function WorkerDashboardPage() {
       return;
     }
 
-    fetch(`${apiUrl}/matching/open-shifts?longitude=-114.0719&latitude=51.0447&radiusKm=25`, {
+    fetch(`${apiUrl}/worker-profiles/onboarding-status`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((status: WorkerOnboardingStatus) => {
+        setOnboardingStatus(status);
+
+        if (status.verificationStatus !== OnboardingStatus.Approved) {
+          setMessage(status.verificationStatus === OnboardingStatus.Incomplete ? "Complete onboarding to unlock live shift matching." : "Your onboarding is under review. Preview shifts are shown until approval.");
+          return null;
+        }
+
+        return fetch(`${apiUrl}/matching/open-shifts?longitude=-114.0719&latitude=51.0447&radiusKm=25`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      })
+      .then((response) => (response ? (response.ok ? response.json() : Promise.reject()) : []))
       .then((result: MatchedShiftSummary[]) => {
         if (result.length) {
           setShifts(result);
@@ -166,7 +187,13 @@ export default function WorkerDashboardPage() {
   }
 
   async function submitReview(shift: MatchedShiftSummary) {
+    if (reviewComment.trim().length > 280) {
+      setMessage("Facility feedback must be 280 characters or fewer.");
+      return;
+    }
+
     const token = window.localStorage.getItem("medshift.accessToken");
+    const comment = reviewComment.trim();
 
     if (!token || shift.id.startsWith("demo-")) {
       setMessage(`Preview facility review submitted with ${reviewRating} stars.`);
@@ -180,7 +207,7 @@ export default function WorkerDashboardPage() {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ rating: reviewRating, comment: reviewComment })
+      body: JSON.stringify({ rating: reviewRating, comment })
     });
 
     if (response.ok) {
@@ -193,17 +220,20 @@ export default function WorkerDashboardPage() {
   }
 
   return (
-    <main className="worker-page">
-      <nav className="worker-nav">
-        <MedShiftLogo />
-        <a href="/facility">Facility portal</a>
-      </nav>
-
+    <DashboardShell
+      className="worker-page"
+      eyebrow={<StatusBadge tone="green">Available now</StatusBadge>}
+      navItems={[
+        { label: "Shift board", href: "/worker", active: true },
+        { label: "Map view", href: "/worker#map" }
+      ]}
+      title="Shift board"
+      userLabel="Worker workspace"
+    >
       <section className="worker-shell">
         <header className="worker-header">
           <div>
-            <StatusBadge tone="green">Available now</StatusBadge>
-            <h1>Nearby shifts</h1>
+            <h2>Nearby shifts</h2>
             <p>{nextShift ? `Next match starts ${formatShortDate(nextShift.startTime)}.` : "No open shifts in your radius yet."}</p>
           </div>
           <div className="worker-earnings" aria-label="Worker summary">
@@ -212,6 +242,19 @@ export default function WorkerDashboardPage() {
             <small>{openShifts} open matches</small>
           </div>
         </header>
+
+        {onboardingStatus?.verificationStatus === OnboardingStatus.Incomplete ? (
+          <section className="dashboard-onboarding-banner" aria-label="Complete worker onboarding">
+            <div>
+              <span>Profile required</span>
+              <h3>Complete your onboarding to unlock live shifts.</h3>
+              <p>Finish your profile, service area, availability, credentials, and background-check consent so MedShift can review your account.</p>
+            </div>
+            <a className="auth-submit" href="/worker/onboarding">
+              Continue onboarding
+            </a>
+          </section>
+        ) : null}
 
         <div className="worker-toolbar">
           <div className="segmented-control" aria-label="Shift view">
@@ -225,7 +268,7 @@ export default function WorkerDashboardPage() {
           <span>{message || "Live board connected to your saved radius."}</span>
         </div>
 
-        <section className="worker-grid">
+        <section className="worker-grid" id="map">
           <div className={viewMode === "map" ? "shift-map-panel" : "worker-shift-list"}>
             {viewMode === "list" ? (
               shifts.map((shift) => (
@@ -242,18 +285,7 @@ export default function WorkerDashboardPage() {
                 </button>
               ))
             ) : (
-              <div className="map-preview" aria-label="Nearby shift map preview">
-                {shifts.map((shift, index) => (
-                  <button
-                    className={shift.id === selectedShift?.id ? "map-pin active" : "map-pin"}
-                    key={shift.id}
-                    style={{ left: `${24 + index * 24}%`, top: `${34 + (index % 2) * 26}%` }}
-                    type="button"
-                    onClick={() => setSelectedShiftId(shift.id)}
-                    aria-label={`Select ${shift.facility?.name ?? shift.roleRequired} shift`}
-                  />
-                ))}
-              </div>
+              <ShiftMap shifts={shifts} selectedShiftId={selectedShift?.id} token={mapboxToken} onSelectShift={setSelectedShiftId} />
             )}
           </div>
 
@@ -313,6 +345,8 @@ export default function WorkerDashboardPage() {
                     ))}
                   </div>
                   <textarea
+                    maxLength={280}
+                    name="facilityReview"
                     value={reviewComment}
                     onChange={(event) => setReviewComment(event.target.value)}
                     placeholder="Add facility feedback"
@@ -325,7 +359,7 @@ export default function WorkerDashboardPage() {
           ) : null}
         </section>
       </section>
-    </main>
+    </DashboardShell>
   );
 }
 

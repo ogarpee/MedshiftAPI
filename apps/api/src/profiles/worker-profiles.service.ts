@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-import { UserRole } from "@medshift/shared-types";
+import { BackgroundCheckStatus, OnboardingStatus, UserRole } from "@medshift/shared-types";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 import { AuthUser } from "../auth/auth-user";
 import { CreateWorkerProfileDto } from "./dto/create-worker-profile.dto";
@@ -23,6 +23,11 @@ export class WorkerProfilesService {
 
     const profile = await this.workerProfiles.create({
       ...dto,
+      backgroundCheck: {
+        status: dto.backgroundCheck?.status ?? BackgroundCheckStatus.Pending,
+        consentedAt: dto.backgroundCheck?.consentedAt
+      },
+      onboarding: this.buildOnboardingState(dto),
       userId: new Types.ObjectId(currentUser.sub)
     });
 
@@ -45,6 +50,23 @@ export class WorkerProfilesService {
     return this.serialize(profile);
   }
 
+  async getOnboardingStatus(currentUser: AuthUser) {
+    const profile = await this.workerProfiles.findOne({ userId: currentUser.sub }).exec();
+
+    if (!profile) {
+      return {
+        role: UserRole.Worker,
+        profileId: null,
+        completed: false,
+        verificationStatus: OnboardingStatus.Incomplete,
+        rejectedReason: null,
+        nextStep: "COMPLETE_PROFILE"
+      };
+    }
+
+    return this.serializeOnboardingStatus(profile);
+  }
+
   async findOne(currentUser: AuthUser, id: string) {
     const profile = await this.findDocument(id);
     this.assertCanManage(currentUser, profile);
@@ -56,6 +78,13 @@ export class WorkerProfilesService {
     const profile = await this.findDocument(id);
     this.assertCanManage(currentUser, profile);
     profile.set(dto);
+    profile.set({
+      backgroundCheck: {
+        ...profile.backgroundCheck,
+        status: profile.backgroundCheck?.status ?? BackgroundCheckStatus.Pending
+      },
+      onboarding: this.buildOnboardingState(profile)
+    });
 
     return this.serialize(await profile.save());
   }
@@ -101,4 +130,63 @@ export class WorkerProfilesService {
       _id: undefined
     };
   }
+
+  private serializeOnboardingStatus(profile: WorkerProfileDocument) {
+    const onboarding = profile.onboarding ?? { verificationStatus: OnboardingStatus.Incomplete };
+    const verificationStatus = onboarding.verificationStatus ?? OnboardingStatus.Incomplete;
+
+    return {
+      role: UserRole.Worker,
+      profileId: profile.id,
+      completed: Boolean(onboarding.completedAt) && verificationStatus === OnboardingStatus.Approved,
+      completedAt: onboarding.completedAt ?? null,
+      verificationStatus,
+      rejectedReason: onboarding.rejectedReason ?? null,
+      nextStep: getWorkerNextStep(verificationStatus, Boolean(onboarding.completedAt))
+    };
+  }
+
+  private buildOnboardingState(source: WorkerOnboardingSource) {
+    const hasIdentity = Boolean(source.firstName?.trim() && source.lastName?.trim() && source.title);
+    const hasLocation = source.location?.type === "Point" && source.location.coordinates?.length === 2;
+    const hasPreferences = Boolean(source.preferences?.maxDistanceKm && source.preferences?.availableDays?.length);
+    const hasCredential = Boolean(source.credentials?.some((credential) => credential.type?.trim() && credential.documentUrl?.trim()));
+    const hasBackgroundConsent = Boolean(source.backgroundCheck?.consentedAt);
+    const isComplete = hasIdentity && hasLocation && hasPreferences && hasCredential && hasBackgroundConsent;
+
+    return {
+      completedAt: isComplete ? new Date() : undefined,
+      verificationStatus: isComplete ? OnboardingStatus.PendingReview : OnboardingStatus.Incomplete
+    };
+  }
+}
+
+type WorkerOnboardingSource = {
+  firstName?: string;
+  lastName?: string;
+  title?: unknown;
+  credentials?: Array<{ type?: string; documentUrl?: string }>;
+  backgroundCheck?: { consentedAt?: string | Date };
+  location?: { type?: string; coordinates?: number[] };
+  preferences?: { availableDays?: string[]; maxDistanceKm?: number };
+};
+
+function getWorkerNextStep(verificationStatus: OnboardingStatus, hasCompletedProfile: boolean) {
+  if (!hasCompletedProfile) {
+    return "COMPLETE_PROFILE";
+  }
+
+  if (verificationStatus === OnboardingStatus.PendingReview) {
+    return "WAIT_FOR_REVIEW";
+  }
+
+  if (verificationStatus === OnboardingStatus.Rejected) {
+    return "RESUBMIT_CREDENTIALS";
+  }
+
+  if (verificationStatus === OnboardingStatus.Approved) {
+    return "SHIFT_BOARD";
+  }
+
+  return "SUBMIT_FOR_REVIEW";
 }

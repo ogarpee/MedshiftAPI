@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AccountStatus, ClinicalRole, FacilityType, ShiftStatus, UserRole } from "@medshift/shared-types";
-import { MedShiftLogo, StatusBadge } from "@medshift/ui-components";
+import { AccountStatus, ClinicalRole, FacilityType, OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
+import { DashboardShell, StatusBadge } from "@medshift/ui-components";
 
 type AdminUser = {
   id: string;
@@ -19,6 +19,7 @@ type AdminWorker = {
   title: ClinicalRole;
   backgroundCheck: { status: string };
   credentials: Array<{ type?: string; isVerified: boolean; verifiedAt?: string }>;
+  onboarding?: { verificationStatus?: OnboardingStatus; rejectedReason?: string };
   createdAt?: string;
 };
 
@@ -28,6 +29,8 @@ type AdminFacility = {
   facilityType?: FacilityType;
   billingStatus: string;
   address?: { city?: string; province?: string };
+  contactPerson?: { name?: string; email?: string };
+  onboarding?: { verificationStatus?: OnboardingStatus; rejectedReason?: string };
 };
 
 type AdminShift = {
@@ -72,7 +75,8 @@ const previewOverview: AdminOverview = {
       lastName: "Jensen",
       title: ClinicalRole.Hca,
       backgroundCheck: { status: "PENDING" },
-      credentials: [{ type: "HCA certificate", isVerified: false }]
+      credentials: [{ type: "HCA certificate", isVerified: false }],
+      onboarding: { verificationStatus: OnboardingStatus.PendingReview }
     },
     {
       id: "w2",
@@ -84,7 +88,15 @@ const previewOverview: AdminOverview = {
     }
   ],
   facilities: [
-    { id: "f1", name: "Bow Valley Care Centre", facilityType: FacilityType.LongTermCare, billingStatus: "ACTIVE", address: { city: "Calgary", province: "AB" } },
+    {
+      id: "f1",
+      name: "Bow Valley Care Centre",
+      facilityType: FacilityType.LongTermCare,
+      billingStatus: "ACTIVE",
+      address: { city: "Calgary", province: "AB" },
+      contactPerson: { name: "Amara Singh", email: "ops@bowvalley.ca" },
+      onboarding: { verificationStatus: OnboardingStatus.PendingReview }
+    },
     { id: "f2", name: "Prairie North Hospital", facilityType: FacilityType.Hospital, billingStatus: "INACTIVE", address: { city: "Calgary", province: "AB" } }
   ],
   shifts: [
@@ -109,6 +121,8 @@ export default function AdminPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const [overview, setOverview] = useState<AdminOverview>(previewOverview);
   const [activeTable, setActiveTable] = useState<"users" | "facilities" | "shifts">("users");
+  const [queueFilter, setQueueFilter] = useState<"all" | "workers" | "facilities">("all");
+  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("Showing preview data until an admin token is available.");
 
   useEffect(() => {
@@ -138,6 +152,12 @@ export default function AdminPage() {
       ),
     [overview.workers]
   );
+  const facilityQueue = useMemo(
+    () => overview.facilities.filter((facility) => facility.onboarding?.verificationStatus === OnboardingStatus.PendingReview),
+    [overview.facilities]
+  );
+  const visibleWorkerQueue = queueFilter === "all" || queueFilter === "workers" ? queue : [];
+  const visibleFacilityQueue = queueFilter === "all" || queueFilter === "facilities" ? facilityQueue : [];
 
   async function reviewCredential(worker: AdminWorker, credentialIndex: number, approved: boolean) {
     const token = window.localStorage.getItem("medshift.accessToken");
@@ -182,31 +202,128 @@ export default function AdminPage() {
     }
   }
 
-  return (
-    <main className="admin-shell">
-      <aside>
-        <MedShiftLogo />
-        <nav>
-          <button type="button" className={activeTable === "users" ? "active" : ""} onClick={() => setActiveTable("users")}>
-            Users
-          </button>
-          <button type="button" className={activeTable === "facilities" ? "active" : ""} onClick={() => setActiveTable("facilities")}>
-            Facilities
-          </button>
-          <button type="button" className={activeTable === "shifts" ? "active" : ""} onClick={() => setActiveTable("shifts")}>
-            Shifts
-          </button>
-        </nav>
-      </aside>
+  async function reviewWorkerOnboarding(worker: AdminWorker, approved: boolean) {
+    const reasonKey = `worker-${worker.id}`;
+    const rejectedReason = rejectionReasons[reasonKey]?.trim();
 
+    if (!approved && !rejectedReason) {
+      setMessage("Add a rejection reason before rejecting worker onboarding.");
+      return;
+    }
+
+    const token = window.localStorage.getItem("medshift.accessToken");
+
+    if (!token) {
+      setOverview((current) => ({
+        ...current,
+        workers: current.workers.map((item) =>
+          item.id === worker.id
+            ? {
+                ...item,
+                backgroundCheck: { status: approved ? "PASSED" : "FAILED" },
+                credentials: item.credentials.map((credential) => ({ ...credential, isVerified: approved })),
+                onboarding: {
+                  rejectedReason: approved ? undefined : rejectedReason,
+                  verificationStatus: approved ? OnboardingStatus.Approved : OnboardingStatus.Rejected
+                }
+              }
+            : item
+        )
+      }));
+      setMessage(approved ? "Preview worker onboarding approved." : "Preview worker onboarding rejected.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/admin/worker-profiles/${worker.id}/onboarding`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ approved, rejectedReason })
+    });
+
+    if (response.ok) {
+      const updated = (await response.json()) as AdminWorker;
+      setOverview((current) => ({
+        ...current,
+        workers: current.workers.map((item) => (item.id === updated.id ? updated : item))
+      }));
+      setMessage(approved ? "Worker onboarding approved and email sent." : "Worker onboarding rejected and email sent.");
+      return;
+    }
+
+    setMessage("Worker onboarding review failed.");
+  }
+
+  async function reviewFacilityOnboarding(facility: AdminFacility, approved: boolean) {
+    const reasonKey = `facility-${facility.id}`;
+    const rejectedReason = rejectionReasons[reasonKey]?.trim();
+
+    if (!approved && !rejectedReason) {
+      setMessage("Add a rejection reason before rejecting facility registration.");
+      return;
+    }
+
+    const token = window.localStorage.getItem("medshift.accessToken");
+
+    if (!token) {
+      setOverview((current) => ({
+        ...current,
+        facilities: current.facilities.map((item) =>
+          item.id === facility.id
+            ? {
+                ...item,
+                billingStatus: approved ? "ACTIVE" : "INACTIVE",
+                onboarding: {
+                  rejectedReason: approved ? undefined : rejectedReason,
+                  verificationStatus: approved ? OnboardingStatus.Approved : OnboardingStatus.Rejected
+                }
+              }
+            : item
+        )
+      }));
+      setMessage(approved ? "Preview facility registration approved." : "Preview facility registration rejected.");
+      return;
+    }
+
+    const response = await fetch(`${apiUrl}/admin/facility-profiles/${facility.id}/onboarding`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ approved, rejectedReason })
+    });
+
+    if (response.ok) {
+      const updated = (await response.json()) as AdminFacility;
+      setOverview((current) => ({
+        ...current,
+        facilities: current.facilities.map((item) => (item.id === updated.id ? updated : item))
+      }));
+      setMessage(approved ? "Facility registration approved and email sent." : "Facility registration rejected and email sent.");
+      return;
+    }
+
+    setMessage("Facility onboarding review failed.");
+  }
+
+  return (
+    <DashboardShell
+      className="admin-shell"
+      eyebrow={<StatusBadge tone="navy">Platform monitoring</StatusBadge>}
+      navItems={[
+        { label: "Users", active: activeTable === "users", onClick: () => setActiveTable("users") },
+        { label: "Facilities", active: activeTable === "facilities", onClick: () => setActiveTable("facilities") },
+        { label: "Shifts", active: activeTable === "shifts", onClick: () => setActiveTable("shifts") },
+        { label: "Verification", href: "#verification" }
+      ]}
+      title="Operations overview"
+      userLabel="Admin workspace"
+    >
       <section className="workspace">
-        <header>
-          <div>
-            <StatusBadge tone="navy">Platform monitoring</StatusBadge>
-            <h1>Operations overview</h1>
-          </div>
-          <span className="admin-message">{message}</span>
-        </header>
+        <span className="admin-message">{message}</span>
 
         <div className="metrics">
           <article>
@@ -250,13 +367,44 @@ export default function AdminPage() {
           <AdminTable overview={overview} activeTable={activeTable} />
         </section>
 
-        <section className="table-panel verification-panel">
+        <section className="table-panel verification-panel" id="verification">
           <div className="panel-title">
             <h2>Verification queue</h2>
-            <StatusBadge tone="gold">{queue.length} pending</StatusBadge>
+            <StatusBadge tone="gold">{queue.length + facilityQueue.length} pending</StatusBadge>
+          </div>
+          <div className="queue-filter" aria-label="Verification queue filter">
+            <button className={queueFilter === "all" ? "active" : ""} type="button" onClick={() => setQueueFilter("all")}>
+              All
+            </button>
+            <button className={queueFilter === "workers" ? "active" : ""} type="button" onClick={() => setQueueFilter("workers")}>
+              Workers
+            </button>
+            <button className={queueFilter === "facilities" ? "active" : ""} type="button" onClick={() => setQueueFilter("facilities")}>
+              Facilities
+            </button>
           </div>
           <div className="verification-list">
-            {queue.map((worker) => (
+            {visibleFacilityQueue.map((facility) => (
+              <article key={facility.id}>
+                <div>
+                  <strong>{facility.name}</strong>
+                  <span>{facility.facilityType ?? "Facility"} · {facility.billingStatus} billing · {facility.onboarding?.verificationStatus}</span>
+                </div>
+                <div className="credential-actions">
+                  <span>{facility.contactPerson?.name ?? "Primary contact"} · {facility.contactPerson?.email ?? "Contact email pending"}</span>
+                  <button type="button" onClick={() => reviewFacilityOnboarding(facility, true)}>Approve</button>
+                  <button type="button" className="secondary-action" onClick={() => reviewFacilityOnboarding(facility, false)}>Reject</button>
+                </div>
+                <input
+                  className="rejection-input"
+                  maxLength={280}
+                  onChange={(event) => setRejectionReasons((current) => ({ ...current, [`facility-${facility.id}`]: event.target.value }))}
+                  placeholder="Reason required when rejecting"
+                  value={rejectionReasons[`facility-${facility.id}`] ?? ""}
+                />
+              </article>
+            ))}
+            {visibleWorkerQueue.map((worker) => (
               <article key={worker.id}>
                 <div>
                   <strong>{worker.firstName} {worker.lastName}</strong>
@@ -269,12 +417,24 @@ export default function AdminPage() {
                     <button type="button" className="secondary-action" onClick={() => reviewCredential(worker, index, false)}>Reject</button>
                   </div>
                 ))}
+                <div className="credential-actions">
+                  <span>Onboarding · {worker.onboarding?.verificationStatus ?? "Pending"}</span>
+                  <button type="button" onClick={() => reviewWorkerOnboarding(worker, true)}>Approve onboarding</button>
+                  <button type="button" className="secondary-action" onClick={() => reviewWorkerOnboarding(worker, false)}>Reject onboarding</button>
+                </div>
+                <input
+                  className="rejection-input"
+                  maxLength={280}
+                  onChange={(event) => setRejectionReasons((current) => ({ ...current, [`worker-${worker.id}`]: event.target.value }))}
+                  placeholder="Reason required when rejecting"
+                  value={rejectionReasons[`worker-${worker.id}`] ?? ""}
+                />
               </article>
             ))}
           </div>
         </section>
       </section>
-    </main>
+    </DashboardShell>
   );
 }
 
