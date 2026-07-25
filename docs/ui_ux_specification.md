@@ -71,12 +71,14 @@ Derived from the MedShift marketing site:
 4. **Forgot Password**:
    - The login page includes a forgot-password link.
    - The forgot-password page accepts an email address and always shows a generic confirmation after submit to avoid account enumeration.
+   - The recovery flow proceeds in three distinct steps: email, OTP, then set password.
+   - The OTP step prompts only for the 6-digit code and verifies it with the API before showing password fields.
    - The confirmation state uses toast and inline feedback to tell the user to check their inbox if the account exists.
 5. **Reset Password**:
-   - Reset links open a dedicated reset-password page with token and email query parameters.
+   - Reset recovery uses the same time-limited email OTP pattern as registration rather than a link token.
    - The form requires a new password that satisfies password policy and a matching confirmation field.
    - Successful reset shows a toast, clears the form, and provides a primary sign-in action.
-   - Invalid or expired links show inline recovery copy and a forgot-password action.
+   - Invalid or expired codes show inline recovery copy and a resend-code action.
 6. **Visual Treatment**:
    - Use the existing auth page split layout, MedShift logo, navy/gold palette, and restrained form states.
    - Verification messages should be concise, accessible, and placed near the form action that resolves the issue.

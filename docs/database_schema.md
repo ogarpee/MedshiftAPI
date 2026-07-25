@@ -188,6 +188,22 @@ Handles the dual-rating system (Facility rates Worker, Worker rates Facility).
 }
 ```
 
+### 2.7 Waitlist Signups Collection
+Stores early access signups from the public landing page and confirmation email status.
+
+```javascript
+// Collection: waitlist_signups
+{
+  _id: ObjectId,
+  email: { type: String, required: true, lowercase: true, trim: true },
+  role: { type: String, enum: ['WORKER', 'FACILITY'], required: true },
+  confirmationEmailSentAt: Date,
+  lastRequestedAt: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
 ## 3. Database Indexes
 To ensure performance and scalability, the following indexes are critical:
 - **Geospatial**: `shifts.location` (2dsphere) - For finding shifts near a worker.
@@ -195,7 +211,8 @@ To ensure performance and scalability, the following indexes are critical:
 - **Compound**: `shifts.status` + `shifts.startTime` - For fast querying of open/upcoming shifts.
 - **Unique**: `users.email` - For authentication.
 - **Sparse**: `users.emailVerificationTokenHash` - For verifying and rotating pending email verification links without scanning users.
-- **Sparse**: `users.passwordResetTokenHash` - For validating and rotating forgot-password reset links without scanning users.
+- **Sparse**: `users.passwordResetTokenHash` - For validating and rotating forgot-password OTP codes without scanning users.
 - **Compound**: `users.emailVerified` + `users.status` - For admin filtering and account activation queues.
 - **Unique**: `registration_attempts.email` - For rotating a single active registration OTP attempt per email.
 - **Sparse**: `registration_attempts.completionTokenHash` - For validating completed OTP registration sessions.
+- **Unique Compound**: `waitlist_signups.email` + `waitlist_signups.role` - For idempotent public waitlist signups.

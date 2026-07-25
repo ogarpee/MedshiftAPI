@@ -84,6 +84,85 @@
   gap: 8px;
 }
 
+.accountTypeGroup {
+  border: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.accountTypeGroup legend {
+  color: #0b1f3a;
+  font-size: 0.86rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.accountTypeGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.accountTypeCard {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.14);
+  border-radius: 8px;
+  color: #0b1f3a;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  min-height: 94px;
+  padding: 12px;
+  text-align: left;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  width: 100%;
+}
+
+.accountTypeCard:hover {
+  border-color: rgba(212, 175, 55, 0.62);
+  transform: translateY(-1px);
+}
+
+.accountTypeCardActive {
+  background: rgba(212, 175, 55, 0.12);
+  border-color: #d4af37;
+  box-shadow: 0 12px 26px rgba(212, 175, 55, 0.12);
+}
+
+.accountTypeIcon {
+  align-items: center;
+  background: #0b1f3a;
+  border-radius: 8px;
+  color: #d4af37;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.accountTypeCard strong,
+.accountTypeCard small {
+  display: block;
+}
+
+.accountTypeCard strong {
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.accountTypeCard small {
+  color: #6b7280;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
 .form input,
 .form select {
   background: #ffffff;
@@ -227,6 +306,21 @@
 .alternate a {
   color: #0b1f3a;
   font-weight: 500;
+}
+
+.textButton {
+  background: transparent;
+  border: 0;
+  color: #0b1f3a;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  padding: 0;
+}
+
+.textButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .alternateSeparator {
@@ -513,6 +607,10 @@
 
 @media (max-width: 760px) {
   .authPage {
+    grid-template-columns: 1fr;
+  }
+
+  .accountTypeGrid {
     grid-template-columns: 1fr;
   }
 

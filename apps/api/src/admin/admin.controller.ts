@@ -6,6 +6,8 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import { AdminService } from "./admin.service";
 import { ReviewCredentialDto } from "./dto/review-credential.dto";
 import { ReviewOnboardingDto } from "./dto/review-onboarding.dto";
+import { UpdateShiftStatusDto } from "./dto/update-shift-status.dto";
+import { UpdateUserStatusDto } from "./dto/update-user-status.dto";
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.Admin)
@@ -36,6 +38,16 @@ export class AdminController {
   @Get("verification-queue")
   verificationQueue() {
     return this.adminService.verificationQueue();
+  }
+
+  @Patch("users/:userId/status")
+  updateUserStatus(@Param("userId") userId: string, @Body() dto: UpdateUserStatusDto) {
+    return this.adminService.updateUserStatus(userId, dto.status);
+  }
+
+  @Patch("shifts/:shiftId/status")
+  updateShiftStatus(@Param("shiftId") shiftId: string, @Body() dto: UpdateShiftStatusDto) {
+    return this.adminService.updateShiftStatus(shiftId, dto.status);
   }
 
   @Patch("worker-profiles/:workerId/credentials/:credentialIndex")

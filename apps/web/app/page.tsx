@@ -1,14 +1,23 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { UserRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
+import { Calendar, Check, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
 
 type SignupType = "worker" | "facility";
 
 type StoredAuthUser = {
   email: string;
   role: UserRole;
+};
+
+type WaitlistResponse = {
+  code?: string;
+  emailDelivered?: boolean;
+  joined?: boolean;
+  message?: string;
 };
 
 const steps = [
@@ -40,41 +49,36 @@ const steps = [
 
 const facilityFeatures = [
   {
-    title: "Fill urgent gaps in hours, not days",
-    copy: "Post a shift and have a qualified professional confirmed the same day.",
+    title: "Post urgent gaps in minutes",
+    copy: "Create open shifts with role, rate, time, and location details your team can act on quickly.",
     icon: <BoltIcon />
   },
   {
-    title: "Verified, credentialed professionals",
-    copy: "Every worker is background-checked and credential-verified before they ever appear in your results.",
+    title: "Only verified professionals",
+    copy: "Workers enter your queue after credential, background-check, and availability signals are reviewed.",
     icon: <ShieldIcon />
   },
   {
-    title: "No agency markups",
-    copy: "Transparent pricing. Pay workers directly through the platform - no middlemen, no surprises.",
+    title: "Keep coverage costs transparent",
+    copy: "Direct platform workflows help facilities avoid agency markups and manage payments in one place.",
     icon: <DollarIcon />
   }
 ];
 
 const workerPerks = [
   {
-    title: "You choose your schedule",
-    copy: "Browse available shifts in your area and pick what works for you. No minimums, no obligations.",
+    title: "Choose shifts around your life",
+    copy: "Filter by date, distance, clinical role, and shift type before you commit.",
     icon: <CalendarIcon />
   },
   {
-    title: "Get paid",
-    copy: "Finish your shift, get paid. No waiting weeks for a paycheque.",
+    title: "See rates before accepting",
+    copy: "Review hourly pay, facility type, and commute details up front.",
     icon: <DollarIcon />
   },
   {
-    title: "Work where you want",
-    copy: "Filter by location, facility type, and shift length. Find opportunities near you.",
-    icon: <PinIcon />
-  },
-  {
-    title: "Build your reputation",
-    copy: "Earn ratings, get repeat requests from facilities you love, and grow your network.",
+    title: "Build a trusted profile",
+    copy: "Credentials, ratings, and completed shifts help you earn repeat requests.",
     icon: <ShieldIcon />
   }
 ];
@@ -86,6 +90,26 @@ const stats = [
   ["24/7", "Platform availability"]
 ];
 
+const facilityProof = [
+  ["Live queue", "Qualified workers surfaced by role and proximity"],
+  ["Admin-ready", "Facility registrations move into verification review"],
+  ["Direct pay", "Transparent coverage costs without agency middlemen"]
+];
+
+const facilityPreviewShifts = [
+  ["RN", "Tonight, 7 PM", "3 nearby matches"],
+  ["HCA", "Tomorrow, 8 AM", "5 available workers"],
+  ["LPN", "Weekend", "Credential review ready"]
+];
+
+const workerPreviewShifts = [
+  ["HCA", "Long-term care", "$34/hr", "2.1 km"],
+  ["RN", "Hospital evening", "$52/hr", "5.8 km"],
+  ["LPN", "Weekend clinic", "$44/hr", "8.4 km"]
+];
+
+const workerProof = ["Flexible shifts", "Verified facilities", "Clear rates"];
+
 const values = [
   ["🤝", "Compassion", "Every shift we fill improves patient care and a professional's livelihood."],
   ["🛡", "Reliability", "Facilities and workers can count on MedShift to deliver, every time."],
@@ -93,15 +117,44 @@ const values = [
   ["⭐", "Excellence", "We hold professionals and facilities to the highest standard of care."]
 ];
 
+const waitlistOptions = {
+  worker: {
+    title: "Healthcare Worker",
+    copy: "Get notified when local shifts open for your role and preferred schedule.",
+    placeholder: "name@example.com",
+    cta: "Join as Worker",
+    icon: <Users size={19} strokeWidth={2.2} />,
+    points: ["Early shift alerts", "Credential-ready profile", "Flexible local work"]
+  },
+  facility: {
+    title: "Facility",
+    copy: "Be first to access verified workers for urgent and planned coverage gaps.",
+    placeholder: "name@facility.ca",
+    cta: "Join as Facility",
+    icon: <ShieldCheck size={19} strokeWidth={2.2} />,
+    points: ["Priority launch access", "Verified clinical staff", "Fast coverage support"]
+  }
+} satisfies Record<SignupType, {
+  copy: string;
+  cta: string;
+  icon: ReactNode;
+  placeholder: string;
+  points: string[];
+  title: string;
+}>;
+
 export default function HomePage() {
   const [signupType, setSignupType] = useState<SignupType>("worker");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "warning" | "error">("success");
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
   const [authUser, setAuthUser] = useState<StoredAuthUser | null>(null);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const dashboardHref = useMemo(() => getDashboardHref(authUser?.role), [authUser?.role]);
   const userInitials = useMemo(() => getUserInitials(authUser?.email), [authUser?.email]);
+  const waitlistOption = waitlistOptions[signupType];
 
   useEffect(() => {
     const accessToken = window.localStorage.getItem("medshift.accessToken");
@@ -133,12 +186,17 @@ export default function HomePage() {
     const trimmedEmail = email.trim().toLowerCase();
 
     if (!trimmedEmail || !isValidEmail(trimmedEmail)) {
+      setMessageTone("error");
       setMessage("Please enter a valid email address.");
       return;
     }
 
+    setIsSubmittingWaitlist(true);
+    setMessage("");
+    setMessageTone("success");
+
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/waitlist`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/waitlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -146,11 +204,41 @@ export default function HomePage() {
           role: signupType === "worker" ? UserRole.Worker : UserRole.Facility
         })
       });
-    } finally {
+
+      if (!response.ok) {
+        let result: WaitlistResponse = {};
+
+        try {
+          result = (await response.json()) as WaitlistResponse;
+        } catch {
+          result = {};
+        }
+
+        throw new Error(formatWaitlistError(result));
+      }
+
+      const result = (await response.json()) as WaitlistResponse;
+
+      if (result.joined && result.emailDelivered === false) {
+        setMessageTone("warning");
+        setMessage(
+          result.message ??
+            "You're on the waitlist. We could not send the confirmation email yet, so the team should check Resend setup."
+        );
+        setEmail("");
+        return;
+      }
+
+      setMessageTone("success");
       setMessage(
-        `Thanks for signing up as a ${signupType === "worker" ? "healthcare worker" : "facility"}! We'll be in touch soon.`
+        `You're on the list as a ${signupType === "worker" ? "healthcare worker" : "facility"}. Check your email for confirmation.`
       );
       setEmail("");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "Unable to join the waitlist right now. Please try again.");
+    } finally {
+      setIsSubmittingWaitlist(false);
     }
   }
 
@@ -317,17 +405,23 @@ export default function HomePage() {
 
       <section className="facilities" id="facilities">
         <div className="facilities-inner">
-          <div>
+          <div className="facilities-copy">
             <div className="section-label">For healthcare facilities</div>
             <h2>
-              Coverage you can count on.
-              <br />
-              Without the chaos.
+              Fill critical shifts with verified local professionals.
             </h2>
             <p className="section-sub">
-              Stop scrambling for last-minute coverage. MedShift gives you a vetted pool of local professionals ready
-              to work - on your timeline.
+              MedShift helps care teams replace last-minute staffing scrambles with a cleaner workflow for posting
+              shifts, reviewing matches, and keeping coverage moving.
             </p>
+            <div className="facility-proof-grid" aria-label="Facility coverage proof">
+              {facilityProof.map(([title, copy]) => (
+                <div key={title}>
+                  <span>{title}</span>
+                  <strong>{copy}</strong>
+                </div>
+              ))}
+            </div>
             <div className="feature-list">
               {facilityFeatures.map((feature) => (
                 <article className="feature-item" key={feature.title}>
@@ -343,92 +437,189 @@ export default function HomePage() {
               Get Early Access →
             </a>
           </div>
-          <div className="stats-grid">
-            {stats.map(([number, label]) => (
-              <article className="stat-card" key={label}>
-                <div className="stat-num">{number}</div>
-                <div className="stat-label">{label}</div>
-              </article>
-            ))}
+          <div className="facility-command-panel" aria-label="Facility coverage preview">
+            <div className="facility-command-header">
+              <div>
+                <span>Coverage command</span>
+                <strong>Calgary care team</strong>
+              </div>
+              <small>Live matching</small>
+            </div>
+            <div className="facility-command-list">
+              {facilityPreviewShifts.map(([role, time, matches]) => (
+                <article key={`${role}-${time}`}>
+                  <div className="facility-role-badge">{role}</div>
+                  <div>
+                    <strong>{time}</strong>
+                    <span>{matches}</span>
+                  </div>
+                  <Check size={16} aria-hidden="true" />
+                </article>
+              ))}
+            </div>
+            <div className="stats-grid">
+              {stats.map(([number, label]) => (
+                <article className="stat-card" key={label}>
+                  <div className="stat-num">{number}</div>
+                  <div className="stat-label">{label}</div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       <section className="workers" id="workers">
         <div className="workers-inner">
-          <div>
+          <div className="worker-preview-panel" aria-label="Worker shift board preview">
+            <div className="worker-preview-header">
+              <div>
+                <span>Shift board</span>
+                <strong>Available near you</strong>
+              </div>
+              <small>Map + list</small>
+            </div>
+            <div className="worker-preview-list">
+              {workerPreviewShifts.map(([role, facilityType, rate, distance]) => (
+                <article key={`${role}-${facilityType}`}>
+                  <div className="worker-role-badge">{role}</div>
+                  <div>
+                    <strong>{facilityType}</strong>
+                    <span>{distance} away</span>
+                  </div>
+                  <em>{rate}</em>
+                </article>
+              ))}
+            </div>
+            <div className="worker-preview-footer">
+              <div>
+                <span>Credential status</span>
+                <strong>Ready for review</strong>
+              </div>
+              <div>
+                <span>Preferred radius</span>
+                <strong>25 km</strong>
+              </div>
+            </div>
+          </div>
+          <div className="workers-copy">
             <div className="section-label">For healthcare professionals</div>
             <h2>
-              Work on your terms.
-              <br />
-              Get paid
+              Pick up verified shifts without agency friction.
             </h2>
             <p className="section-sub">
-              Your schedule, your choice. Pick up shifts that fit your life - no long-term commitments, no agencies
-              taking a cut.
+              Browse nearby shifts, review rates up front, and accept work that fits your schedule.
             </p>
+            <div className="worker-proof-row" aria-label="Healthcare professional benefits">
+              {workerProof.map((item) => (
+                <span key={item}>
+                  <Check size={14} aria-hidden="true" />
+                  {item}
+                </span>
+              ))}
+            </div>
+            <div className="worker-perk-grid">
+              {workerPerks.map((perk) => (
+                <article className="perk-card" key={perk.title}>
+                  <div className="perk-icon">{perk.icon}</div>
+                  <div>
+                    <div className="perk-title">{perk.title}</div>
+                    <div className="perk-desc">{perk.copy}</div>
+                  </div>
+                </article>
+              ))}
+            </div>
             <a className="btn-primary worker-cta" href="#signup">
               Join the Waitlist →
             </a>
-          </div>
-          <div>
-            {workerPerks.map((perk) => (
-              <article className="perk-card" key={perk.title}>
-                <div className="perk-icon">{perk.icon}</div>
-                <div>
-                  <div className="perk-title">{perk.title}</div>
-                  <div className="perk-desc">{perk.copy}</div>
-                </div>
-              </article>
-            ))}
           </div>
         </div>
       </section>
 
       <section className="signup" id="signup">
         <div className="signup-inner">
-          <div className="section-label">Be first in line</div>
-          <h2>Join the MedShift Waitlist</h2>
-          <p className="section-sub">
-            We're launching in Alberta first. Sign up and we'll notify you the moment your region goes live.
-          </p>
-          <div className="signup-tabs" aria-label="Waitlist type">
-            <button
-              className={`tab ${signupType === "worker" ? "active" : ""}`}
-              type="button"
-              onClick={() => setSignupType("worker")}
-            >
-              I'm a Healthcare Worker
-            </button>
-            <button
-              className={`tab ${signupType === "facility" ? "active" : ""}`}
-              type="button"
-              onClick={() => setSignupType("facility")}
-            >
-              I'm a Facility
-            </button>
+          <div className="signup-copy">
+            <div className="section-label">Be first in line</div>
+            <h2>Join the MedShift Waitlist</h2>
+            <p className="section-sub">
+              Alberta launch access is opening in waves. Tell us where you fit and we will send the right next steps to
+              your inbox.
+            </p>
+            <div className="signup-highlights" aria-label="Waitlist benefits">
+              <div>
+                <Clock size={18} aria-hidden="true" />
+                <span>Launch alerts</span>
+              </div>
+              <div>
+                <MapPin size={18} aria-hidden="true" />
+                <span>Alberta first</span>
+              </div>
+              <div>
+                <Calendar size={18} aria-hidden="true" />
+                <span>Early access</span>
+              </div>
+            </div>
           </div>
-          <form
-            className="signup-form"
-            onSubmit={handleSignup}
-          >
-            <input
-              aria-label="Email address"
-              autoComplete="email"
-              maxLength={254}
-              name="email"
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder={signupType === "worker" ? "name@example.com" : "name@facility.ca"}
-              required
-              type="email"
-              value={email}
-            />
-            <button className="btn-primary" type="submit">
-              Get Early Access →
-            </button>
-          </form>
-          <p className="signup-note">No spam. Unsubscribe anytime. 🔒</p>
-          {message ? <p className="signup-message">{message}</p> : null}
+
+          <div className="signup-card">
+            <div className="signup-card-header">
+              <span>Choose your waitlist</span>
+              <strong>{waitlistOption.title}</strong>
+              <p>{waitlistOption.copy}</p>
+            </div>
+            <div className="signup-tabs" aria-label="Waitlist type">
+              {(["worker", "facility"] as const).map((type) => (
+                <button
+                  aria-pressed={signupType === type}
+                  className={`tab ${signupType === type ? "active" : ""}`}
+                  key={type}
+                  type="button"
+                  onClick={() => setSignupType(type)}
+                >
+                  <span className="tab-icon" aria-hidden="true">{waitlistOptions[type].icon}</span>
+                  <span>
+                    <strong>{waitlistOptions[type].title}</strong>
+                    <small>{type === "worker" ? "Find flexible shifts" : "Fill staffing gaps"}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <form
+              aria-busy={isSubmittingWaitlist}
+              className="signup-form"
+              onSubmit={handleSignup}
+            >
+              <input
+                aria-label="Email address"
+                autoComplete="email"
+                maxLength={254}
+                name="email"
+                disabled={isSubmittingWaitlist}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder={waitlistOption.placeholder}
+                required
+                type="email"
+                value={email}
+              />
+              <button className="btn-primary" disabled={isSubmittingWaitlist} type="submit">
+                {isSubmittingWaitlist ? "Sending..." : waitlistOption.cta}
+              </button>
+            </form>
+            <div className="signup-points" aria-label={`${waitlistOption.title} waitlist includes`}>
+              {waitlistOption.points.map((point) => (
+                <span key={point}>
+                  <Check size={14} aria-hidden="true" />
+                  {point}
+                </span>
+              ))}
+            </div>
+            <p className="signup-note">No spam. Confirmation email sent after signup.</p>
+            {message ? (
+              <p className={`signup-message ${messageTone}`} role={messageTone === "error" ? "alert" : "status"}>
+                {message}
+              </p>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -549,6 +740,18 @@ function CheckIcon() {
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function formatWaitlistError(result: WaitlistResponse) {
+  if (result.code === "WAITLIST_EMAIL_NOT_SENT") {
+    return result.message ?? "You're on the waitlist. We could not send the confirmation email yet.";
+  }
+
+  if (typeof result.message === "string" && result.message.length > 0) {
+    return result.message;
+  }
+
+  return "Unable to join the waitlist right now. Please try again.";
 }
 
 function getDashboardHref(role?: UserRole) {

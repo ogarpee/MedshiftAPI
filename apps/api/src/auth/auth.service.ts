@@ -16,13 +16,14 @@ import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { StartRegistrationDto } from "./dto/start-registration.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyPasswordResetOtpDto } from "./dto/verify-password-reset-otp.dto";
 import { VerifyRegistrationOtpDto } from "./dto/verify-registration-otp.dto";
 import { PasswordService } from "./password.service";
 
 const verificationTokenExpiresInHours = 24;
 const verificationTokenExpiresInMs = verificationTokenExpiresInHours * 60 * 60 * 1000;
-const passwordResetTokenExpiresInHours = 1;
-const passwordResetTokenExpiresInMs = passwordResetTokenExpiresInHours * 60 * 60 * 1000;
+const passwordResetOtpExpiresInMinutes = 10;
+const passwordResetOtpExpiresInMs = passwordResetOtpExpiresInMinutes * 60 * 1000;
 const registrationOtpExpiresInMinutes = 10;
 const registrationOtpExpiresInMs = registrationOtpExpiresInMinutes * 60 * 1000;
 const registrationCompletionTokenExpiresInMinutes = 20;
@@ -70,6 +71,12 @@ interface PasswordResetRequestResponse {
 
 interface PasswordResetResponse {
   message: string;
+}
+
+interface PasswordResetOtpVerificationResponse {
+  email: string;
+  message: string;
+  passwordResetOtpVerified: true;
 }
 
 interface RegistrationOtpResponse {
@@ -320,29 +327,13 @@ export class AuthService {
     }
 
     return {
-      message: "If that email belongs to a MedShift account, a password reset link has been sent."
+      message: "If that email belongs to a MedShift account, a 6-digit reset code has been sent."
     };
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<PasswordResetResponse> {
     const email = dto.email.toLowerCase().trim();
-    const tokenHash = this.hashToken(dto.token);
-    const user = await this.users.findOne({ email, passwordResetTokenHash: tokenHash }).exec();
-
-    if (!user) {
-      throw new BadRequestException({
-        code: "PASSWORD_RESET_INVALID",
-        message: "This password reset link is invalid or has already been used."
-      });
-    }
-
-    if (!user.passwordResetTokenExpiresAt || user.passwordResetTokenExpiresAt.getTime() < Date.now()) {
-      throw new BadRequestException({
-        code: "PASSWORD_RESET_EXPIRED",
-        email: user.email,
-        message: "This password reset link has expired. Request a new password reset email."
-      });
-    }
+    const user = await this.findUserForPasswordResetOtp(email, dto.otp);
 
     user.passwordHash = await this.passwordService.hash(dto.password);
     user.passwordResetTokenHash = undefined;
@@ -353,6 +344,17 @@ export class AuthService {
 
     return {
       message: "Password reset. You can now sign in with your new password."
+    };
+  }
+
+  async verifyPasswordResetOtp(dto: VerifyPasswordResetOtpDto): Promise<PasswordResetOtpVerificationResponse> {
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.findUserForPasswordResetOtp(email, dto.otp);
+
+    return {
+      email: user.email,
+      message: "Code verified. Set your new password.",
+      passwordResetOtpVerified: true
     };
   }
 
@@ -392,18 +394,50 @@ export class AuthService {
   }
 
   private async rotatePasswordResetTokenAndSend(user: UserDocument) {
-    const token = randomBytes(32).toString("base64url");
+    const otp = this.createPasswordResetOtp();
 
-    user.passwordResetTokenHash = this.hashToken(token);
-    user.passwordResetTokenExpiresAt = new Date(Date.now() + passwordResetTokenExpiresInMs);
+    user.passwordResetTokenHash = this.hashToken(otp);
+    user.passwordResetTokenExpiresAt = new Date(Date.now() + passwordResetOtpExpiresInMs);
     user.passwordResetSentAt = new Date();
     await user.save();
 
     await this.notificationService.sendPasswordReset({
       email: user.email,
-      resetUrl: this.buildPasswordResetUrl(user.email, token),
-      expiresInHours: passwordResetTokenExpiresInHours
+      otp,
+      expiresInMinutes: passwordResetOtpExpiresInMinutes
     });
+  }
+
+  private async findUserForPasswordResetOtp(email: string, otp: string) {
+    const otpHash = this.hashToken(otp);
+    const isDevelopmentDefaultOtp = this.isDevelopmentPasswordResetOtp(otp);
+    const user =
+      (await this.users.findOne({ email, passwordResetTokenHash: otpHash }).exec()) ??
+      (isDevelopmentDefaultOtp ? await this.users.findOne({ email }).exec() : null);
+
+    if (!user && isDevelopmentDefaultOtp) {
+      throw new BadRequestException({
+        code: "PASSWORD_RESET_ACCOUNT_NOT_FOUND",
+        message: "No MedShift account exists for this email in this environment."
+      });
+    }
+
+    if (!user) {
+      throw new BadRequestException({
+        code: "PASSWORD_RESET_INVALID",
+        message: this.getPasswordResetOtpPrompt()
+      });
+    }
+
+    if (!isDevelopmentDefaultOtp && (!user.passwordResetTokenExpiresAt || user.passwordResetTokenExpiresAt.getTime() < Date.now())) {
+      throw new BadRequestException({
+        code: "PASSWORD_RESET_EXPIRED",
+        email: user.email,
+        message: "This password reset code has expired. Request a new code."
+      });
+    }
+
+    return user;
   }
 
   private hashToken(token: string) {
@@ -411,7 +445,25 @@ export class AuthService {
   }
 
   private createRegistrationOtp() {
-    return this.config.get<string>("NODE_ENV") === "production" ? randomInt(100000, 1000000).toString() : "123456";
+    return this.allowDefaultOtp() ? "123456" : randomInt(100000, 1000000).toString();
+  }
+
+  private createPasswordResetOtp() {
+    return this.allowDefaultOtp() ? "123456" : randomInt(100000, 1000000).toString();
+  }
+
+  private getPasswordResetOtpPrompt() {
+    return "Enter the 6-digit reset code.";
+  }
+
+  private isDevelopmentPasswordResetOtp(otp: string) {
+    return this.allowDefaultOtp() && otp === "123456";
+  }
+
+  private allowDefaultOtp() {
+    const allowDevOtps = this.config.get<string>("ALLOW_DEV_OTPS")?.toLowerCase();
+
+    return allowDevOtps === "true" || allowDevOtps === "1" || allowDevOtps === "yes" || this.config.get<string>("NODE_ENV") !== "production";
   }
 
   private validateRegistrationRole(role: UserRole) {
@@ -441,15 +493,6 @@ export class AuthService {
   private buildVerificationUrl(email: string, token: string) {
     const webOrigin = this.config.get<string>("WEB_ORIGIN", "http://localhost:3000").replace(/\/$/, "");
     const url = new URL("/verify-email", webOrigin);
-    url.searchParams.set("email", email);
-    url.searchParams.set("token", token);
-
-    return url.toString();
-  }
-
-  private buildPasswordResetUrl(email: string, token: string) {
-    const webOrigin = this.config.get<string>("WEB_ORIGIN", "http://localhost:3000").replace(/\/$/, "");
-    const url = new URL("/reset-password", webOrigin);
     url.searchParams.set("email", email);
     url.searchParams.set("token", token);
 

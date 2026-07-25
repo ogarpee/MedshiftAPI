@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ClinicalRole, FacilityType, MatchedShiftSummary, OnboardingStatus, ShiftStatus } from "@medshift/shared-types";
+import type { ReactNode } from "react";
+import { ClinicalRole, FacilityType, GeoPoint, MatchedShiftSummary, OnboardingStatus, ShiftStatus } from "@medshift/shared-types";
 import { DashboardShell, StatusBadge } from "@medshift/ui-components";
+import { Calendar, Check, ChevronLeft, ChevronRight, Clock, Coins, Hourglass, MapPin, Star, Users, Wallet, X } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { ShiftMap } from "./shift-map";
 
@@ -11,6 +13,13 @@ type WorkerOnboardingStatus = {
   completed?: boolean;
   nextStep?: string;
   verificationStatus?: OnboardingStatus;
+};
+
+type WorkerProfileResponse = {
+  location?: GeoPoint;
+  preferences?: {
+    maxDistanceKm?: number;
+  };
 };
 
 const demoShifts: MatchedShiftSummary[] = [
@@ -73,6 +82,43 @@ const demoShifts: MatchedShiftSummary[] = [
   }
 ];
 
+const workOverview = [
+  { month: "Jan", completed: 28, total: 54 },
+  { month: "Feb", completed: 49, total: 74 },
+  { month: "Mar", completed: 39, total: 68 },
+  { month: "Apr", completed: 66, total: 99 },
+  { month: "May", completed: 35, total: 66 },
+  { month: "Jun", completed: 77, total: 90 },
+  { month: "Jul", completed: 28, total: 68 },
+  { month: "Aug", completed: 0, total: 0 },
+  { month: "Sep", completed: 0, total: 0 },
+  { month: "Oct", completed: 0, total: 0 },
+  { month: "Nov", completed: 0, total: 0 },
+  { month: "Dec", completed: 0, total: 0 }
+];
+
+const weekDays = [
+  { label: "SUN", day: 5 },
+  { label: "MON", day: 6 },
+  { label: "TUE", day: 7 },
+  { label: "WED", day: 8, active: true },
+  { label: "THU", day: 9 },
+  { label: "FRI", day: 10 },
+  { label: "SAT", day: 11 }
+];
+
+const scheduleSlots = [
+  { time: "10 AM - 1 PM", title: "Confirmed shift", detail: "Bow Valley Care Centre", icon: Calendar },
+  { time: "2 PM", title: "Available slot", detail: "Open for matching", icon: Clock },
+  { time: "3 PM - 6 PM", title: "Confirmed shift", detail: "Prairie North Hospital", icon: Calendar }
+];
+
+const reviewCards = [
+  { name: "Bow Valley Care Centre", type: "Long-term care", rating: "4.8" },
+  { name: "Prairie North Hospital", type: "Hospital", rating: "4.6" },
+  { name: "Foothills Clinic", type: "Community clinic", rating: "4.9" }
+];
+
 export default function WorkerDashboardPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
@@ -80,6 +126,7 @@ export default function WorkerDashboardPage() {
   const [selectedShiftId, setSelectedShiftId] = useState(demoShifts[0]?.id ?? "");
   const [shifts, setShifts] = useState<MatchedShiftSummary[]>(demoShifts);
   const [message, setMessage] = useState("");
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<WorkerOnboardingStatus | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
@@ -90,11 +137,6 @@ export default function WorkerDashboardPage() {
     [selectedShiftId, shifts]
   );
 
-  const openShifts = shifts.filter((shift) => shift.status === ShiftStatus.Open).length;
-  const nextShift = shifts
-    .filter((shift) => shift.status === ShiftStatus.Open)
-    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
-
   useEffect(() => {
     const token = window.localStorage.getItem("medshift.accessToken");
 
@@ -103,35 +145,84 @@ export default function WorkerDashboardPage() {
       return;
     }
 
-    fetch(`${apiUrl}/worker-profiles/onboarding-status`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((status: WorkerOnboardingStatus) => {
+    let cancelled = false;
+
+    async function loadWorkerDashboard() {
+      setIsLoadingDashboard(true);
+
+      try {
+        const statusResponse = await fetch(`${apiUrl}/worker-profiles/onboarding-status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!statusResponse.ok) {
+          throw new Error("Unable to load onboarding status");
+        }
+
+        const status = (await statusResponse.json()) as WorkerOnboardingStatus;
+
+        if (cancelled) {
+          return;
+        }
+
         setOnboardingStatus(status);
 
         if (status.verificationStatus !== OnboardingStatus.Approved) {
           setMessage(status.verificationStatus === OnboardingStatus.Incomplete ? "Complete onboarding to unlock live shift matching." : "Your onboarding is under review. Preview shifts are shown until approval.");
-          return null;
         }
 
-        return fetch(`${apiUrl}/matching/open-shifts?longitude=-114.0719&latitude=51.0447&radiusKm=25`, {
+        const profileResponse = await fetch(`${apiUrl}/worker-profiles/me`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-      })
-      .then((response) => (response ? (response.ok ? response.json() : Promise.reject()) : []))
-      .then((result: MatchedShiftSummary[]) => {
-        if (result.length) {
+
+        const profile = profileResponse.ok ? ((await profileResponse.json()) as WorkerProfileResponse) : null;
+        const [longitude, latitude] = profile?.location?.coordinates ?? [-114.0719, 51.0447];
+        const radiusKm = profile?.preferences?.maxDistanceKm ?? 25;
+        const query = new URLSearchParams({
+          longitude: String(longitude),
+          latitude: String(latitude),
+          radiusKm: String(radiusKm)
+        });
+        const shiftsResponse = await fetch(`${apiUrl}/matching/open-shifts?${query.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (!shiftsResponse.ok) {
+          throw new Error("Unable to load open shifts");
+        }
+
+        const result = (await shiftsResponse.json()) as MatchedShiftSummary[];
+
+        if (!cancelled && result.length) {
           setShifts(result);
           setSelectedShiftId(result[0].id);
-          setMessage("");
+          setMessage(status.verificationStatus === OnboardingStatus.Approved ? "Live board connected to your saved radius." : "Previewing live nearby shifts while onboarding is incomplete.");
         }
-      })
-      .catch(() => setMessage("Live worker matching is unavailable, so this board is using preview shifts."));
+      } catch {
+        if (!cancelled) {
+          setMessage("Live worker matching is unavailable, so this board is using preview shifts.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDashboard(false);
+        }
+      }
+    }
+
+    void loadWorkerDashboard();
+
+    return () => {
+      cancelled = true;
+    };
   }, [apiUrl]);
 
   useEffect(() => {
     let socket: Socket | null = null;
+    const token = window.localStorage.getItem("medshift.accessToken");
+
+    if (!token) {
+      return undefined;
+    }
 
     import("socket.io-client")
       .then(({ io }) => {
@@ -224,24 +315,18 @@ export default function WorkerDashboardPage() {
       className="worker-page"
       eyebrow={<StatusBadge tone="green">Available now</StatusBadge>}
       navItems={[
-        { label: "Shift board", href: "/worker", active: true },
-        { label: "Map view", href: "/worker#map" }
+        { label: "Shift board", href: "/worker", active: true }
       ]}
       title="Shift board"
       userLabel="Worker workspace"
     >
-      <section className="worker-shell">
-        <header className="worker-header">
-          <div>
-            <h2>Nearby shifts</h2>
-            <p>{nextShift ? `Next match starts ${formatShortDate(nextShift.startTime)}.` : "No open shifts in your radius yet."}</p>
-          </div>
-          <div className="worker-earnings" aria-label="Worker summary">
-            <span>Projected today</span>
-            <strong>${calculateProjectedPay(shifts)}</strong>
-            <small>{openShifts} open matches</small>
-          </div>
-        </header>
+      <section className="worker-shell worker-dashboard-refresh">
+        <section className="worker-metric-strip" aria-label="Worker metrics">
+          <MetricPill icon={<Calendar aria-hidden="true" />} label="Total shifts" value={String(shifts.length + 24)} trend="+5%" />
+          <MetricPill icon={<Clock aria-hidden="true" />} label="Hours worked" value="66h" trend="-2%" tone="danger" />
+          <MetricPill icon={<Star aria-hidden="true" />} label="Rating" value="4.8" />
+          <MetricPill icon={<Users aria-hidden="true" />} label="Repeat facilities" value="78%" trend="+8%" />
+        </section>
 
         {onboardingStatus?.verificationStatus === OnboardingStatus.Incomplete ? (
           <section className="dashboard-onboarding-banner" aria-label="Complete worker onboarding">
@@ -250,116 +335,286 @@ export default function WorkerDashboardPage() {
               <h3>Complete your onboarding to unlock live shifts.</h3>
               <p>Finish your profile, service area, availability, credentials, and background-check consent so MedShift can review your account.</p>
             </div>
-            <a className="auth-submit" href="/worker/onboarding">
+            <a className="dashboard-banner-action" href="/worker/onboarding">
               Continue onboarding
             </a>
           </section>
         ) : null}
 
-        <div className="worker-toolbar">
-          <div className="segmented-control" aria-label="Shift view">
-            <button className={viewMode === "list" ? "active" : ""} type="button" onClick={() => setViewMode("list")}>
-              List
-            </button>
-            <button className={viewMode === "map" ? "active" : ""} type="button" onClick={() => setViewMode("map")}>
-              Map
-            </button>
-          </div>
-          <span>{message || "Live board connected to your saved radius."}</span>
-        </div>
-
-        <section className="worker-grid" id="map">
-          <div className={viewMode === "map" ? "shift-map-panel" : "worker-shift-list"}>
-            {viewMode === "list" ? (
-              shifts.map((shift) => (
-                <button
-                  className={shift.id === selectedShift?.id ? "worker-shift-card active" : "worker-shift-card"}
-                  key={shift.id}
-                  type="button"
-                  onClick={() => setSelectedShiftId(shift.id)}
-                >
-                  <span>{shift.facility?.name ?? "MedShift facility"}</span>
-                  <strong>{shift.roleRequired} · ${shift.hourlyRate}/hr</strong>
-                  <small>{formatWindow(shift.startTime, shift.endTime)}</small>
-                  <em>{shift.distanceKm ? `${shift.distanceKm} km away` : "Nearby"}</em>
-                </button>
-              ))
-            ) : (
-              <ShiftMap shifts={shifts} selectedShiftId={selectedShift?.id} token={mapboxToken} onSelectShift={setSelectedShiftId} />
-            )}
-          </div>
-
-          {selectedShift ? (
-            <aside className="shift-detail-panel" aria-label="Shift details">
-              <div>
-                <StatusBadge tone={selectedShift.status === ShiftStatus.Open ? "gold" : "green"}>{selectedShift.status}</StatusBadge>
-                <h2>{selectedShift.facility?.name ?? "MedShift facility"}</h2>
-                <p>{selectedShift.description}</p>
+        <section className="worker-dashboard-grid">
+          <div className="worker-dashboard-main-column">
+            <section className="work-overview-card" aria-label="Work overview">
+              <div className="work-overview-heading">
+                <div>
+                  <h2>Work overview</h2>
+                  <p>Last year <span>+12%</span></p>
+                </div>
+                <button className="soft-select-button" type="button">Year</button>
               </div>
+              <div className="work-chart" aria-label="Completed shifts by month">
+                <div className="work-chart-scale" aria-hidden="true">
+                  <span>100</span>
+                  <span>75</span>
+                  <span>50</span>
+                  <span>25</span>
+                  <span>0</span>
+                </div>
+                <div className="work-chart-bars">
+                  {workOverview.map((month) => (
+                    <div className="work-chart-month" key={month.month}>
+                      <div className="work-bar-track" aria-hidden="true">
+                        {month.total ? <span style={{ height: `${month.total}%` }} /> : null}
+                        {month.completed ? <strong style={{ height: `${month.completed}%` }} /> : null}
+                      </div>
+                      <span>{month.month}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
 
-              <dl className="shift-detail-list">
-                <div>
-                  <dt>Role</dt>
-                  <dd>{selectedShift.roleRequired}</dd>
-                </div>
-                <div>
-                  <dt>Time</dt>
-                  <dd>{formatWindow(selectedShift.startTime, selectedShift.endTime)}</dd>
-                </div>
-                <div>
-                  <dt>Rate</dt>
-                  <dd>${selectedShift.hourlyRate}/hr</dd>
-                </div>
-                <div>
-                  <dt>Distance</dt>
-                  <dd>{selectedShift.distanceKm ? `${selectedShift.distanceKm} km` : "Nearby"}</dd>
-                </div>
-                <div>
-                  <dt>Facility rating</dt>
-                  <dd>{selectedShift.facility?.stats?.averageRating ? selectedShift.facility.stats.averageRating.toFixed(1) : "New"}</dd>
-                </div>
-              </dl>
+            <section className="worker-section-heading">
+              <h2>Requests</h2>
+              <button type="button">View all</button>
+            </section>
 
-              <button
-                className="auth-submit"
-                disabled={isAccepting || selectedShift.status !== ShiftStatus.Open}
-                type="button"
-                onClick={() => acceptShift(selectedShift)}
-              >
-                {selectedShift.status === ShiftStatus.Open ? "Accept shift" : "Matched"}
-              </button>
-
-              {selectedShift.status === ShiftStatus.Completed ? (
-                <form className="worker-review-form" onSubmit={(event) => { event.preventDefault(); void submitReview(selectedShift); }}>
-                  <div className="star-row" aria-label="Facility rating">
-                    {[1, 2, 3, 4, 5].map((rating) => (
-                      <button
-                        className={reviewRating >= rating ? "active" : ""}
-                        key={rating}
-                        type="button"
-                        onClick={() => setReviewRating(rating)}
-                        aria-label={`${rating} star rating`}
-                      >
-                        ★
-                      </button>
-                    ))}
+            <section className="worker-request-grid" aria-label="Shift requests">
+              {shifts.slice(0, 2).map((shift) => (
+                <article className="worker-request-card" key={shift.id}>
+                  <div className="request-card-top">
+                    <div className="request-avatar">{getFacilityInitials(shift.facility?.name)}</div>
+                    <div>
+                      <h3>{shift.facility?.name ?? "MedShift facility"}</h3>
+                      <span>{shift.roleRequired} shift</span>
+                    </div>
+                    <div className="request-actions">
+                      <button aria-label="Decline request" type="button"><X aria-hidden="true" /></button>
+                      <button aria-label="Accept request" type="button" onClick={() => acceptShift(shift)} disabled={isAccepting || shift.status !== ShiftStatus.Open}><Check aria-hidden="true" /></button>
+                    </div>
                   </div>
-                  <textarea
-                    maxLength={280}
-                    name="facilityReview"
-                    value={reviewComment}
-                    onChange={(event) => setReviewComment(event.target.value)}
-                    placeholder="Add facility feedback"
-                    rows={3}
-                  />
-                  <button type="submit">Submit review</button>
-                </form>
-              ) : null}
-            </aside>
-          ) : null}
+                  <div className="request-meta">
+                    <span><Calendar aria-hidden="true" /> {formatShortDate(shift.startTime)}</span>
+                    <span><Clock aria-hidden="true" /> {formatTimeRange(shift.startTime, shift.endTime)}</span>
+                  </div>
+                  <div className="request-footer">
+                    <span><MapPin aria-hidden="true" /> {shift.facility?.address?.city ?? "Calgary"}, {shift.facility?.address?.province ?? "AB"}</span>
+                    <strong>${calculateShiftPay(shift)} <small>/{calculateShiftHours(shift)} hr</small></strong>
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            <section className="worker-section-heading">
+              <h2>Facility reviews</h2>
+              <button type="button">View all</button>
+            </section>
+
+            <section className="worker-review-card-grid" aria-label="Facility reviews">
+              {reviewCards.map((review) => (
+                <article className="facility-review-card" key={review.name}>
+                  <div className="request-avatar">{getFacilityInitials(review.name)}</div>
+                  <div>
+                    <h3>{review.name}</h3>
+                    <span>{review.type}</span>
+                  </div>
+                  <strong><Star aria-hidden="true" /> {review.rating}</strong>
+                </article>
+              ))}
+            </section>
+
+            <section className="worker-open-matches" id="map">
+              <div className="worker-toolbar">
+                <div className="segmented-control" aria-label="Shift view">
+                  <button className={viewMode === "list" ? "active" : ""} type="button" onClick={() => setViewMode("list")}>
+                    List
+                  </button>
+                  <button className={viewMode === "map" ? "active" : ""} type="button" onClick={() => setViewMode("map")}>
+                    Map
+                  </button>
+                </div>
+                <span>{isLoadingDashboard ? "Loading live dashboard data..." : message || "Live board connected to your saved radius."}</span>
+              </div>
+              <div className={viewMode === "map" ? "shift-map-panel" : "worker-shift-list compact"}>
+                {viewMode === "list" ? (
+                  shifts.map((shift) => (
+                    <button
+                      className={shift.id === selectedShift?.id ? "worker-shift-card active" : "worker-shift-card"}
+                      key={shift.id}
+                      type="button"
+                      onClick={() => setSelectedShiftId(shift.id)}
+                    >
+                      <span>{shift.facility?.name ?? "MedShift facility"}</span>
+                      <strong>{shift.roleRequired} · ${shift.hourlyRate}/hr</strong>
+                      <small>{formatWindow(shift.startTime, shift.endTime)}</small>
+                      <em>{shift.distanceKm ? `${shift.distanceKm} km away` : "Nearby"}</em>
+                    </button>
+                  ))
+                ) : (
+                  <ShiftMap shifts={shifts} selectedShiftId={selectedShift?.id} token={mapboxToken} onSelectShift={setSelectedShiftId} />
+                )}
+              </div>
+            </section>
+          </div>
+
+          <aside className="worker-dashboard-side-column" aria-label="Schedule and earnings">
+            <section className="pay-summary-grid">
+              <PayTile icon={<Coins aria-hidden="true" />} label="Earned today" value={`+$${calculateProjectedPay(shifts)}`} hint="$90 yesterday" featured />
+              <PayTile icon={<Calendar aria-hidden="true" />} label="This week" value="$640" hint="$200 last week" />
+              <PayTile icon={<Hourglass aria-hidden="true" />} label="Pending" value="$215" hint="3 payments" />
+              <PayTile icon={<Wallet aria-hidden="true" />} label="Total balance" value="$2,849" hint="Available" />
+            </section>
+
+            <section className="schedule-card" aria-label="April 2026 calendar">
+              <div className="schedule-heading">
+                <button aria-label="Previous week" type="button"><ChevronLeft aria-hidden="true" /></button>
+                <h2>April 2026</h2>
+                <button aria-label="Next week" type="button"><ChevronRight aria-hidden="true" /></button>
+              </div>
+              <div className="schedule-days">
+                {weekDays.map((day) => (
+                  <div className={day.active ? "active" : ""} key={day.label}>
+                    <span>{day.label}</span>
+                    <strong>{day.day}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="schedule-timeline" aria-label="Daily schedule">
+              {scheduleSlots.map((slot) => {
+                const Icon = slot.icon;
+
+                return (
+                  <article key={`${slot.time}-${slot.title}`}>
+                    <time>{slot.time}</time>
+                    <div>
+                      <span><Icon aria-hidden="true" /></span>
+                      <div>
+                        <h3>{slot.title}</h3>
+                        <p>{slot.detail}</p>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+
+            {selectedShift ? (
+              <section className="shift-detail-panel compact" aria-label="Selected shift details">
+                <div>
+                  <StatusBadge tone={selectedShift.status === ShiftStatus.Open ? "gold" : "green"}>{selectedShift.status}</StatusBadge>
+                  <h2>{selectedShift.facility?.name ?? "MedShift facility"}</h2>
+                  <p>{selectedShift.description}</p>
+                </div>
+
+                <dl className="shift-detail-list">
+                  <div>
+                    <dt>Role</dt>
+                    <dd>{selectedShift.roleRequired}</dd>
+                  </div>
+                  <div>
+                    <dt>Rate</dt>
+                    <dd>${selectedShift.hourlyRate}/hr</dd>
+                  </div>
+                  <div>
+                    <dt>Distance</dt>
+                    <dd>{selectedShift.distanceKm ? `${selectedShift.distanceKm} km` : "Nearby"}</dd>
+                  </div>
+                </dl>
+
+                <button
+                  className="auth-submit"
+                  disabled={isAccepting || selectedShift.status !== ShiftStatus.Open}
+                  type="button"
+                  onClick={() => acceptShift(selectedShift)}
+                >
+                  {selectedShift.status === ShiftStatus.Open ? "Accept shift" : "Matched"}
+                </button>
+
+                {selectedShift.status === ShiftStatus.Completed ? (
+                  <form className="worker-review-form" onSubmit={(event) => { event.preventDefault(); void submitReview(selectedShift); }}>
+                    <div className="star-row" aria-label="Facility rating">
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <button
+                          className={reviewRating >= rating ? "active" : ""}
+                          key={rating}
+                          type="button"
+                          onClick={() => setReviewRating(rating)}
+                          aria-label={`${rating} star rating`}
+                        >
+                          ★
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      maxLength={280}
+                      name="facilityReview"
+                      value={reviewComment}
+                      onChange={(event) => setReviewComment(event.target.value)}
+                      placeholder="Add facility feedback"
+                      rows={3}
+                    />
+                    <button type="submit">Submit review</button>
+                  </form>
+                ) : null}
+              </section>
+            ) : null}
+          </aside>
         </section>
       </section>
     </DashboardShell>
+  );
+}
+
+function MetricPill({
+  icon,
+  label,
+  tone = "success",
+  trend,
+  value
+}: {
+  icon: ReactNode;
+  label: string;
+  tone?: "success" | "danger";
+  trend?: string;
+  value: string;
+}) {
+  return (
+    <article className="metric-pill">
+      <span>{icon}</span>
+      <div>
+        <small>{label}</small>
+        <strong>{value}</strong>
+      </div>
+      {trend ? <em className={tone}>{trend}</em> : null}
+    </article>
+  );
+}
+
+function PayTile({
+  featured,
+  hint,
+  icon,
+  label,
+  value
+}: {
+  featured?: boolean;
+  hint: string;
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className={featured ? "pay-tile featured" : "pay-tile"}>
+      <div>
+        <span>{icon}</span>
+        <div>
+          <small>{label}</small>
+          <strong>{value}</strong>
+        </div>
+      </div>
+      <p>{hint}</p>
+    </article>
   );
 }
 
@@ -389,4 +644,35 @@ function calculateProjectedPay(shifts: MatchedShiftSummary[]) {
       const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3_600_000;
       return total + Math.max(0, Math.round(hours * shift.hourlyRate));
     }, 0);
+}
+
+function calculateShiftHours(shift: MatchedShiftSummary) {
+  const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3_600_000;
+  return Math.max(1, Math.round(hours));
+}
+
+function calculateShiftPay(shift: MatchedShiftSummary) {
+  return calculateShiftHours(shift) * shift.hourlyRate;
+}
+
+function formatTimeRange(startTime: string, endTime: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    hour: "numeric",
+    minute: "2-digit"
+  });
+
+  return `${formatter.format(new Date(startTime))}-${formatter.format(new Date(endTime))}`;
+}
+
+function getFacilityInitials(name?: string) {
+  if (!name) {
+    return "MS";
+  }
+
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }

@@ -52,6 +52,7 @@ export function ShiftMap({ selectedShiftId, shifts, token, onSelectShift }: Shif
     const selectedShift = validShifts.find((shift) => shift.id === selectedShiftId) ?? validShifts[0];
     return selectedShift?.location.coordinates ?? [-114.0719, 51.0447];
   }, [selectedShiftId, validShifts]);
+  const hasFallbackPins = mapState === "fallback" && validShifts.length > 0;
 
   useEffect(() => {
     if (!token || !containerRef.current || !validShifts.length) {
@@ -121,13 +122,39 @@ export function ShiftMap({ selectedShiftId, shifts, token, onSelectShift }: Shif
   return (
     <div className="shift-mapbox" aria-label="Nearby shifts Mapbox view">
       <div className="shift-mapbox-canvas" ref={containerRef} />
-      <div className={mapState === "ready" ? "shift-mapbox-status compact" : "shift-mapbox-status"}>
+      {mapState === "fallback" ? (
+        <div className="shift-map-fallback-pins" aria-label="Nearby shift coordinate fallback">
+          {validShifts.map((shift, index) => (
+            <button
+              aria-label={`Select ${shift.facility?.name ?? shift.roleRequired} shift`}
+              className={shift.id === selectedShiftId ? "shift-map-fallback-pin active" : "shift-map-fallback-pin"}
+              key={shift.id}
+              onClick={() => onSelectShift(shift.id)}
+              style={getFallbackPinPosition(index, validShifts.length)}
+              type="button"
+            >
+              ${shift.hourlyRate}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className={mapState === "ready" || hasFallbackPins ? "shift-mapbox-status compact" : "shift-mapbox-status"}>
         <strong>Nearby shift map</strong>
         <span>{validShifts.length ? `${validShifts.length} shifts around Calgary` : "No valid shift coordinates"}</span>
         <small>{getMapStatusText(mapState, Boolean(token))}</small>
       </div>
     </div>
   );
+}
+
+function getFallbackPinPosition(index: number, total: number) {
+  const angle = total > 1 ? (index / total) * Math.PI * 2 : 0;
+  const radius = total > 1 ? 24 : 0;
+
+  return {
+    left: `${50 + Math.cos(angle) * radius}%`,
+    top: `${50 + Math.sin(angle) * radius}%`
+  };
 }
 
 function loadMapbox() {

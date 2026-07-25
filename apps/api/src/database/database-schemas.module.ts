@@ -5,6 +5,7 @@ import { RegistrationAttempt, RegistrationAttemptSchema } from "./schemas/regist
 import { Review, ReviewSchema } from "./schemas/review.schema";
 import { Shift, ShiftSchema } from "./schemas/shift.schema";
 import { User, UserSchema } from "./schemas/user.schema";
+import { WaitlistSignup, WaitlistSignupSchema } from "./schemas/waitlist-signup.schema";
 import { WorkerProfile, WorkerProfileSchema } from "./schemas/worker-profile.schema";
 
 @Module({
@@ -15,7 +16,8 @@ import { WorkerProfile, WorkerProfileSchema } from "./schemas/worker-profile.sch
       { name: WorkerProfile.name, schema: WorkerProfileSchema },
       { name: FacilityProfile.name, schema: FacilityProfileSchema },
       { name: Shift.name, schema: ShiftSchema },
-      { name: Review.name, schema: ReviewSchema }
+      { name: Review.name, schema: ReviewSchema },
+      { name: WaitlistSignup.name, schema: WaitlistSignupSchema }
     ])
   ],
   exports: [MongooseModule]

@@ -72,6 +72,42 @@ export class AdminService {
     };
   }
 
+  async updateUserStatus(userId: string, status: AccountStatus) {
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException("User not found");
+    }
+
+    const user = await this.users.findById(userId).exec();
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    user.status = status;
+
+    return this.serializeLean((await user.save()).toObject({ versionKey: false }));
+  }
+
+  async updateShiftStatus(shiftId: string, status: ShiftStatus) {
+    if (!Types.ObjectId.isValid(shiftId)) {
+      throw new NotFoundException("Shift not found");
+    }
+
+    const shift = await this.shifts.findById(shiftId).exec();
+
+    if (!shift) {
+      throw new NotFoundException("Shift not found");
+    }
+
+    shift.status = status;
+
+    if (status === ShiftStatus.Open) {
+      shift.matchedWorkerId = null;
+    }
+
+    return this.serializeLean((await shift.save()).toObject({ versionKey: false }));
+  }
+
   async reviewCredential(workerId: string, credentialIndex: number, approved: boolean) {
     if (!Types.ObjectId.isValid(workerId)) {
       throw new NotFoundException("Worker profile not found");

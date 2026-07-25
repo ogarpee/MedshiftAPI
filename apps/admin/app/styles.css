@@ -258,8 +258,22 @@ nav button:hover {
 
 .workspace {
   margin: 0 auto;
-  max-width: 1280px;
+  max-width: 1440px;
   padding: 30px 32px 42px;
+}
+
+.admin-command-bar {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.admin-command-bar > div {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
 }
 
 header,
@@ -326,6 +340,13 @@ button:hover {
   margin-top: 6px;
 }
 
+.metrics small {
+  color: rgba(11, 31, 58, 0.48);
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 4px;
+}
+
 .admin-message {
   background: rgba(11, 31, 58, 0.06);
   border: 1px solid rgba(11, 31, 58, 0.08);
@@ -334,8 +355,15 @@ button:hover {
   display: block;
   font-size: 0.84rem;
   line-height: 1.45;
-  margin-bottom: 18px;
+  margin: 0;
   padding: 10px 12px;
+}
+
+.admin-grid {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .health-panel {
@@ -380,6 +408,30 @@ h2 {
   margin: 0;
 }
 
+.table-toolbar {
+  border-top: 1px solid rgba(11, 31, 58, 0.09);
+  padding: 14px 18px;
+}
+
+.table-toolbar input,
+select {
+  background: #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.14);
+  border-radius: 8px;
+  color: var(--navy);
+  font: inherit;
+  min-height: 40px;
+  padding: 9px 11px;
+}
+
+.table-toolbar input {
+  width: min(100%, 420px);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -408,6 +460,41 @@ th {
 
 .verification-list {
   display: grid;
+}
+
+.compact-list,
+.facility-grid {
+  border-top: 1px solid rgba(11, 31, 58, 0.09);
+  display: grid;
+}
+
+.compact-list article,
+.facility-grid article {
+  border-top: 1px solid rgba(11, 31, 58, 0.09);
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.compact-list article:first-child,
+.facility-grid article:first-child {
+  border-top: 0;
+}
+
+.compact-list strong,
+.facility-grid strong {
+  color: var(--navy);
+  font-weight: 500;
+}
+
+.compact-list span,
+.facility-grid span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.facility-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .queue-filter {
@@ -474,6 +561,14 @@ th {
   padding: 9px 12px;
 }
 
+.credential-actions a {
+  color: var(--navy);
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
 .secondary-action {
   background: rgba(11, 31, 58, 0.08);
   color: var(--navy);
@@ -507,6 +602,16 @@ th {
 .status-badge-navy {
   background: rgba(11, 31, 58, 0.1);
   color: var(--navy);
+}
+
+.status-badge-green {
+  background: rgba(74, 222, 128, 0.2);
+  color: #15803d;
+}
+
+.status-badge-red {
+  background: rgba(244, 63, 94, 0.14);
+  color: #be123c;
 }
 
 @media (max-width: 760px) {
@@ -543,6 +648,15 @@ th {
   }
 
   .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-command-bar,
+  .admin-command-bar > div,
+  .admin-grid,
+  .facility-grid {
+    align-items: stretch;
+    display: grid;
     grid-template-columns: 1fr;
   }
 

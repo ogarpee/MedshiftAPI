@@ -42,8 +42,8 @@
 - **Verified Login**: Users must verify their email address before accessing authenticated worker, facility, or admin workflows.
 - **Role-Based Login Routing**: Successful sign-in sends workers to the worker dashboard, facilities to the facility dashboard, and admins to the admin dashboard.
 - **Resend Verification**: Users can request a new verification email when the original link expires or is lost.
-- **Forgot Password**: Users can request a password reset email from the login flow without revealing whether the email exists.
-- **Reset Password**: Users can open a time-limited reset link, set a new password that satisfies password policy, and then sign in with the updated credentials.
+- **Forgot Password**: Users can request a password reset OTP email from the login flow without revealing whether the email exists.
+- **Reset Password**: Users enter the time-limited reset OTP, set a new password that satisfies password policy, and then sign in with the updated credentials.
 - **Status Handling**: Unverified accounts remain `PENDING`; successful email verification records the verification timestamp and allows the account to progress toward `ACTIVE` after any role-specific approval requirements.
 - **Action Feedback**: Every user-triggered auth action must provide clear success, loading, and error feedback through inline states and/or an app-level toast system. Native browser alerts are not allowed.
 

@@ -57,10 +57,10 @@ export function DashboardShell({
       <section className="dashboard-content">
         <header className="dashboard-topbar">
           <div className="dashboard-title-group">
-            {eyebrow ? <div className="dashboard-eyebrow">{eyebrow}</div> : null}
             <h1>{title}</h1>
           </div>
           <div className="dashboard-topbar-actions">
+            {eyebrow ? <div className="dashboard-eyebrow">{eyebrow}</div> : null}
             {actions}
             {status ? <div className="dashboard-status">{status}</div> : null}
             <button className="dashboard-icon-button" type="button" aria-label="Notifications">

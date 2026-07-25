@@ -38,10 +38,10 @@
 
 ### Story 2.3: Forgot Password & Action Feedback
 - [x] Add password reset fields to the user schema.
-- [x] Generate and store hashed, expiring password reset tokens.
+- [x] Generate and store hashed, expiring password reset OTPs.
 - [x] Send password reset emails through the notification service.
 - [x] Create endpoint to request a password reset with account-enumeration-safe response text.
-- [x] Create endpoint to reset a password with token validation and token cleanup.
+- [x] Create endpoint to reset a password with OTP validation and token cleanup.
 - [x] Build forgot-password and reset-password pages in the web auth flow.
 - [x] Add a shared Next.js-compatible toast provider for web feedback.
 - [x] Replace any native `alert()`, `confirm()`, or blocking browser prompts with toast and inline UI feedback.
@@ -53,6 +53,8 @@
 - [x] Auto-verify completed registration OTP input and hide alternate sign-in link during OTP entry.
 - [x] Require facility work email during registration and use 123456 as non-production OTP.
 - [x] Replace post-registration form repeat with congratulations and profile-completion guidance.
+- [x] Convert forgot-password recovery to an email OTP reset flow.
+- [x] Align registration account type selection with the public waitlist role cards.
 
 ### Story 2.4: User Profiles
 - [x] Create `WorkerProfile` CRUD endpoints (including GeoJSON location fields).
@@ -96,13 +98,18 @@
 ### Story 5.1: Email Notifications
 - [x] Integrate Resend API in a `NotificationModule`.
 - [x] Send welcome emails upon waitlist/registration.
+- [x] Wire the public landing waitlist form to send confirmation emails and surface delivery feedback.
+- [x] Refine the public landing waitlist section with clearer role-specific early access messaging.
 - [x] Verify completed registrations send welcome emails before returning the session.
 - [x] Send shift confirmation emails.
+- [x] Refine transactional email templates and ensure configured Resend delivery works in development and production.
 
 ### Story 5.2: Admin Dashboard
 - [x] Build UI data tables to view all Users, Facilities, and Shifts.
 - [x] Build UI for verifying Worker credentials (approve/reject documents).
 - [x] Add system health charts (e.g., active socket connections, shift fulfillment rates).
+- [x] Add a repeatable seed command for a verified admin account.
+- [x] Expand the admin dashboard into a management console for users, facilities, shifts, verification, and platform health.
 
 ## Sprint 6: Reviews, Polish & Launch Prep
 **Goal**: Implement the dual-review system and finalize UI/UX.
@@ -120,6 +127,11 @@
 - [x] Improve the public site "How MedShift Works" section with an illustrative flow diagram.
 - [x] Add placeholders and strengthen validation for all web form fields.
 - [x] Replace public homepage login/join links with an authenticated profile menu when a user is signed in.
+- [x] Refine the public site healthcare facilities section with stronger operational proof and CTA hierarchy.
+- [x] Refine the public site healthcare professionals section with stronger shift-board proof and CTA hierarchy.
+- [x] Reduce the public site healthcare professionals section content density.
+- [x] Add balanced content to the healthcare professionals section and place the join CTA below it.
+- [x] Fix healthcare professionals card formatting and balance the shift board preview content.
 
 ## Sprint 7: Role-Based Onboarding & Verification
 **Goal**: Make registration actionable by routing users to the right dashboard and providing full onboarding for healthcare workers and facilities.

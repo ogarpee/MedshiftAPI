@@ -10,6 +10,7 @@ import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { StartRegistrationDto } from "./dto/start-registration.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { VerifyPasswordResetOtpDto } from "./dto/verify-password-reset-otp.dto";
 import { VerifyRegistrationOtpDto } from "./dto/verify-registration-otp.dto";
 import { Req } from "@nestjs/common";
 
@@ -55,6 +56,11 @@ export class AuthController {
   @Post("forgot-password")
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
+  }
+
+  @Post("forgot-password/verify-otp")
+  verifyPasswordResetOtp(@Body() dto: VerifyPasswordResetOtpDto) {
+    return this.authService.verifyPasswordResetOtp(dto);
   }
 
   @Post("reset-password")

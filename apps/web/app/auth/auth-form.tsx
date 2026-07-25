@@ -2,7 +2,7 @@
 
 import { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { CircleCheck, Eye, EyeOff } from "lucide-react";
+import { CircleCheck, Eye, EyeOff, ShieldCheck, Users } from "lucide-react";
 import { AccountStatus, UserRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { useToast } from "../toast-provider";
@@ -42,6 +42,21 @@ interface AuthFormProps {
   submitLabel: string;
   supportingCopy: string;
 }
+
+const accountTypeOptions = [
+  {
+    role: UserRole.Worker,
+    title: "Healthcare Worker",
+    copy: "Find flexible shifts that match your role, location, and availability.",
+    icon: <Users size={19} strokeWidth={2.2} />
+  },
+  {
+    role: UserRole.Facility,
+    title: "Facility",
+    copy: "Post coverage needs and connect with verified clinical staff.",
+    icon: <ShieldCheck size={19} strokeWidth={2.2} />
+  }
+];
 
 export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportingCopy }: AuthFormProps) {
   const { notify } = useToast();
@@ -348,19 +363,27 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
         ) : (
           <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
             {mode === "register" && registrationStep === "email" ? (
-              <label>
-                Account type
-                <select
-                  aria-label="Account type"
-                  name="accountType"
-                  required
-                  value={role}
-                  onChange={(event) => setRole(event.target.value as UserRole)}
-                >
-                  <option value={UserRole.Worker}>Healthcare worker</option>
-                  <option value={UserRole.Facility}>Facility</option>
-                </select>
-              </label>
+              <fieldset className={styles.accountTypeGroup}>
+                <legend>Account type</legend>
+                <input name="accountType" type="hidden" value={role} />
+                <div className={styles.accountTypeGrid} aria-label="Account type">
+                  {accountTypeOptions.map((option) => (
+                    <button
+                      aria-pressed={role === option.role}
+                      className={`${styles.accountTypeCard} ${role === option.role ? styles.accountTypeCardActive : ""}`}
+                      key={option.role}
+                      onClick={() => setRole(option.role)}
+                      type="button"
+                    >
+                      <span className={styles.accountTypeIcon} aria-hidden="true">{option.icon}</span>
+                      <span>
+                        <strong>{option.title}</strong>
+                        <small>{option.copy}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
             ) : null}
 
             {mode === "register" && registrationStep === "otp" ? (
@@ -592,7 +615,7 @@ function getDashboardHref(role: UserRole, adminUrl: string) {
 
 async function getPostLoginHref(role: UserRole, options: { accessToken: string; adminUrl: string; apiUrl: string }) {
   if (role === UserRole.Admin) {
-    return options.adminUrl;
+    return withAccessTokenHash(options.adminUrl, options.accessToken);
   }
 
   const dashboardHref = getDashboardHref(role, options.adminUrl);
@@ -613,4 +636,11 @@ async function getPostLoginHref(role: UserRole, options: { accessToken: string; 
   } catch {
     return dashboardHref;
   }
+}
+
+function withAccessTokenHash(href: string, accessToken: string) {
+  const redirectUrl = new URL(href, window.location.origin);
+  redirectUrl.hash = `access_token=${encodeURIComponent(accessToken)}`;
+
+  return redirectUrl.toString();
 }
