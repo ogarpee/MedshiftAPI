@@ -5,7 +5,9 @@ Use this checklist for launch-readiness passes after `pnpm typecheck`, `pnpm bui
 ## Public Site
 - [ ] Landing page loads with visible MedShift logo, favicon, hero copy, and waitlist form.
 - [ ] Worker/facility waitlist tabs switch cleanly on mobile and desktop.
+- [ ] Worker and facility waitlist submissions show the correct role-specific fields and persist the submitted details.
 - [ ] Waitlist submission posts to the API when available and still gives clear fallback feedback.
+- [ ] Waitlist submissions sync to the configured Resend waitlist campaign group, and completed registrations sync to general plus worker/facility role groups.
 
 ## Authentication
 - [ ] Login and registration pages have distinct layouts and preserve the 50/50 auth brand/form split on desktop.
@@ -14,12 +16,16 @@ Use this checklist for launch-readiness passes after `pnpm typecheck`, `pnpm bui
 
 ## Worker Portal
 - [ ] Worker dashboard loads preview shifts without auth and live nearby shifts with a worker token.
+- [ ] Worker dashboard metrics, earnings, weekly schedule, and review cards derive from worker-owned shifts and submitted reviews.
+- [ ] Realtime `shift.created` refreshes nearby open matches and realtime `shift.accepted` removes unavailable open shifts.
 - [ ] List/map toggle does not resize or overlap the shift detail panel.
 - [ ] Accept Shift posts to the API for live shifts and updates the UI state.
 - [ ] Completed shifts show the facility review form and submit to `/reviews/shifts/:id`.
 - [ ] Worker onboarding advances through logical steps and saves each step as a resumable draft.
 - [ ] Worker onboarding location step shows an interactive Mapbox map when `NEXT_PUBLIC_MAPBOX_TOKEN` or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured and a fallback map state otherwise.
+- [ ] Worker onboarding and worker settings location search prefill coordinates and reposition the Mapbox pin when `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` is configured.
 - [ ] Worker onboarding credential upload sends files to Cloudinary when `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` and `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` are configured, then stores the returned secure URL.
+- [ ] Worker settings loads `/worker-profiles/me`, lets workers update profile, matching radius/location, availability, credentials, and PATCHes `/worker-profiles/:id`.
 
 ## Facility Portal
 - [ ] Facility dashboard loads preview shifts without auth and live shifts with a facility token.
@@ -28,6 +34,7 @@ Use this checklist for launch-readiness passes after `pnpm typecheck`, `pnpm bui
 - [ ] Dashboard metrics update from the current shift list.
 - [ ] Facility onboarding advances through logical steps and saves each step as a resumable draft.
 - [ ] Facility onboarding service-address step shows an interactive Mapbox map when `NEXT_PUBLIC_MAPBOX_TOKEN` or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured and a fallback map state otherwise.
+- [ ] Facility onboarding Google Places search prefills street, city, province, postal code, coordinates, and repositions the Mapbox pin when `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` is configured.
 
 ## Admin Portal
 - [ ] Admin dashboard loads preview data without a token and live data with an admin token.

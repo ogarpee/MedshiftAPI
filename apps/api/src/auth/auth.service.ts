@@ -221,7 +221,10 @@ export class AuthService {
     });
 
     await this.registrationAttempts.deleteOne({ _id: attempt._id }).exec();
-    await this.notificationService.sendWelcomeEmail(user.email, user.role);
+    await Promise.all([
+      this.notificationService.sendWelcomeEmail(user.email, user.role),
+      this.notificationService.syncRegisteredContact(user.email, user.role)
+    ]);
 
     return this.toAuthResponse(user);
   }
@@ -296,7 +299,10 @@ export class AuthService {
     user.emailVerificationSentAt = undefined;
     user.status = AccountStatus.Active;
     await user.save();
-    await this.notificationService.sendWelcomeEmail(user.email, user.role);
+    await Promise.all([
+      this.notificationService.sendWelcomeEmail(user.email, user.role),
+      this.notificationService.syncRegisteredContact(user.email, user.role)
+    ]);
 
     return {
       message: "Email verified. You can now sign in.",

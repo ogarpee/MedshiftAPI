@@ -37,6 +37,12 @@ export class ShiftsController {
     return this.shiftsService.metrics(request.user);
   }
 
+  @Roles(UserRole.Worker)
+  @Get("worker/me")
+  findMineForWorker(@Req() request: AuthRequest) {
+    return this.shiftsService.findMineForWorker(request.user);
+  }
+
   @Roles(UserRole.Facility, UserRole.Admin)
   @Get(":id")
   findOne(@Req() request: AuthRequest, @Param("id") id: string) {

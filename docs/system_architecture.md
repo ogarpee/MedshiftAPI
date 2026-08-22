@@ -81,7 +81,7 @@ The NestJS application follows a strict modular and layered architecture to enfo
 - **`FacilityModule`**: Manages facility profiles, billing setup, and locations.
 - **`ShiftModule`**: Manages shift lifecycle (creation, publishing, completion, cancellation).
 - **`MatchingModule`**: Uses geospatial queries (MongoDB `$near`) and worker availability to find matches.
-- **`NotificationModule`**: Adapters for Email (Resend) and Real-time (Socket.io), including registration verification emails, password reset emails, welcome emails, and shift notifications. Open/Closed Principle (OCP) applies here: new notification channels (e.g., SMS) can be added without modifying existing code.
+- **`NotificationModule`**: Adapters for Email and campaign contacts (Resend) and Real-time (Socket.io), including registration verification emails, password reset emails, welcome emails, shift notifications, waitlist contact sync, and role-based campaign group sync. Open/Closed Principle (OCP) applies here: new notification channels (e.g., SMS) can be added without modifying existing code.
 
 ### Authentication Flow
 1. **Start Registration**: The API accepts account type and email, requires a work email for facility registrations, stores a hashed six-digit OTP with an expiration timestamp, and asks `NotificationModule` to send the code through Resend. Non-production environments or local environments with `ALLOW_DEV_OTPS=true` use `123456` as the OTP; production generates a random code.
@@ -101,16 +101,17 @@ The NestJS application follows a strict modular and layered architecture to enfo
    - Worker clients read `GET /worker-profiles/onboarding-status`.
    - Facility clients read `GET /facility-profiles/onboarding-status`.
    - Both endpoints return `INCOMPLETE` for authenticated users who have not created a profile yet, allowing the frontend to route directly to profile completion instead of treating missing profile data as an error.
-2. **Worker Onboarding**: The worker flow captures identity details, clinical role, location/radius, availability preferences, credential uploads, and background-check consent before enabling live shift matching.
+2. **Worker Onboarding & Settings**: The worker flow captures identity details, professional role, location/radius, availability preferences, credential uploads, and background-check consent before enabling live shift matching. Authenticated workers can later update the same setup data from `/worker/settings`, which persists through the existing worker profile update API.
 3. **Facility Onboarding**: The facility flow captures organization details, facility type, service address/geolocation, primary contact details, and billing/readiness information before enabling live shift posting.
    - Onboarding clients use standalone full-screen focused setup layouts, not the shared dashboard shell and not a dashboard-style topbar. The pages should keep users in a guided profile-completion context before they enter role dashboards.
    - Onboarding clients use a step-based wizard. Each step saves a local draft immediately so users can leave and resume incomplete onboarding later without creating a partial profile record.
    - Final submission sends the consolidated profile payload to the role-specific profile API and transitions complete submissions to `PENDING_REVIEW`.
-   - Location steps render an interactive Mapbox GL map when `NEXT_PUBLIC_MAPBOX_TOKEN` or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured, falling back to a static coordinate grid when a public token is unavailable or the map script fails to load.
+   - Location steps render an interactive Mapbox GL map when `NEXT_PUBLIC_MAPBOX_TOKEN` or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured, falling back to a static coordinate grid when a public token is unavailable or the map script fails to load. When `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` is configured, the same location steps also expose Google Places address search that can prefill coordinates and, for facility service addresses, structured address fields.
    - Worker credential upload steps use Cloudinary unsigned uploads from the browser. The web app requires `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` and `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET`, stores the returned `secure_url` in the local onboarding draft, and submits that URL as the credential `documentUrl`.
    - Because the app runs inside a monorepo, the web Next.js config loads browser-safe `NEXT_PUBLIC_*` values from both the repository root env files and `apps/web` env files. App-specific env files override root values, and the dev server must be restarted after env changes.
 4. **Access Gates**: Worker shift acceptance and facility shift posting should detect incomplete onboarding and route users to the relevant profile completion flow with inline guidance.
-5. **Admin Verification**: Uploaded worker credentials and completed facility registrations enter the admin verification queue; approval unlocks production matching/posting capabilities.
+5. **Worker Dashboard Data**: Worker dashboards read open nearby shifts from `GET /matching/open-shifts`, worker-owned matched/in-progress/completed shifts from `GET /shifts/worker/me`, onboarding/profile status from worker profile endpoints, and submitted reviews from `GET /reviews/me`. Earnings widgets are derived from shift rate and duration until dedicated payment records are introduced.
+6. **Admin Verification**: Uploaded worker credentials and completed facility registrations enter the admin verification queue; approval unlocks production matching/posting capabilities.
    - Admins can filter the queue by worker credential reviews or facility registration reviews.
    - Approval updates onboarding verification status to `APPROVED`, activates the account, and sends an approval email.
    - Rejection updates onboarding verification status to `REJECTED`, stores the rejected reason, keeps the account pending, and sends an update-required email.

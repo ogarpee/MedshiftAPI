@@ -72,6 +72,10 @@ export class ShiftsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(`facility:${facilityId}`).emit("shift.accepted", payload);
   }
 
+  emitWorkerShiftAccepted(payload: unknown) {
+    this.server.to("workers").emit("shift.accepted", payload);
+  }
+
   getActiveConnectionCount() {
     return this.activeConnections.size;
   }

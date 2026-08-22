@@ -23,14 +23,45 @@ export const ClinicalRole = {
 
 export type ClinicalRole = (typeof ClinicalRole)[keyof typeof ClinicalRole];
 
+export const WaitlistProfessionalRole = {
+  HealthcareAide: "HEALTHCARE_AIDE",
+  PersonalSupportWorker: "PERSONAL_SUPPORT_WORKER",
+  Other: "OTHER"
+} as const;
+
+export type WaitlistProfessionalRole = (typeof WaitlistProfessionalRole)[keyof typeof WaitlistProfessionalRole];
+
 export const FacilityType = {
   LongTermCare: "LONG_TERM_CARE",
   Hospital: "HOSPITAL",
   Clinic: "CLINIC",
-  HomeCare: "HOME_CARE"
+  HomeCare: "HOME_CARE",
+  SupportiveLiving: "SUPPORTIVE_LIVING",
+  RetirementResidence: "RETIREMENT_RESIDENCE",
+  Other: "OTHER"
 } as const;
 
 export type FacilityType = (typeof FacilityType)[keyof typeof FacilityType];
+
+export const WaitlistAvailability = {
+  Days: "DAYS",
+  Evenings: "EVENINGS",
+  Nights: "NIGHTS",
+  Weekends: "WEEKENDS",
+  Casual: "CASUAL",
+  Flexible: "FLEXIBLE"
+} as const;
+
+export type WaitlistAvailability = (typeof WaitlistAvailability)[keyof typeof WaitlistAvailability];
+
+export const WaitlistStaffingNeed = {
+  UrgentCoverage: "URGENT_COVERAGE",
+  PlannedCoverage: "PLANNED_COVERAGE",
+  OngoingPool: "ONGOING_POOL",
+  Exploring: "EXPLORING"
+} as const;
+
+export type WaitlistStaffingNeed = (typeof WaitlistStaffingNeed)[keyof typeof WaitlistStaffingNeed];
 
 export const BackgroundCheckStatus = {
   Pending: "PENDING",
@@ -58,6 +89,16 @@ export const ShiftStatus = {
 } as const;
 
 export type ShiftStatus = (typeof ShiftStatus)[keyof typeof ShiftStatus];
+
+export const NotificationType = {
+  ShiftCreated: "SHIFT_CREATED",
+  ShiftAccepted: "SHIFT_ACCEPTED",
+  OnboardingApproved: "ONBOARDING_APPROVED",
+  OnboardingRejected: "ONBOARDING_REJECTED",
+  ReviewAvailable: "REVIEW_AVAILABLE"
+} as const;
+
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
 export interface GeoPoint {
   type: "Point";
@@ -144,4 +185,16 @@ export interface OnboardingState {
   completedAt?: string | Date;
   verificationStatus: OnboardingStatus;
   rejectedReason?: string;
+}
+
+export interface NotificationSummary {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  href?: string;
+  metadata?: Record<string, string>;
+  readAt?: string | null;
+  createdAt?: string;
 }

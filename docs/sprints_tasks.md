@@ -72,6 +72,16 @@
 - [x] Build UI modal to post a new shift (Role dropdown, Date/Time picker).
 - [x] Build Dashboard UI to list active and upcoming shifts.
 - [x] Display dashboard metrics (fill times, active shifts).
+- [x] Convert facility active and upcoming shifts into an actionable table.
+- [x] Remove the facility dashboard Ready to post side card.
+- [x] Refine facility shifts table and make completed shifts clickable for review.
+- [x] Open completed shift reviews in a modal and add edit action for open shifts.
+- [x] Complete facility dashboard backend wiring for live cards, actions, shift posting, and realtime updates.
+- [x] Remove onboarding and cross-portal links from the facility dashboard sidebar.
+- [x] Make the facility active and upcoming shifts table span the full dashboard width.
+- [x] Stop the facility side column from overlapping the full-width shifts table.
+- [x] Restructure the facility dashboard into a cleaner operations layout.
+- [x] Simplify the facility dashboard by removing chart clutter and tightening support panels.
 
 ## Sprint 4: Matching Engine & Real-Time Communications
 **Goal**: Broadcast shifts in real-time and allow workers to accept them based on proximity.
@@ -91,6 +101,7 @@
 - [x] Build detailed Shift Card UI.
 - [x] Build UI and flow for "Accept Shift" button.
 - [x] Replace worker dashboard placeholder map with Mapbox shift pins and remove cross-portal navigation.
+- [x] Integrate worker dashboard panels with live worker-owned shift, review, and realtime data.
 
 ## Sprint 5: Notifications & Admin Dashboard
 **Goal**: Send transactional emails and provide oversight tools for admins.
@@ -100,8 +111,12 @@
 - [x] Send welcome emails upon waitlist/registration.
 - [x] Wire the public landing waitlist form to send confirmation emails and surface delivery feedback.
 - [x] Refine the public landing waitlist section with clearer role-specific early access messaging.
+- [x] Capture role-specific waitlist details from workers and facilities.
+- [x] Update waitlist fields and launch option sets for facility and worker audiences.
+- [x] Sync waitlist and registered users into Resend campaign audiences by role.
 - [x] Verify completed registrations send welcome emails before returning the session.
 - [x] Send shift confirmation emails.
+- [x] Implement persisted in-app notification center.
 - [x] Refine transactional email templates and ensure configured Resend delivery works in development and production.
 
 ### Story 5.2: Admin Dashboard
@@ -132,6 +147,10 @@
 - [x] Reduce the public site healthcare professionals section content density.
 - [x] Add balanced content to the healthcare professionals section and place the join CTA below it.
 - [x] Fix healthcare professionals card formatting and balance the shift board preview content.
+- [x] Stack waitlist form input fields one per line.
+- [x] Widen waitlist form and align fields in a two-column desktop grid.
+- [x] Polish worker dashboard facility review cards.
+- [x] Refine general typography and use white text on gold-filled UI.
 
 ## Sprint 7: Role-Based Onboarding & Verification
 **Goal**: Make registration actionable by routing users to the right dashboard and providing full onboarding for healthcare workers and facilities.
@@ -159,6 +178,19 @@
 - [x] Route newly registered worker users from registration success to worker onboarding.
 - [x] Route returning incomplete worker users to onboarding before the shift board.
 - [x] Replace worker dashboard onboarding redirect/nav links with an in-content completion banner.
+- [x] Add worker settings for updating profile, matching radius, availability, credentials, and onboarding setup data.
+- [x] Polish worker settings layout into a clearer dashboard profile editor.
+- [x] Remove outer padding from the worker settings content area.
+- [x] Add balanced page-edge spacing around worker settings cards.
+- [x] Replace worker settings summary cards with tabbed logical panels.
+- [x] Simplify worker settings tabs to labels only.
+- [x] Remove worker settings side card and refine form inputs/save placement.
+- [x] Stack worker settings profile fields and fix input height.
+- [x] Add placeholders to worker settings input fields.
+- [x] Remove the Profile and matching banner from worker settings.
+- [x] Stabilize the worker settings tab menu position.
+- [x] Keep the worker settings save action visible with stable tabs.
+- [x] Reduce dashboard onboarding banner height and show it across dashboard pages.
 
 ### Story 7.4: Facility Onboarding
 - [x] Build facility profile completion UI for facility name, care setting, address/geolocation, and primary contact.
@@ -166,6 +198,7 @@
 - [x] Submit completed facility registrations into the admin verification queue.
 - [x] Route newly registered facility users from registration success to facility onboarding.
 - [x] Route returning incomplete facility users to onboarding before shift posting.
+- [x] Add a repeatable verified facility seed for dashboard testing.
 
 ### Story 7.5: Admin Verification Operations
 - [x] Add admin queue filters for worker credential review and facility registration review.
@@ -186,6 +219,9 @@
 - [x] Add Cloudinary-backed worker credential file upload during onboarding.
 - [x] Load web public env values from monorepo root and web app env files for Mapbox and Cloudinary.
 - [x] Expand onboarding Mapbox panels to fill the available location-step container height.
+- [x] Add Google Places address search to worker and facility location maps.
+- [x] Polish location search visibility and provider-neutral address labels.
+- [x] Prevent Google Places address suggestions from overlapping following inputs.
 - [x] Route login directly to role onboarding when profile completion is required.
 - [x] Polish onboarding left rail logo, status chip, and active step spacing.
 - [x] Add green completed onboarding step states and improve step indicator spacing.

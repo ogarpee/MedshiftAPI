@@ -3,13 +3,15 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { FacilityType, OnboardingStatus } from "@medshift/shared-types";
 import { MedShiftLogo, StatusBadge } from "@medshift/ui-components";
+import { GooglePlacesSearch } from "../../google-places-search";
+import type { GooglePlaceSelection } from "../../google-places-search";
 import { OnboardingMap } from "../../onboarding-map";
 import { useToast } from "../../toast-provider";
 
 const draftKey = "medshift.facilityOnboardingDraft";
 const steps = [
   { title: "Organization", caption: "Facility identity and care setting" },
-  { title: "Service Address", caption: "Mapbox service location" },
+  { title: "Service Address", caption: "Service location" },
   { title: "Primary Contact", caption: "Staffing contact details" },
   { title: "Billing", caption: "Readiness and authorization" },
   { title: "Review", caption: "Submit registration" }
@@ -79,6 +81,7 @@ const initialDraft: FacilityDraft = {
 export default function FacilityOnboardingPage() {
   const { notify } = useToast();
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const googlePlacesApiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const [currentStep, setCurrentStep] = useState(0);
   const [draft, setDraft] = useState<FacilityDraft>(initialDraft);
@@ -136,6 +139,22 @@ export default function FacilityOnboardingPage() {
     },
     []
   );
+
+  const handlePlaceSelect = useCallback((selection: GooglePlaceSelection) => {
+    setDraft((currentDraft) => {
+      const nextDraft = {
+        ...currentDraft,
+        city: selection.city ?? currentDraft.city,
+        latitude: selection.latitude,
+        longitude: selection.longitude,
+        postalCode: selection.postalCode ?? currentDraft.postalCode,
+        province: selection.province ?? currentDraft.province,
+        street: selection.street ?? currentDraft.street
+      };
+      window.localStorage.setItem(draftKey, JSON.stringify(nextDraft));
+      return nextDraft;
+    });
+  }, []);
 
   function saveDraft(successMessage = "Draft saved. You can come back later.") {
     window.localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -344,14 +363,22 @@ export default function FacilityOnboardingPage() {
 
           {currentStep === 1 ? (
             <section>
-              <StepHeading eyebrow="Step 2" title="Service address and Mapbox location" />
+              <StepHeading eyebrow="Step 2" title="Service address and location" />
               <div className="map-step-grid">
-                <OnboardingMap label="Mapbox service address" latitude={draft.latitude} longitude={draft.longitude} token={mapboxToken} zoom={12} onCoordinatesChange={updateLocationDraft} />
+                <OnboardingMap label="Service address location" latitude={draft.latitude} longitude={draft.longitude} token={mapboxToken} zoom={12} onCoordinatesChange={updateLocationDraft} />
                 <div className="onboarding-field-grid compact">
-                  <label>
-                    Street address
-                    <input value={draft.street} onChange={(event) => updateDraft({ ...draft, street: event.target.value })} minLength={4} maxLength={140} name="street" placeholder="123 4 Avenue SW" required />
-                  </label>
+                  <GooglePlacesSearch
+                    apiKey={googlePlacesApiKey}
+                    label="Street address"
+                    maxLength={140}
+                    minLength={4}
+                    name="street"
+                    onInputChange={(street) => updateDraft({ ...draft, street })}
+                    onPlaceSelect={handlePlaceSelect}
+                    placeholder="Search or enter service address"
+                    required
+                    value={draft.street}
+                  />
                   <label>
                     City
                     <input value={draft.city} onChange={(event) => updateDraft({ ...draft, city: event.target.value })} minLength={2} maxLength={80} name="city" placeholder="Calgary" required />

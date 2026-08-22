@@ -126,11 +126,13 @@ export function OnboardingMap({ label, latitude, longitude, token, zoom = 11, on
   return (
     <div className="mapbox-panel" aria-label={label}>
       <div className="mapbox-canvas" ref={containerRef} />
-      <div className={mapState === "ready" ? "mapbox-fallback compact" : "mapbox-fallback"}>
-        <strong>{label}</strong>
-        <span>{hasCoordinates ? `${parsedLatitude.toFixed(4)}, ${parsedLongitude.toFixed(4)}` : "Enter valid coordinates"}</span>
-        <small>{getMapStatusText(mapState, Boolean(token))}</small>
-      </div>
+      {mapState !== "ready" ? (
+        <div className="mapbox-fallback">
+          <strong>{label}</strong>
+          <span>{hasCoordinates ? `${parsedLatitude.toFixed(4)}, ${parsedLongitude.toFixed(4)}` : "Enter valid coordinates"}</span>
+          <small>{getMapStatusText(mapState, Boolean(token))}</small>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -182,7 +184,7 @@ function formatCoordinates(latitude: number, longitude: number) {
 
 function getMapStatusText(mapState: "idle" | "loading" | "ready" | "fallback", hasToken: boolean) {
   if (!hasToken) {
-    return "Set NEXT_PUBLIC_MAPBOX_TOKEN or NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN for live Mapbox";
+    return "Add a public map token to enable the live map.";
   }
 
   if (mapState === "ready") {
@@ -190,8 +192,8 @@ function getMapStatusText(mapState: "idle" | "loading" | "ready" | "fallback", h
   }
 
   if (mapState === "loading" || mapState === "idle") {
-    return "Loading Mapbox";
+    return "Loading map.";
   }
 
-  return "Mapbox could not load. Coordinates are still saved.";
+  return "The map could not load. Coordinates are still saved.";
 }

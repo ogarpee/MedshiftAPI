@@ -197,8 +197,41 @@ Stores early access signups from the public landing page and confirmation email 
   _id: ObjectId,
   email: { type: String, required: true, lowercase: true, trim: true },
   role: { type: String, enum: ['WORKER', 'FACILITY'], required: true },
+  workerDetails: {
+    fullName: String,
+    phone: String,
+    clinicalRole: { type: String, enum: ['HEALTHCARE_AIDE', 'PERSONAL_SUPPORT_WORKER', 'OTHER'] },
+    city: String,
+    availability: { type: String, enum: ['DAYS', 'EVENINGS', 'NIGHTS', 'WEEKENDS', 'CASUAL', 'FLEXIBLE'] }
+  },
+  facilityDetails: {
+    facilityName: String,
+    phone: String,
+    facilityType: { type: String, enum: ['LONG_TERM_CARE', 'SUPPORTIVE_LIVING', 'RETIREMENT_RESIDENCE', 'HOME_CARE', 'OTHER'] },
+    city: String,
+    province: String
+  },
   confirmationEmailSentAt: Date,
   lastRequestedAt: Date,
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+### 2.8 Notifications Collection
+Stores persisted in-app dashboard notifications for authenticated workers and facilities.
+
+```javascript
+// Collection: notifications
+{
+  _id: ObjectId,
+  userId: { type: ObjectId, ref: 'users', required: true },
+  type: { type: String, enum: ['SHIFT_CREATED', 'SHIFT_ACCEPTED', 'ONBOARDING_APPROVED', 'ONBOARDING_REJECTED', 'REVIEW_AVAILABLE'], required: true },
+  title: { type: String, required: true },
+  body: { type: String, required: true },
+  href: String,
+  metadata: Map<String, String>,
+  readAt: Date,
   createdAt: Date,
   updatedAt: Date
 }

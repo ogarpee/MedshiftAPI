@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model, Types } from "mongoose";
+import { Model, PipelineStage, Types } from "mongoose";
 import { OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
 import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
@@ -11,6 +11,11 @@ import { NotificationService } from "../notifications/notification.service";
 import { ShiftsGateway } from "../realtime/shifts.gateway";
 import { CreateShiftDto } from "./dto/create-shift.dto";
 import { UpdateShiftDto } from "./dto/update-shift.dto";
+
+type ShiftWithFacility = Shift & {
+  _id: Types.ObjectId;
+  facility?: FacilityProfile & { _id: Types.ObjectId };
+};
 
 @Injectable()
 export class ShiftsService {
@@ -37,6 +42,14 @@ export class ShiftsService {
       status: ShiftStatus.Open
     });
 
+    await this.notificationService.notifyMatchingWorkersForShift({
+      facilityName: facility.name,
+      hourlyRate: shift.hourlyRate,
+      location: shift.location,
+      roleRequired: shift.roleRequired,
+      shiftId: shift.id,
+      startTime: shift.startTime
+    });
     const serialized = this.serialize(shift);
     this.shiftsGateway.emitShiftCreated(serialized);
 
@@ -61,9 +74,49 @@ export class ShiftsService {
     return this.serialize(shift);
   }
 
+  async findMineForWorker(currentUser: AuthUser) {
+    const worker = await this.resolveWorkerForDashboard(currentUser);
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          matchedWorkerId: worker._id,
+          status: { $in: [ShiftStatus.Matched, ShiftStatus.InProgress, ShiftStatus.Completed] }
+        }
+      },
+      {
+        $lookup: {
+          from: "facility_profiles",
+          localField: "facilityId",
+          foreignField: "_id",
+          as: "facility"
+        }
+      },
+      { $unwind: { path: "$facility", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          sortBucket: {
+            $cond: [{ $gte: ["$startTime", new Date()] }, 0, 1]
+          },
+          sortCompletedTime: {
+            $cond: [{ $lt: ["$startTime", new Date()] }, "$startTime", null]
+          },
+          sortUpcomingTime: {
+            $cond: [{ $gte: ["$startTime", new Date()] }, "$startTime", null]
+          }
+        }
+      },
+      { $sort: { sortBucket: 1, sortUpcomingTime: 1, sortCompletedTime: -1 } },
+      { $limit: 100 }
+    ];
+    const shifts = await this.shifts.aggregate<ShiftWithFacility>(pipeline);
+
+    return shifts.map((shift) => this.serializeMatchedShift(shift));
+  }
+
   async update(currentUser: AuthUser, id: string, dto: UpdateShiftDto) {
     const shift = await this.findDocument(id);
     await this.assertCanManage(currentUser, shift);
+    const previousStatus = shift.status;
 
     const nextStartTime = dto.startTime ?? shift.startTime;
     const nextEndTime = dto.endTime ?? shift.endTime;
@@ -73,18 +126,42 @@ export class ShiftsService {
       shift.facilityId = (await this.resolveFacilityForCreate(currentUser, dto.facilityId))._id;
     }
 
-    shift.set({
-      roleRequired: dto.roleRequired,
-      startTime: dto.startTime,
-      endTime: dto.endTime,
-      hourlyRate: dto.hourlyRate,
-      location: dto.location,
-      description: dto.description,
-      status: dto.status,
-      matchedWorkerId: dto.matchedWorkerId ? new Types.ObjectId(dto.matchedWorkerId) : undefined
-    });
+    if (dto.roleRequired !== undefined) {
+      shift.roleRequired = dto.roleRequired;
+    }
 
-    return this.serialize(await shift.save());
+    if (dto.startTime !== undefined) {
+      shift.startTime = dto.startTime;
+    }
+
+    if (dto.endTime !== undefined) {
+      shift.endTime = dto.endTime;
+    }
+
+    if (dto.hourlyRate !== undefined) {
+      shift.hourlyRate = dto.hourlyRate;
+    }
+
+    if (dto.location !== undefined) {
+      shift.location = dto.location;
+    }
+
+    if (dto.description !== undefined) {
+      shift.description = dto.description;
+    }
+
+    if (dto.status !== undefined) {
+      shift.status = dto.status;
+    }
+
+    if (dto.matchedWorkerId !== undefined) {
+      shift.matchedWorkerId = dto.matchedWorkerId ? new Types.ObjectId(dto.matchedWorkerId) : undefined;
+    }
+
+    const savedShift = await shift.save();
+    await this.notifyReviewAvailableIfCompleted(savedShift, previousStatus);
+
+    return this.serialize(savedShift);
   }
 
   async remove(currentUser: AuthUser, id: string) {
@@ -115,8 +192,9 @@ export class ShiftsService {
     }
 
     const serialized = this.serialize(shift);
-    this.shiftsGateway.emitShiftAccepted(shift.facilityId.toString(), serialized);
     await this.sendShiftConfirmation(shift, worker);
+    this.shiftsGateway.emitShiftAccepted(shift.facilityId.toString(), serialized);
+    this.shiftsGateway.emitWorkerShiftAccepted(serialized);
 
     return serialized;
   }
@@ -181,6 +259,20 @@ export class ShiftsService {
     return worker;
   }
 
+  private async resolveWorkerForDashboard(currentUser: AuthUser): Promise<WorkerProfileDocument> {
+    if (currentUser.role !== UserRole.Worker) {
+      throw new ForbiddenException("Only workers can view their shifts");
+    }
+
+    const worker = await this.workerProfiles.findOne({ userId: currentUser.sub }).exec();
+
+    if (!worker) {
+      throw new NotFoundException("Worker profile is required before viewing worker shifts");
+    }
+
+    return worker;
+  }
+
   private assertOnboardingApproved(onboarding: { verificationStatus?: OnboardingStatus } | undefined, message: string) {
     if (onboarding?.verificationStatus !== OnboardingStatus.Approved) {
       throw new ForbiddenException({
@@ -204,6 +296,33 @@ export class ShiftsService {
       roleRequired: shift.roleRequired,
       startTime: shift.startTime,
       endTime: shift.endTime
+    });
+    await this.notificationService.notifyShiftAccepted({
+      facilityName: facility?.name,
+      facilityUserId: facility?.userId,
+      roleRequired: shift.roleRequired,
+      shiftId: shift.id,
+      startTime: shift.startTime,
+      workerUserId: worker.userId
+    });
+  }
+
+  private async notifyReviewAvailableIfCompleted(shift: ShiftDocument, previousStatus: ShiftStatus) {
+    if (previousStatus === ShiftStatus.Completed || shift.status !== ShiftStatus.Completed || !shift.matchedWorkerId) {
+      return;
+    }
+
+    const [facility, worker] = await Promise.all([
+      this.facilityProfiles.findById(shift.facilityId).exec(),
+      this.workerProfiles.findById(shift.matchedWorkerId).exec()
+    ]);
+
+    await this.notificationService.notifyReviewAvailable({
+      facilityUserId: facility?.userId,
+      roleRequired: shift.roleRequired,
+      shiftId: shift.id,
+      startTime: shift.startTime,
+      workerUserId: worker?.userId
     });
   }
 
@@ -264,6 +383,30 @@ export class ShiftsService {
       ...object,
       id: shift.id,
       _id: undefined
+    };
+  }
+
+  private serializeMatchedShift(shift: ShiftWithFacility) {
+    return {
+      id: shift._id.toString(),
+      facilityId: shift.facilityId?.toString(),
+      roleRequired: shift.roleRequired,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      hourlyRate: shift.hourlyRate,
+      status: shift.status,
+      matchedWorkerId: shift.matchedWorkerId?.toString() ?? null,
+      location: shift.location,
+      description: shift.description,
+      facility: shift.facility
+        ? {
+            id: shift.facility._id?.toString(),
+            name: shift.facility.name,
+            facilityType: shift.facility.facilityType,
+            address: shift.facility.address,
+            stats: shift.facility.stats
+          }
+        : undefined
     };
   }
 }

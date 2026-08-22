@@ -19,7 +19,7 @@ Derived from the MedShift marketing site:
 ## 2. Shared Components
 
 ### 2.1 Buttons
-- **Primary Button**: Solid Gold background (`#D4AF37`), Navy text (`#0B1F3A`). Bold Poppins font, 8px border-radius. Hover state: Light Gold with a slight upward translation (`translateY(-2px)`) and a soft gold shadow.
+- **Primary Button**: Solid Gold background (`#D4AF37`), White text (`#FFFFFF`). Bold Poppins font, 8px border-radius. Hover state: Light Gold with a slight upward translation (`translateY(-2px)`) and a soft gold shadow.
 - **Secondary Button**: Transparent background, White/Navy border. Hover state: Border and text turn Gold.
 
 ### 2.2 Cards & Containers
@@ -99,11 +99,12 @@ Derived from the MedShift marketing site:
    - Includes facility rating and map preview.
 3. **Profile & Credentials**:
    - Status indicators for credential verification (Pending vs. Verified).
-   - A required onboarding flow captures legal name, clinical role, location/radius, availability, credentials, and background-check consent.
+   - A required onboarding flow captures legal name, professional role, location/radius, availability, credentials, and background-check consent.
    - Onboarding should use a standalone focused setup layout rather than the shared dashboard shell.
    - Onboarding uses a step-based workflow with a progress rail, one primary task per step, and a draft-saved state after every step transition.
-   - Location/radius steps use an interactive Mapbox map when configured and show editable coordinates beside the map. If Mapbox cannot load, the fallback must clearly show the current coordinates without blocking onboarding.
+   - Location/radius steps use an interactive Mapbox map when configured and show editable coordinates beside the map. If `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` is configured, users can search an address to prefill coordinates and reposition the map pin. If Mapbox or Google Places cannot load, manual coordinate entry must remain available.
    - Credential upload uses a Cloudinary-backed file picker with upload progress, success/error feedback, and a visible uploaded-document link before submission.
+   - Worker settings in the dashboard shell let authenticated workers update the same setup data after onboarding, including legal name, professional role, matching location/radius, availability, credentials, and background-check consent.
    - The shift board should show an in-content onboarding banner with a Continue onboarding action while the worker profile is still incomplete. Once the worker has completed onboarding and entered review/approval, the banner should not show again.
 
 ### 3.3 Healthcare Facility Portal
@@ -122,7 +123,7 @@ Derived from the MedShift marketing site:
    - A required onboarding flow captures facility name, care setting, service address/geolocation, primary contact details, and billing/readiness details.
    - Onboarding should use a standalone focused setup layout rather than the shared dashboard shell.
    - Onboarding uses a step-based workflow with draft saves after each step so facilities can pause and resume setup later.
-   - Service address/geolocation steps use an interactive Mapbox map when configured and show editable coordinates beside the map. If Mapbox cannot load, the fallback must clearly show the current coordinates without blocking onboarding.
+   - Service address/geolocation steps use an interactive Mapbox map when configured and show editable coordinates beside the map. If `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` is configured, users can search an address to prefill service address fields, coordinates, and reposition the map pin. If Mapbox or Google Places cannot load, manual address and coordinate entry must remain available.
    - Shift posting should show an onboarding gate until the facility profile is complete and registration verification is approved.
 
 ### 3.4 Admin Dashboard

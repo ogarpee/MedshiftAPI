@@ -21,11 +21,11 @@
 
 ## 3. Target Audience
 ### 3.1 Healthcare Facilities
-- Long-term care homes, clinics, and hospitals looking to fill urgent staffing gaps quickly (in under 2 hours).
+- Long-term care, supportive living, retirement residence, and home care organizations looking to fill urgent staffing gaps quickly (in under 2 hours).
 - Seeking verified, credentialed professionals without agency markups or middlemen.
 
 ### 3.2 Healthcare Professionals (Workers)
-- Healthcare Assistants (HCAs), Nurses, and other clinical staff (e.g., Sarah J. - HealthCare Assistant).
+- Healthcare aides, personal support workers, and other care staff (e.g., Sarah J. - Healthcare Aide).
 - Seeking flexible schedules, quick payouts, and direct connections to facilities without agency commitments.
 
 ## 4. Core Workflows & Features
@@ -61,7 +61,7 @@
 
 ### 4.4 Worker App/Portal Requirements
 - **Dashboard Shell**: Worker dashboards must follow the modern app shell standard: persistent/sidebar-or-mobile-drawer navigation, topbar, and main content area for shift discovery and profile tasks.
-- **Worker Onboarding**: New workers must complete identity details, clinical role, location/radius, availability preferences, credential uploads, and background-check consent before live shift matching is enabled.
+- **Worker Onboarding**: New workers must complete identity details, professional role, location/radius, availability preferences, credential uploads, and background-check consent before live shift matching is enabled.
 - **Credential Uploads**: Worker credential files are uploaded to Cloudinary during onboarding before profile submission. The stored worker credential record keeps the returned secure Cloudinary URL for admin review.
 - **Shift Browsing & Filtering**: Filter shifts by location, facility type, and shift length. Find opportunities nearby.
 - **Flexible Scheduling**: No minimum shift obligations; workers choose when and where they work on their terms.
@@ -78,8 +78,8 @@
 
 ### 4.6 Public Marketing Site
 - **Landing Page**: Communicates the dual value proposition to Workers and Facilities.
-- **Early Access / Waitlist Form**: Captures email addresses, distinguishing between Workers and Facilities.
-- **Automated Emails**: Uses Resend to send confirmation emails and notifications upon waitlist signup, completed registration, and platform launch.
+- **Early Access / Waitlist Form**: Captures role-specific launch details. Facility signups collect facility name, work email, phone number, facility type, city, and province. Worker signups collect name, email, phone number, professional role, city, and preferred shift.
+- **Automated Emails & Campaign Contacts**: Uses Resend to send confirmation emails and notifications upon waitlist signup, completed registration, and platform launch. Waitlist submissions are also added to the waitlist campaign group, while completed registrations are added to the general campaign group and their selected Worker or Facility role group.
 
 ## 5. Technical & Non-Functional Requirements
 - **Real-Time Capabilities**: Socket.io must power real-time shift broadcasting, worker acceptance notifications, and live status updates to ensure shift fill times remain under 2 hours.

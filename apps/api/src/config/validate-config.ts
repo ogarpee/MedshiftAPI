@@ -3,6 +3,14 @@ interface EnvironmentConfig {
   JWT_SECRET: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
+  RESEND_FACILITY_AUDIENCE_ID?: string;
+  RESEND_FACILITY_SEGMENT_ID?: string;
+  RESEND_GENERAL_AUDIENCE_ID?: string;
+  RESEND_GENERAL_SEGMENT_ID?: string;
+  RESEND_WAITLIST_AUDIENCE_ID?: string;
+  RESEND_WAITLIST_SEGMENT_ID?: string;
+  RESEND_WORKER_AUDIENCE_ID?: string;
+  RESEND_WORKER_SEGMENT_ID?: string;
   PORT?: string;
   WEB_ORIGIN?: string;
 }

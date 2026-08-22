@@ -2,11 +2,27 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { UserRole } from "@medshift/shared-types";
+import { FacilityType, UserRole, WaitlistAvailability, WaitlistProfessionalRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { Calendar, Check, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
 
 type SignupType = "worker" | "facility";
+
+type WorkerWaitlistDetails = {
+  availability: WaitlistAvailability;
+  city: string;
+  clinicalRole: WaitlistProfessionalRole;
+  fullName: string;
+  phone: string;
+};
+
+type FacilityWaitlistDetails = {
+  city: string;
+  facilityName: string;
+  facilityType: FacilityType;
+  phone: string;
+  province: string;
+};
 
 type StoredAuthUser = {
   email: string;
@@ -68,7 +84,7 @@ const facilityFeatures = [
 const workerPerks = [
   {
     title: "Choose shifts around your life",
-    copy: "Filter by date, distance, clinical role, and shift type before you commit.",
+    copy: "Filter by date, distance, professional role, and shift type before you commit.",
     icon: <CalendarIcon />
   },
   {
@@ -97,15 +113,15 @@ const facilityProof = [
 ];
 
 const facilityPreviewShifts = [
-  ["RN", "Tonight, 7 PM", "3 nearby matches"],
+  ["HCA", "Tonight, 7 PM", "3 nearby matches"],
   ["HCA", "Tomorrow, 8 AM", "5 available workers"],
-  ["LPN", "Weekend", "Credential review ready"]
+  ["PSW", "Weekend", "Credential review ready"]
 ];
 
 const workerPreviewShifts = [
   ["HCA", "Long-term care", "$34/hr", "2.1 km"],
-  ["RN", "Hospital evening", "$52/hr", "5.8 km"],
-  ["LPN", "Weekend clinic", "$44/hr", "8.4 km"]
+  ["PSW", "Supportive living evening", "$34/hr", "5.8 km"],
+  ["HCA", "Retirement residence casual", "$32/hr", "8.4 km"]
 ];
 
 const workerProof = ["Flexible shifts", "Verified facilities", "Clear rates"];
@@ -132,7 +148,7 @@ const waitlistOptions = {
     placeholder: "name@facility.ca",
     cta: "Join as Facility",
     icon: <ShieldCheck size={19} strokeWidth={2.2} />,
-    points: ["Priority launch access", "Verified clinical staff", "Fast coverage support"]
+    points: ["Priority launch access", "Verified care staff", "Fast coverage support"]
   }
 } satisfies Record<SignupType, {
   copy: string;
@@ -143,9 +159,46 @@ const waitlistOptions = {
   title: string;
 }>;
 
+const professionalRoleOptions = [
+  { label: "Healthcare aide", value: WaitlistProfessionalRole.HealthcareAide },
+  { label: "Personal support worker", value: WaitlistProfessionalRole.PersonalSupportWorker },
+  { label: "Other", value: WaitlistProfessionalRole.Other }
+];
+
+const availabilityOptions = [
+  { label: "Day shifts", value: WaitlistAvailability.Days },
+  { label: "Evenings", value: WaitlistAvailability.Evenings },
+  { label: "Nights", value: WaitlistAvailability.Nights },
+  { label: "Weekends", value: WaitlistAvailability.Weekends },
+  { label: "Casual", value: WaitlistAvailability.Casual },
+  { label: "Flexible", value: WaitlistAvailability.Flexible }
+];
+
+const facilityTypeOptions = [
+  { label: "Long-term care", value: FacilityType.LongTermCare },
+  { label: "Supportive living", value: FacilityType.SupportiveLiving },
+  { label: "Retirement residence", value: FacilityType.RetirementResidence },
+  { label: "Home care", value: FacilityType.HomeCare },
+  { label: "Other", value: FacilityType.Other }
+];
+
 export default function HomePage() {
   const [signupType, setSignupType] = useState<SignupType>("worker");
   const [email, setEmail] = useState("");
+  const [workerDetails, setWorkerDetails] = useState<WorkerWaitlistDetails>({
+    availability: WaitlistAvailability.Flexible,
+    city: "",
+    clinicalRole: WaitlistProfessionalRole.HealthcareAide,
+    fullName: "",
+    phone: ""
+  });
+  const [facilityDetails, setFacilityDetails] = useState<FacilityWaitlistDetails>({
+    city: "",
+    facilityName: "",
+    facilityType: FacilityType.LongTermCare,
+    phone: "",
+    province: ""
+  });
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"success" | "warning" | "error">("success");
   const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
@@ -191,6 +244,21 @@ export default function HomePage() {
       return;
     }
 
+    if (signupType === "worker" && (!workerDetails.fullName.trim() || !workerDetails.phone.trim() || !workerDetails.city.trim())) {
+      setMessageTone("error");
+      setMessage("Please share your name, phone number, and city so we can route worker launch updates.");
+      return;
+    }
+
+    if (
+      signupType === "facility" &&
+      (!facilityDetails.facilityName.trim() || !facilityDetails.phone.trim() || !facilityDetails.city.trim() || !facilityDetails.province.trim())
+    ) {
+      setMessageTone("error");
+      setMessage("Please share your facility name, phone number, city, and province so we can prioritize coverage support.");
+      return;
+    }
+
     setIsSubmittingWaitlist(true);
     setMessage("");
     setMessageTone("success");
@@ -201,7 +269,25 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: trimmedEmail,
-          role: signupType === "worker" ? UserRole.Worker : UserRole.Facility
+          role: signupType === "worker" ? UserRole.Worker : UserRole.Facility,
+          ...(signupType === "worker"
+            ? {
+                workerDetails: {
+                  ...workerDetails,
+                  city: workerDetails.city.trim(),
+                  fullName: workerDetails.fullName.trim(),
+                  phone: workerDetails.phone.trim()
+                }
+              }
+            : {
+                facilityDetails: {
+                  ...facilityDetails,
+                  city: facilityDetails.city.trim(),
+                  facilityName: facilityDetails.facilityName.trim(),
+                  phone: facilityDetails.phone.trim(),
+                  province: facilityDetails.province.trim()
+                }
+              })
         })
       });
 
@@ -226,6 +312,7 @@ export default function HomePage() {
             "You're on the waitlist. We could not send the confirmation email yet, so the team should check Resend setup."
         );
         setEmail("");
+        resetWaitlistDetails(signupType, setWorkerDetails, setFacilityDetails);
         return;
       }
 
@@ -234,6 +321,7 @@ export default function HomePage() {
         `You're on the list as a ${signupType === "worker" ? "healthcare worker" : "facility"}. Check your email for confirmation.`
       );
       setEmail("");
+      resetWaitlistDetails(signupType, setWorkerDetails, setFacilityDetails);
     } catch (error) {
       setMessageTone("error");
       setMessage(error instanceof Error ? error.message : "Unable to join the waitlist right now. Please try again.");
@@ -589,18 +677,205 @@ export default function HomePage() {
               className="signup-form"
               onSubmit={handleSignup}
             >
-              <input
-                aria-label="Email address"
-                autoComplete="email"
-                maxLength={254}
-                name="email"
-                disabled={isSubmittingWaitlist}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder={waitlistOption.placeholder}
-                required
-                type="email"
-                value={email}
-              />
+              <div className="signup-field-group">
+                {signupType === "worker" ? (
+                  <>
+                    <label>
+                      <span>Name</span>
+                      <input
+                        autoComplete="name"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={100}
+                        name="fullName"
+                        onChange={(event) =>
+                          setWorkerDetails((current) => ({ ...current, fullName: event.target.value }))
+                        }
+                        placeholder="Sarah Johnson"
+                        required
+                        type="text"
+                        value={workerDetails.fullName}
+                      />
+                    </label>
+                    <label>
+                      <span>Email</span>
+                      <input
+                        autoComplete="email"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={254}
+                        name="email"
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder={waitlistOption.placeholder}
+                        required
+                        type="email"
+                        value={email}
+                      />
+                    </label>
+                    <label>
+                      <span>Phone number</span>
+                      <input
+                        autoComplete="tel"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={30}
+                        name="workerPhone"
+                        onChange={(event) => setWorkerDetails((current) => ({ ...current, phone: event.target.value }))}
+                        placeholder="(403) 555-0198"
+                        required
+                        type="tel"
+                        value={workerDetails.phone}
+                      />
+                    </label>
+                    <label>
+                      <span>Professional role</span>
+                      <select
+                        disabled={isSubmittingWaitlist}
+                        name="clinicalRole"
+                        onChange={(event) =>
+                          setWorkerDetails((current) => ({
+                            ...current,
+                            clinicalRole: event.target.value as WaitlistProfessionalRole
+                          }))
+                        }
+                        value={workerDetails.clinicalRole}
+                      >
+                        {professionalRoleOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>City</span>
+                      <input
+                        autoComplete="address-level2"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={80}
+                        name="workerCity"
+                        onChange={(event) => setWorkerDetails((current) => ({ ...current, city: event.target.value }))}
+                        placeholder="Calgary"
+                        required
+                        type="text"
+                        value={workerDetails.city}
+                      />
+                    </label>
+                    <label>
+                      <span>Preferred shift</span>
+                      <select
+                        disabled={isSubmittingWaitlist}
+                        name="availability"
+                        onChange={(event) =>
+                          setWorkerDetails((current) => ({
+                            ...current,
+                            availability: event.target.value as WaitlistAvailability
+                          }))
+                        }
+                        value={workerDetails.availability}
+                      >
+                        {availabilityOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      <span>Facility name</span>
+                      <input
+                        autoComplete="organization"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={120}
+                        name="facilityName"
+                        onChange={(event) =>
+                          setFacilityDetails((current) => ({ ...current, facilityName: event.target.value }))
+                        }
+                        placeholder="Cedar Ridge Care"
+                        required
+                        type="text"
+                        value={facilityDetails.facilityName}
+                      />
+                    </label>
+                    <label>
+                      <span>Work email</span>
+                      <input
+                        autoComplete="email"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={254}
+                        name="email"
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder={waitlistOption.placeholder}
+                        required
+                        type="email"
+                        value={email}
+                      />
+                    </label>
+                    <label>
+                      <span>Phone number</span>
+                      <input
+                        autoComplete="tel"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={30}
+                        name="facilityPhone"
+                        onChange={(event) => setFacilityDetails((current) => ({ ...current, phone: event.target.value }))}
+                        placeholder="(403) 555-0142"
+                        required
+                        type="tel"
+                        value={facilityDetails.phone}
+                      />
+                    </label>
+                    <label>
+                      <span>Facility type</span>
+                      <select
+                        disabled={isSubmittingWaitlist}
+                        name="facilityType"
+                        onChange={(event) =>
+                          setFacilityDetails((current) => ({
+                            ...current,
+                            facilityType: event.target.value as FacilityType
+                          }))
+                        }
+                        value={facilityDetails.facilityType}
+                      >
+                        {facilityTypeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>City</span>
+                      <input
+                        autoComplete="address-level2"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={80}
+                        name="facilityCity"
+                        onChange={(event) => setFacilityDetails((current) => ({ ...current, city: event.target.value }))}
+                        placeholder="Calgary"
+                        required
+                        type="text"
+                        value={facilityDetails.city}
+                      />
+                    </label>
+                    <label>
+                      <span>Province</span>
+                      <input
+                        autoComplete="address-level1"
+                        disabled={isSubmittingWaitlist}
+                        maxLength={40}
+                        name="facilityProvince"
+                        onChange={(event) => setFacilityDetails((current) => ({ ...current, province: event.target.value }))}
+                        placeholder="Alberta"
+                        required
+                        type="text"
+                        value={facilityDetails.province}
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
               <button className="btn-primary" disabled={isSubmittingWaitlist} type="submit">
                 {isSubmittingWaitlist ? "Sending..." : waitlistOption.cta}
               </button>
@@ -740,6 +1015,31 @@ function CheckIcon() {
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function resetWaitlistDetails(
+  signupType: SignupType,
+  setWorkerDetails: (details: WorkerWaitlistDetails) => void,
+  setFacilityDetails: (details: FacilityWaitlistDetails) => void
+) {
+  if (signupType === "worker") {
+    setWorkerDetails({
+      availability: WaitlistAvailability.Flexible,
+      city: "",
+      clinicalRole: WaitlistProfessionalRole.HealthcareAide,
+      fullName: "",
+      phone: ""
+    });
+    return;
+  }
+
+  setFacilityDetails({
+    city: "",
+    facilityName: "",
+    facilityType: FacilityType.LongTermCare,
+    phone: "",
+    province: ""
+  });
 }
 
 function formatWaitlistError(result: WaitlistResponse) {

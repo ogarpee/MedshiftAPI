@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { BackgroundCheckStatus, ClinicalRole, OnboardingStatus } from "@medshift/shared-types";
 import { MedShiftLogo, StatusBadge } from "@medshift/ui-components";
 import { CloudinaryUploadField } from "../../cloudinary-upload-field";
+import { GooglePlacesSearch } from "../../google-places-search";
+import type { GooglePlaceSelection } from "../../google-places-search";
 import { OnboardingMap } from "../../onboarding-map";
 import { useToast } from "../../toast-provider";
 
@@ -73,6 +75,7 @@ const initialDraft: WorkerDraft = {
 export default function WorkerOnboardingPage() {
   const { notify } = useToast();
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const googlePlacesApiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const [currentStep, setCurrentStep] = useState(0);
   const [draft, setDraft] = useState<WorkerDraft>(initialDraft);
@@ -130,6 +133,10 @@ export default function WorkerOnboardingPage() {
     },
     []
   );
+
+  const handlePlaceSelect = useCallback((selection: GooglePlaceSelection) => {
+    updateLocationDraft({ latitude: selection.latitude, longitude: selection.longitude });
+  }, [updateLocationDraft]);
 
   function goToStep(step: number) {
     const validationMessage = validateStep(currentStep);
@@ -339,10 +346,11 @@ export default function WorkerOnboardingPage() {
 
           {currentStep === 1 ? (
             <section>
-              <StepHeading eyebrow="Step 2" title="Service area and Mapbox location" />
+              <StepHeading eyebrow="Step 2" title="Service area and location" />
               <div className="map-step-grid">
-                <OnboardingMap label="Mapbox service area" latitude={draft.latitude} longitude={draft.longitude} token={mapboxToken} onCoordinatesChange={updateLocationDraft} />
+                <OnboardingMap label="Service area location" latitude={draft.latitude} longitude={draft.longitude} token={mapboxToken} onCoordinatesChange={updateLocationDraft} />
                 <div className="onboarding-field-grid compact">
+                  <GooglePlacesSearch apiKey={googlePlacesApiKey} label="Search address" onPlaceSelect={handlePlaceSelect} placeholder="Search an Alberta address" />
                   <label>
                     Longitude
                     <input value={draft.longitude} onChange={(event) => updateDraft({ ...draft, longitude: event.target.value })} inputMode="decimal" name="longitude" placeholder="-114.0719" required />

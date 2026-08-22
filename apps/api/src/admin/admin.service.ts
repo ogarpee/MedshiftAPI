@@ -99,13 +99,17 @@ export class AdminService {
       throw new NotFoundException("Shift not found");
     }
 
+    const previousStatus = shift.status;
     shift.status = status;
 
     if (status === ShiftStatus.Open) {
       shift.matchedWorkerId = null;
     }
 
-    return this.serializeLean((await shift.save()).toObject({ versionKey: false }));
+    const savedShift = await shift.save();
+    await this.notifyReviewAvailableIfCompleted(savedShift, previousStatus);
+
+    return this.serializeLean(savedShift.toObject({ versionKey: false }));
   }
 
   async reviewCredential(workerId: string, credentialIndex: number, approved: boolean) {
@@ -170,6 +174,12 @@ export class AdminService {
       rejectedReason: dto.rejectedReason,
       role: user.role
     });
+    await this.notificationService.notifyOnboardingReviewResult({
+      approved: dto.approved,
+      rejectedReason: dto.rejectedReason,
+      role: user.role,
+      userId: user._id
+    });
 
     return this.serializeDocument(savedWorker);
   }
@@ -203,8 +213,33 @@ export class AdminService {
       rejectedReason: dto.rejectedReason,
       role: user.role
     });
+    await this.notificationService.notifyOnboardingReviewResult({
+      approved: dto.approved,
+      rejectedReason: dto.rejectedReason,
+      role: user.role,
+      userId: user._id
+    });
 
     return this.serializeFacilityDocument(savedFacility);
+  }
+
+  private async notifyReviewAvailableIfCompleted(shift: ShiftDocument, previousStatus: ShiftStatus) {
+    if (previousStatus === ShiftStatus.Completed || shift.status !== ShiftStatus.Completed || !shift.matchedWorkerId) {
+      return;
+    }
+
+    const [facility, worker] = await Promise.all([
+      this.facilityProfiles.findById(shift.facilityId).exec(),
+      this.workerProfiles.findById(shift.matchedWorkerId).exec()
+    ]);
+
+    await this.notificationService.notifyReviewAvailable({
+      facilityUserId: facility?.userId,
+      roleRequired: shift.roleRequired,
+      shiftId: shift.id,
+      startTime: shift.startTime,
+      workerUserId: worker?.userId
+    });
   }
 
   private computeMetrics(

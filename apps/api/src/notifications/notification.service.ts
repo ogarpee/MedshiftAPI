@@ -1,6 +1,19 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ClinicalRole, UserRole } from "@medshift/shared-types";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import {
+  ClinicalRole,
+  FacilityType,
+  NotificationSummary,
+  NotificationType,
+  OnboardingStatus,
+  UserRole,
+  WaitlistAvailability,
+  WaitlistProfessionalRole
+} from "@medshift/shared-types";
+import { Notification, NotificationDocument } from "../database/schemas/notification.schema";
+import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 
 type EmailPayload = {
   to: string;
@@ -24,6 +37,11 @@ type EmailTemplateOptions = {
 export type EmailDeliveryResult = {
   delivered: boolean;
   provider: "console" | "resend";
+};
+
+type ContactSyncResult = {
+  provider: "console" | "resend";
+  synced: boolean;
 };
 
 type ShiftEmailPayload = {
@@ -61,11 +79,257 @@ type OnboardingReviewEmailPayload = {
   role: UserRole;
 };
 
+type WaitlistContactPayload = {
+  email: string;
+  facilityDetails?: {
+    city?: string;
+    facilityName?: string;
+    facilityType?: FacilityType;
+    phone?: string;
+    province?: string;
+  };
+  role: UserRole;
+  workerDetails?: {
+    availability?: WaitlistAvailability;
+    city?: string;
+    clinicalRole?: WaitlistProfessionalRole;
+    fullName?: string;
+    phone?: string;
+  };
+};
+
+type ResendContactPayload = {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  properties?: Record<string, string>;
+  segmentIds: string[];
+  legacyAudienceIds: string[];
+};
+
+type InAppNotificationPayload = {
+  body: string;
+  href?: string;
+  metadata?: Record<string, string>;
+  title: string;
+  type: NotificationType;
+  userId: string | Types.ObjectId;
+};
+
+type MatchingShiftNotificationPayload = {
+  facilityName?: string;
+  hourlyRate: number;
+  location: {
+    coordinates: [number, number];
+    type: "Point";
+  };
+  roleRequired: ClinicalRole;
+  shiftId: string;
+  startTime: Date | string;
+};
+
+type ReviewAvailableNotificationPayload = {
+  facilityUserId?: string | Types.ObjectId;
+  roleRequired: ClinicalRole;
+  shiftId: string;
+  startTime: Date | string;
+  workerUserId?: string | Types.ObjectId;
+};
+
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @InjectModel(Notification.name) private readonly notifications: Model<NotificationDocument>,
+    @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>
+  ) {}
+
+  async listForUser(userId: string, limit = 20) {
+    const requestedLimit = Number.isFinite(limit) ? limit : 20;
+    const safeLimit = Math.min(Math.max(requestedLimit, 1), 50);
+    const userObjectId = this.toObjectId(userId);
+    const [items, unreadCount] = await Promise.all([
+      this.notifications.find({ userId: userObjectId }).sort({ createdAt: -1 }).limit(safeLimit).exec(),
+      this.notifications.countDocuments({ userId: userObjectId, readAt: null }).exec()
+    ]);
+
+    return {
+      items: items.map((notification) => this.serializeNotification(notification)),
+      unreadCount
+    };
+  }
+
+  async markRead(userId: string, notificationId: string) {
+    if (!Types.ObjectId.isValid(notificationId)) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    const notification = await this.notifications
+      .findOneAndUpdate(
+        { _id: notificationId, userId: this.toObjectId(userId) },
+        { $set: { readAt: new Date() } },
+        { new: true }
+      )
+      .exec();
+
+    if (!notification) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    return this.serializeNotification(notification);
+  }
+
+  async markAllRead(userId: string) {
+    const result = await this.notifications
+      .updateMany({ userId: this.toObjectId(userId), readAt: null }, { $set: { readAt: new Date() } })
+      .exec();
+
+    return { updated: result.modifiedCount };
+  }
+
+  async createInAppNotification(payload: InAppNotificationPayload) {
+    const notification = await this.notifications.create({
+      body: payload.body,
+      href: payload.href,
+      metadata: payload.metadata,
+      title: payload.title,
+      type: payload.type,
+      userId: this.toObjectId(payload.userId)
+    });
+
+    return this.serializeNotification(notification);
+  }
+
+  async notifyMatchingWorkersForShift(payload: MatchingShiftNotificationPayload) {
+    const workers = await this.workerProfiles
+      .find({
+        "onboarding.verificationStatus": OnboardingStatus.Approved,
+        title: payload.roleRequired
+      })
+      .exec();
+    const [shiftLongitude, shiftLatitude] = payload.location.coordinates;
+    const matchingWorkers = workers.filter((worker) => {
+      const [workerLongitude, workerLatitude] = worker.location.coordinates;
+      const distanceKm = calculateDistanceKm(workerLatitude, workerLongitude, shiftLatitude, shiftLongitude);
+      const maxDistanceKm = worker.preferences?.maxDistanceKm ?? 25;
+
+      return distanceKm <= maxDistanceKm;
+    });
+
+    if (!matchingWorkers.length) {
+      return [];
+    }
+
+    return Promise.all(
+      matchingWorkers.map((worker) =>
+        this.createInAppNotification({
+          body: `${payload.facilityName ?? "A facility"} posted a ${payload.roleRequired} shift for ${this.formatDate(payload.startTime)} at $${payload.hourlyRate}/hr.`,
+          href: "/worker",
+          metadata: { shiftId: payload.shiftId, roleRequired: payload.roleRequired },
+          title: "New nearby shift posted",
+          type: NotificationType.ShiftCreated,
+          userId: worker.userId
+        })
+      )
+    );
+  }
+
+  async notifyShiftAccepted(payload: {
+    facilityName?: string;
+    facilityUserId?: string | Types.ObjectId;
+    roleRequired: ClinicalRole;
+    shiftId: string;
+    startTime: Date | string;
+    workerUserId?: string | Types.ObjectId;
+  }) {
+    const notifications: Array<Promise<NotificationSummary>> = [];
+    const formattedStart = this.formatDate(payload.startTime);
+
+    if (payload.facilityUserId) {
+      notifications.push(
+        this.createInAppNotification({
+          body: `A worker accepted your ${payload.roleRequired} shift for ${formattedStart}.`,
+          href: "/facility",
+          metadata: { shiftId: payload.shiftId, roleRequired: payload.roleRequired },
+          title: "Worker accepted a shift",
+          type: NotificationType.ShiftAccepted,
+          userId: payload.facilityUserId
+        })
+      );
+    }
+
+    if (payload.workerUserId) {
+      notifications.push(
+        this.createInAppNotification({
+          body: `Your ${payload.roleRequired} shift at ${payload.facilityName ?? "the facility"} is confirmed for ${formattedStart}.`,
+          href: "/worker",
+          metadata: { shiftId: payload.shiftId, roleRequired: payload.roleRequired },
+          title: "Shift confirmed",
+          type: NotificationType.ShiftAccepted,
+          userId: payload.workerUserId
+        })
+      );
+    }
+
+    return Promise.all(notifications);
+  }
+
+  async notifyOnboardingReviewResult(payload: {
+    approved: boolean;
+    rejectedReason?: string;
+    role: UserRole;
+    userId: string | Types.ObjectId;
+  }) {
+    const roleLabel = payload.role === UserRole.Worker ? "worker" : "facility";
+    const approvedHref = payload.role === UserRole.Worker ? "/worker" : "/facility";
+    const rejectedHref = payload.role === UserRole.Worker ? "/worker/settings" : "/facility/onboarding";
+
+    return this.createInAppNotification({
+      body: payload.approved
+        ? `Your MedShift ${roleLabel} onboarding is approved. Live workflows are unlocked.`
+        : `Your MedShift ${roleLabel} onboarding needs updates.${payload.rejectedReason ? ` ${payload.rejectedReason}` : ""}`,
+      href: payload.approved ? approvedHref : rejectedHref,
+      metadata: { role: payload.role },
+      title: payload.approved ? "Onboarding approved" : "Onboarding needs updates",
+      type: payload.approved ? NotificationType.OnboardingApproved : NotificationType.OnboardingRejected,
+      userId: payload.userId
+    });
+  }
+
+  async notifyReviewAvailable(payload: ReviewAvailableNotificationPayload) {
+    const notifications: Array<Promise<NotificationSummary>> = [];
+    const formattedStart = this.formatDate(payload.startTime);
+
+    if (payload.workerUserId) {
+      notifications.push(
+        this.createInAppNotification({
+          body: `Your completed ${payload.roleRequired} shift from ${formattedStart} is ready for facility feedback.`,
+          href: "/worker",
+          metadata: { shiftId: payload.shiftId, roleRequired: payload.roleRequired },
+          title: "Facility review available",
+          type: NotificationType.ReviewAvailable,
+          userId: payload.workerUserId
+        })
+      );
+    }
+
+    if (payload.facilityUserId) {
+      notifications.push(
+        this.createInAppNotification({
+          body: `Your completed ${payload.roleRequired} shift from ${formattedStart} is ready for worker feedback.`,
+          href: "/facility",
+          metadata: { shiftId: payload.shiftId, roleRequired: payload.roleRequired },
+          title: "Worker review available",
+          type: NotificationType.ReviewAvailable,
+          userId: payload.facilityUserId
+        })
+      );
+    }
+
+    return Promise.all(notifications);
+  }
 
   async sendWelcomeEmail(email: string, role: UserRole) {
     const audience = role === UserRole.Worker ? "healthcare professional" : "facility partner";
@@ -201,6 +465,60 @@ export class NotificationService {
     });
   }
 
+  async syncWaitlistContact(payload: WaitlistContactPayload): Promise<ContactSyncResult> {
+    const role = payload.role === UserRole.Worker ? "worker" : "facility";
+    const nameParts = splitName(payload.workerDetails?.fullName);
+    const properties: Record<string, string> = {
+      medshift_role: payload.role,
+      medshift_contact_stage: "WAITLIST",
+      medshift_source: "PUBLIC_WAITLIST"
+    };
+
+    if (payload.workerDetails) {
+      addProperty(properties, "medshift_full_name", payload.workerDetails.fullName);
+      addProperty(properties, "medshift_phone", payload.workerDetails.phone);
+      addProperty(properties, "medshift_city", payload.workerDetails.city);
+      addProperty(properties, "medshift_professional_role", payload.workerDetails.clinicalRole);
+      addProperty(properties, "medshift_availability", payload.workerDetails.availability);
+    }
+
+    if (payload.facilityDetails) {
+      addProperty(properties, "medshift_facility_name", payload.facilityDetails.facilityName);
+      addProperty(properties, "medshift_phone", payload.facilityDetails.phone);
+      addProperty(properties, "medshift_city", payload.facilityDetails.city);
+      addProperty(properties, "medshift_province", payload.facilityDetails.province);
+      addProperty(properties, "medshift_facility_type", payload.facilityDetails.facilityType);
+    }
+
+    return this.syncResendContact({
+      email: payload.email,
+      firstName: nameParts.firstName,
+      lastName: nameParts.lastName,
+      properties,
+      segmentIds: this.getConfiguredIds(["RESEND_WAITLIST_SEGMENT_ID", role === "worker" ? "RESEND_WORKER_SEGMENT_ID" : "RESEND_FACILITY_SEGMENT_ID"]),
+      legacyAudienceIds: this.getConfiguredIds(["RESEND_WAITLIST_AUDIENCE_ID"])
+    });
+  }
+
+  async syncRegisteredContact(email: string, role: UserRole): Promise<ContactSyncResult> {
+    return this.syncResendContact({
+      email,
+      properties: {
+        medshift_role: role,
+        medshift_contact_stage: "REGISTERED",
+        medshift_source: "ACCOUNT_REGISTRATION"
+      },
+      segmentIds: this.getConfiguredIds([
+        "RESEND_GENERAL_SEGMENT_ID",
+        role === UserRole.Worker ? "RESEND_WORKER_SEGMENT_ID" : "RESEND_FACILITY_SEGMENT_ID"
+      ]),
+      legacyAudienceIds: this.getConfiguredIds([
+        "RESEND_GENERAL_AUDIENCE_ID",
+        role === UserRole.Worker ? "RESEND_WORKER_AUDIENCE_ID" : "RESEND_FACILITY_AUDIENCE_ID"
+      ])
+    });
+  }
+
   async sendShiftConfirmation(payload: ShiftEmailPayload) {
     const window = `${this.formatDate(payload.startTime)} - ${this.formatDate(payload.endTime)}`;
     const facilityName = payload.facilityName ?? "your facility";
@@ -280,6 +598,143 @@ export class NotificationService {
 
     this.logger.log(`Email sent to ${payload.to} through Resend: ${payload.subject}`);
     return { delivered: true, provider: "resend" };
+  }
+
+  private async syncResendContact(payload: ResendContactPayload): Promise<ContactSyncResult> {
+    const apiKey = this.config.get<string>("RESEND_API_KEY")?.trim();
+
+    if (!apiKey) {
+      this.logger.warn(`Resend contact not synced for ${payload.email}: RESEND_API_KEY is not configured.`);
+      return { provider: "console", synced: false };
+    }
+
+    if (payload.segmentIds.length === 0 && payload.legacyAudienceIds.length === 0) {
+      this.logger.warn(`Resend contact not synced for ${payload.email}: no campaign segment or audience IDs are configured.`);
+      return { provider: "resend", synced: false };
+    }
+
+    const contactSynced = await this.createOrUpdateResendContact(apiKey, payload);
+    const segmentResults = await Promise.all(
+      payload.segmentIds.map((segmentId) => this.addResendContactToSegment(apiKey, payload.email, segmentId))
+    );
+    const audienceResults = await Promise.all(
+      payload.legacyAudienceIds.map((audienceId) => this.createOrUpdateLegacyAudienceContact(apiKey, audienceId, payload))
+    );
+    const synced = contactSynced && segmentResults.every(Boolean) && audienceResults.every(Boolean);
+
+    if (synced) {
+      this.logger.log(`Resend contact synced for ${payload.email}`);
+    }
+
+    return { provider: "resend", synced };
+  }
+
+  private async createOrUpdateResendContact(apiKey: string, payload: ResendContactPayload) {
+    const createBody = removeUndefinedValues({
+      email: payload.email,
+      first_name: payload.firstName,
+      last_name: payload.lastName,
+      properties: this.shouldSyncContactProperties() ? payload.properties : undefined,
+      segments: payload.segmentIds.length > 0 ? payload.segmentIds.map((id) => ({ id })) : undefined,
+      unsubscribed: false
+    });
+    const createResponse = await this.fetchResend(apiKey, "/contacts", {
+      method: "POST",
+      body: createBody
+    });
+
+    if (createResponse.ok) {
+      return true;
+    }
+
+    const updateBody = removeUndefinedValues({
+      first_name: payload.firstName,
+      last_name: payload.lastName,
+      properties: this.shouldSyncContactProperties() ? payload.properties : undefined,
+      unsubscribed: false
+    });
+    const updateResponse = await this.fetchResend(apiKey, `/contacts/${encodeURIComponent(payload.email)}`, {
+      method: "PATCH",
+      body: updateBody
+    });
+
+    if (updateResponse.ok) {
+      return true;
+    }
+
+    this.logger.warn(
+      `Resend contact upsert failed for ${payload.email}: ${createResponse.status} ${createResponse.bodyText}/${updateResponse.status} ${updateResponse.bodyText}`
+    );
+    return false;
+  }
+
+  private async addResendContactToSegment(apiKey: string, email: string, segmentId: string) {
+    const response = await this.fetchResend(apiKey, `/contacts/${encodeURIComponent(email)}/segments/${encodeURIComponent(segmentId)}`, {
+      method: "POST"
+    });
+
+    if (response.ok || response.status === 409) {
+      return true;
+    }
+
+    this.logger.warn(`Resend segment sync failed for ${email} into ${segmentId}: ${response.status} ${response.bodyText}`);
+    return false;
+  }
+
+  private async createOrUpdateLegacyAudienceContact(apiKey: string, audienceId: string, payload: ResendContactPayload) {
+    const body = removeUndefinedValues({
+      email: payload.email,
+      first_name: payload.firstName,
+      last_name: payload.lastName,
+      properties: this.shouldSyncContactProperties() ? payload.properties : undefined,
+      unsubscribed: false
+    });
+    const response = await this.fetchResend(apiKey, `/audiences/${encodeURIComponent(audienceId)}/contacts`, {
+      method: "POST",
+      body
+    });
+
+    if (response.ok || response.status === 409) {
+      return true;
+    }
+
+    this.logger.warn(`Resend legacy audience sync failed for ${payload.email} into ${audienceId}: ${response.status} ${response.bodyText}`);
+    return false;
+  }
+
+  private async fetchResend(apiKey: string, path: string, options: { body?: Record<string, unknown>; method: "PATCH" | "POST" }) {
+    try {
+      const response = await fetch(`https://api.resend.com${path}`, {
+        method: options.method,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      const bodyText = response.ok ? "" : await response.text().catch(() => "");
+
+      return {
+        bodyText,
+        ok: response.ok,
+        status: response.status
+      };
+    } catch (error) {
+      this.logger.warn(`Resend request failed for ${path}: ${error instanceof Error ? error.message : "unknown error"}`);
+      return { bodyText: "", ok: false, status: 0 };
+    }
+  }
+
+  private getConfiguredIds(keys: string[]) {
+    return keys
+      .map((key) => this.config.get<string>(key)?.trim())
+      .filter((value): value is string => Boolean(value));
+  }
+
+  private shouldSyncContactProperties() {
+    const value = this.config.get<string>("RESEND_SYNC_CONTACT_PROPERTIES")?.toLowerCase();
+
+    return value === "true" || value === "1" || value === "yes";
   }
 
   private renderEmailTemplate(options: EmailTemplateOptions) {
@@ -362,4 +817,71 @@ export class NotificationService {
       minute: "2-digit"
     }).format(new Date(value));
   }
+
+  private serializeNotification(notification: NotificationDocument): NotificationSummary {
+    const object = notification.toObject({ versionKey: false }) as Notification & {
+      createdAt?: Date;
+      readAt?: Date | null;
+      userId: Types.ObjectId;
+    };
+    const metadata =
+      object.metadata instanceof Map
+        ? Object.fromEntries(object.metadata.entries())
+        : object.metadata
+          ? Object.fromEntries(Object.entries(object.metadata as Record<string, string>).map(([key, value]) => [key, String(value)]))
+          : undefined;
+
+    return {
+      body: object.body,
+      createdAt: object.createdAt?.toISOString?.() ?? undefined,
+      href: object.href,
+      id: notification.id,
+      metadata,
+      readAt: object.readAt ? object.readAt.toISOString() : null,
+      title: object.title,
+      type: object.type,
+      userId: object.userId.toString()
+    };
+  }
+
+  private toObjectId(value: string | Types.ObjectId) {
+    return typeof value === "string" ? new Types.ObjectId(value) : value;
+  }
+}
+
+function addProperty(properties: Record<string, string>, key: string, value?: string) {
+  if (value) {
+    properties[key] = value;
+  }
+}
+
+function splitName(fullName?: string) {
+  const parts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+
+  return {
+    firstName: parts[0],
+    lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined
+  };
+}
+
+function removeUndefinedValues<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(Object.entries(value).filter(([, entryValue]) => entryValue !== undefined));
+}
+
+function calculateDistanceKm(latitudeA: number, longitudeA: number, latitudeB: number, longitudeB: number) {
+  const earthRadiusKm = 6371;
+  const latitudeDelta = toRadians(latitudeB - latitudeA);
+  const longitudeDelta = toRadians(longitudeB - longitudeA);
+  const a =
+    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
+    Math.cos(toRadians(latitudeA)) *
+      Math.cos(toRadians(latitudeB)) *
+      Math.sin(longitudeDelta / 2) *
+      Math.sin(longitudeDelta / 2);
+
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
 }

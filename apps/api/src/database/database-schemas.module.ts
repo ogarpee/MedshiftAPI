@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { FacilityProfile, FacilityProfileSchema } from "./schemas/facility-profile.schema";
+import { Notification, NotificationSchema } from "./schemas/notification.schema";
 import { RegistrationAttempt, RegistrationAttemptSchema } from "./schemas/registration-attempt.schema";
 import { Review, ReviewSchema } from "./schemas/review.schema";
 import { Shift, ShiftSchema } from "./schemas/shift.schema";
@@ -17,6 +18,7 @@ import { WorkerProfile, WorkerProfileSchema } from "./schemas/worker-profile.sch
       { name: FacilityProfile.name, schema: FacilityProfileSchema },
       { name: Shift.name, schema: ShiftSchema },
       { name: Review.name, schema: ReviewSchema },
+      { name: Notification.name, schema: NotificationSchema },
       { name: WaitlistSignup.name, schema: WaitlistSignupSchema }
     ])
   ],
