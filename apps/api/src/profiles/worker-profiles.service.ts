@@ -77,13 +77,16 @@ export class WorkerProfilesService {
   async update(currentUser: AuthUser, id: string, dto: UpdateWorkerProfileDto) {
     const profile = await this.findDocument(id);
     this.assertCanManage(currentUser, profile);
+    const shouldResetReview = this.shouldResetApprovedReview(profile, dto);
     profile.set(dto);
     profile.set({
       backgroundCheck: {
         ...profile.backgroundCheck,
         status: profile.backgroundCheck?.status ?? BackgroundCheckStatus.Pending
       },
-      onboarding: this.buildOnboardingState(profile)
+      onboarding: this.buildOnboardingState(profile, {
+        preserveApproved: profile.onboarding?.verificationStatus === OnboardingStatus.Approved && !shouldResetReview
+      })
     });
 
     return this.serialize(await profile.save());
@@ -146,18 +149,35 @@ export class WorkerProfilesService {
     };
   }
 
-  private buildOnboardingState(source: WorkerOnboardingSource) {
+  private buildOnboardingState(source: WorkerOnboardingSource, options: { preserveApproved?: boolean } = {}) {
     const hasIdentity = Boolean(source.firstName?.trim() && source.lastName?.trim() && source.title);
     const hasLocation = source.location?.type === "Point" && source.location.coordinates?.length === 2;
     const hasPreferences = Boolean(source.preferences?.maxDistanceKm && source.preferences?.availableDays?.length);
     const hasCredential = Boolean(source.credentials?.some((credential) => credential.type?.trim() && credential.documentUrl?.trim()));
     const hasBackgroundConsent = Boolean(source.backgroundCheck?.consentedAt);
     const isComplete = hasIdentity && hasLocation && hasPreferences && hasCredential && hasBackgroundConsent;
+    const currentOnboarding = source.onboarding;
+
+    if (options.preserveApproved && isComplete) {
+      return {
+        completedAt: currentOnboarding?.completedAt ?? new Date(),
+        rejectedReason: undefined,
+        verificationStatus: OnboardingStatus.Approved
+      };
+    }
 
     return {
-      completedAt: isComplete ? new Date() : undefined,
+      completedAt: isComplete ? currentOnboarding?.completedAt ?? new Date() : undefined,
       verificationStatus: isComplete ? OnboardingStatus.PendingReview : OnboardingStatus.Incomplete
     };
+  }
+
+  private shouldResetApprovedReview(profile: WorkerProfileDocument, dto: UpdateWorkerProfileDto) {
+    if (profile.onboarding?.verificationStatus !== OnboardingStatus.Approved) {
+      return false;
+    }
+
+    return dto.credentials !== undefined || dto.backgroundCheck !== undefined || dto.title !== undefined;
   }
 }
 
@@ -168,6 +188,7 @@ type WorkerOnboardingSource = {
   credentials?: Array<{ type?: string; documentUrl?: string }>;
   backgroundCheck?: { consentedAt?: string | Date };
   location?: { type?: string; coordinates?: number[] };
+  onboarding?: { completedAt?: string | Date; verificationStatus?: OnboardingStatus; rejectedReason?: string };
   preferences?: { availableDays?: string[]; maxDistanceKm?: number };
 };
 

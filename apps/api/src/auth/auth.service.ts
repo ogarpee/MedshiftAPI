@@ -215,7 +215,7 @@ export class AuthService {
       email,
       passwordHash: await this.passwordService.hash(dto.password),
       role: attempt.role,
-      status: AccountStatus.Active,
+      status: AccountStatus.Pending,
       emailVerified: true,
       emailVerifiedAt: new Date()
     });
@@ -297,7 +297,9 @@ export class AuthService {
     user.emailVerificationTokenHash = undefined;
     user.emailVerificationTokenExpiresAt = undefined;
     user.emailVerificationSentAt = undefined;
-    user.status = AccountStatus.Active;
+    if (user.role === UserRole.Admin) {
+      user.status = AccountStatus.Active;
+    }
     await user.save();
     await Promise.all([
       this.notificationService.sendWelcomeEmail(user.email, user.role),

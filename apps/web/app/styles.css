@@ -496,7 +496,6 @@ html {
   border: none;
   border-radius: 8px;
   color: var(--gold-contrast);
-  cursor: pointer;
   display: block;
   font-family: Poppins, Arial, sans-serif;
   font-size: 0.9rem;
@@ -507,10 +506,6 @@ html {
   text-decoration: none;
   transition: all 0.2s;
   width: 100%;
-}
-
-.card-cta:hover {
-  background: var(--gold-light);
 }
 
 .marketing-page section {

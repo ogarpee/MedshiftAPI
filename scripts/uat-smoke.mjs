@@ -34,7 +34,7 @@ const checks = [
   {
     name: "shared onboarding map loads Mapbox GL with fallback",
     file: "apps/web/app/onboarding-map.tsx",
-    includes: ["mapbox-gl-js", "mapbox://styles/mapbox/streets-v12", "Click or drag the pin", "Mapbox could not load"]
+    includes: ["mapbox-gl-js", "mapbox://styles/mapbox/streets-v12", "Click or drag the pin", "The map could not load"]
   },
   {
     name: "worker credential upload uses Cloudinary",
@@ -134,7 +134,7 @@ const checks = [
   {
     name: "worker portal uses shared dashboard shell",
     file: "apps/web/app/worker/page.tsx",
-    includes: ["DashboardShell", "navItems", "Shift board", "Nearby shifts", "worker-profiles/onboarding-status", "dashboard-onboarding-banner", "Continue onboarding", "/worker/onboarding"],
+    includes: ["DashboardShell", "navItems", "Shift board", "Requests", "worker-profiles/onboarding-status", "dashboard-onboarding-banner", "Continue onboarding", "/worker/onboarding"],
     excludes: ["label: \"Onboarding\"", "label: \"Reviews\"", "label: \"Facility portal\""]
   },
   {

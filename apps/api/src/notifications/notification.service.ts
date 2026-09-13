@@ -203,20 +203,7 @@ export class NotificationService {
   }
 
   async notifyMatchingWorkersForShift(payload: MatchingShiftNotificationPayload) {
-    const workers = await this.workerProfiles
-      .find({
-        "onboarding.verificationStatus": OnboardingStatus.Approved,
-        title: payload.roleRequired
-      })
-      .exec();
-    const [shiftLongitude, shiftLatitude] = payload.location.coordinates;
-    const matchingWorkers = workers.filter((worker) => {
-      const [workerLongitude, workerLatitude] = worker.location.coordinates;
-      const distanceKm = calculateDistanceKm(workerLatitude, workerLongitude, shiftLatitude, shiftLongitude);
-      const maxDistanceKm = worker.preferences?.maxDistanceKm ?? 25;
-
-      return distanceKm <= maxDistanceKm;
-    });
+    const matchingWorkers = await this.findMatchingWorkersForShift(payload);
 
     if (!matchingWorkers.length) {
       return [];
@@ -234,6 +221,30 @@ export class NotificationService {
         })
       )
     );
+  }
+
+  async findMatchingWorkerUserIdsForShift(payload: MatchingShiftNotificationPayload) {
+    const workers = await this.findMatchingWorkersForShift(payload);
+
+    return workers.map((worker) => worker.userId.toString());
+  }
+
+  private async findMatchingWorkersForShift(payload: MatchingShiftNotificationPayload) {
+    const workers = await this.workerProfiles
+      .find({
+        "onboarding.verificationStatus": OnboardingStatus.Approved,
+        title: payload.roleRequired
+      })
+      .exec();
+    const [shiftLongitude, shiftLatitude] = payload.location.coordinates;
+
+    return workers.filter((worker) => {
+      const [workerLongitude, workerLatitude] = worker.location.coordinates;
+      const distanceKm = calculateDistanceKm(workerLatitude, workerLongitude, shiftLatitude, shiftLongitude);
+      const maxDistanceKm = worker.preferences?.maxDistanceKm ?? 25;
+
+      return distanceKm <= maxDistanceKm;
+    });
   }
 
   async notifyShiftAccepted(payload: {

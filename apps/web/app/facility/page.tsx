@@ -183,10 +183,11 @@ export default function FacilityDashboardPage() {
         setMessage("Your facility onboarding is under review. Shift posting stays locked until approval.");
       }
     } catch {
-      setShifts(demoShifts);
+      setShifts([]);
       setReviews([]);
       setFacilityProfile(null);
-      setMessage("Showing dashboard preview until your facility profile and shifts can be loaded.");
+      setOnboardingStatus(null);
+      setMessage("Live facility dashboard data is unavailable. Check API connectivity, then refresh this workspace.");
     } finally {
       setIsLoadingDashboard(false);
     }
@@ -207,8 +208,7 @@ export default function FacilityDashboardPage() {
 
     import("socket.io-client")
       .then(({ io }) => {
-        socket = io(`${apiUrl}/shifts`, { transports: ["websocket"] });
-        socket.emit("join.facility", { id: facilityId });
+        socket = io(`${apiUrl}/shifts`, { auth: { token }, transports: ["websocket"] });
         socket.on("shift.accepted", (shift: FacilityShiftSummary) => {
           setShifts((current) => current.map((item) => (item.id === shift.id ? { ...item, ...shift } : item)));
           setMessage("A worker accepted one of your shifts. Dashboard updated.");

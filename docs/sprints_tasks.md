@@ -225,3 +225,10 @@
 - [x] Route login directly to role onboarding when profile completion is required.
 - [x] Polish onboarding left rail logo, status chip, and active step spacing.
 - [x] Add green completed onboarding step states and improve step indicator spacing.
+
+### Story 7.7: Launch Blocker Stabilization
+- [x] Fix launch-blocking quality gates, approval-state handling, realtime auth, and live dashboard failure states.
+
+### Story 7.8: Public Site Hero Polish
+- [x] Make the hero shift preview card non-clickable.
+- [x] Add Framer Motion reveal animations to landing page sections.

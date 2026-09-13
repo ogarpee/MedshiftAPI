@@ -42,16 +42,19 @@ export class ShiftsService {
       status: ShiftStatus.Open
     });
 
-    await this.notificationService.notifyMatchingWorkersForShift({
+    const matchingShiftPayload = {
       facilityName: facility.name,
       hourlyRate: shift.hourlyRate,
       location: shift.location,
       roleRequired: shift.roleRequired,
       shiftId: shift.id,
       startTime: shift.startTime
-    });
+    };
+
+    const matchingWorkerUserIds = await this.notificationService.findMatchingWorkerUserIdsForShift(matchingShiftPayload);
+    await this.notificationService.notifyMatchingWorkersForShift(matchingShiftPayload);
     const serialized = this.serialize(shift);
-    this.shiftsGateway.emitShiftCreated(serialized);
+    this.shiftsGateway.emitShiftCreatedToWorkers(matchingWorkerUserIds, serialized);
 
     return serialized;
   }

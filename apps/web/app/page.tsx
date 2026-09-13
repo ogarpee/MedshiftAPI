@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import type { Variants } from "framer-motion";
 import { FacilityType, UserRole, WaitlistAvailability, WaitlistProfessionalRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { Calendar, Check, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
@@ -158,6 +160,48 @@ const waitlistOptions = {
   points: string[];
   title: string;
 }>;
+
+const sectionRevealVariants: Variants = {
+  hidden: { opacity: 0, y: 44, filter: "blur(10px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: {
+      duration: 0.72,
+      ease: [0.22, 1, 0.36, 1],
+      staggerChildren: 0.11,
+      delayChildren: 0.08
+    }
+  }
+};
+
+const heroRevealVariants: Variants = {
+  hidden: { opacity: 0, y: 26, filter: "blur(8px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: {
+      duration: 0.68,
+      ease: [0.22, 1, 0.36, 1],
+      staggerChildren: 0.09
+    }
+  }
+};
+
+const itemRevealVariants: Variants = {
+  hidden: { opacity: 0, y: 22, scale: 0.985 },
+  show: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.55,
+      ease: [0.22, 1, 0.36, 1]
+    }
+  }
+};
 
 const professionalRoleOptions = [
   { label: "Healthcare aide", value: WaitlistProfessionalRole.HealthcareAide },
@@ -383,31 +427,31 @@ export default function HomePage() {
         </div>
       </nav>
 
-      <section className="marketing-hero" id="top">
-        <div className="hero-inner">
-          <div>
-            <div className="hero-tag fade-up">
+      <RevealSection className="marketing-hero" id="top" variants={heroRevealVariants}>
+        <motion.div className="hero-inner" variants={heroRevealVariants}>
+          <motion.div variants={itemRevealVariants}>
+            <motion.div className="hero-tag" variants={itemRevealVariants}>
               <DotIcon />
               Now accepting early access
-            </div>
-            <h1 className="fade-up-2">
+            </motion.div>
+            <motion.h1 variants={itemRevealVariants}>
               Fill Shifts.
               <br />
               <span className="gold">Change Lives.</span>
-            </h1>
-            <p className="hero-sub fade-up-3">
+            </motion.h1>
+            <motion.p className="hero-sub" variants={itemRevealVariants}>
               MedShift connects healthcare professionals with facilities that need care - fast, reliable, and on
               demand.
-            </p>
-            <div className="hero-ctas fade-up-4">
+            </motion.p>
+            <motion.div className="hero-ctas" variants={itemRevealVariants}>
               <a className="btn-primary" href="#workers">
                 Find Shifts →
               </a>
               <a className="btn-secondary" href="#facilities">
                 Hire Staff
               </a>
-            </div>
-            <div className="hero-trust fade-up-4">
+            </motion.div>
+            <motion.div className="hero-trust" variants={itemRevealVariants}>
               <div className="trust-item">
                 <BoltIcon />
                 Fill shifts in under 2 hours
@@ -420,10 +464,10 @@ export default function HomePage() {
                 <DollarIcon />
                 Get paid
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
-          <div className="hero-card">
+          <motion.div className="hero-card" variants={itemRevealVariants}>
             <div className="card-header">
               <div className="card-avatar">SJ</div>
               <div>
@@ -435,13 +479,13 @@ export default function HomePage() {
             <ShiftDetail label="Upcoming Shift" value="Long-term Care Home" />
             <ShiftDetail label="Date & Time" value="May 24 · 7:00 AM - 3:00 PM" />
             <ShiftDetail label="Location" value="Calgary, AB" />
-            <a className="card-cta" href="/facility">
-              View Shift Details
-            </a>
-          </div>
-        </div>
+            <div className="card-cta" aria-label="Shift preview status">
+              Shift preview
+            </div>
+          </motion.div>
+        </motion.div>
 
-        <div className="hero-line">
+        <motion.div className="hero-line" variants={itemRevealVariants}>
           <svg viewBox="0 0 1440 60" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
             <polyline
               points="0,30 200,30 250,30 280,5 310,55 340,30 400,30 450,30 480,15 510,45 540,30 600,30 700,30 730,8 760,52 790,30 900,30 1000,30 1030,18 1060,42 1090,30 1200,30 1440,30"
@@ -450,21 +494,21 @@ export default function HomePage() {
               fill="none"
             />
           </svg>
-        </div>
-      </section>
+        </motion.div>
+      </RevealSection>
 
-      <section className="how" id="how">
-        <div className="how-inner">
-          <div className="how-header">
+      <RevealSection className="how" id="how">
+        <motion.div className="how-inner" variants={sectionRevealVariants}>
+          <motion.div className="how-header" variants={itemRevealVariants}>
             <div className="section-label">Simple by design</div>
             <h2>How MedShift Works</h2>
             <p className="section-sub">
               Three steps between an open shift and a qualified professional walking through your door.
             </p>
-          </div>
-          <div className="steps">
+          </motion.div>
+          <motion.div className="steps" variants={sectionRevealVariants}>
             {steps.map((step, index) => (
-              <article className="step" key={step.title}>
+              <motion.article className="step" key={step.title} variants={itemRevealVariants}>
                 <div className="step-connector" aria-hidden="true">→</div>
                 <div className="step-visual">
                   <div className="step-icon">{step.icon}</div>
@@ -485,15 +529,15 @@ export default function HomePage() {
                     <p>{step.copy}</p>
                   </div>
                 </div>
-              </article>
+              </motion.article>
             ))}
-          </div>
-        </div>
-      </section>
+          </motion.div>
+        </motion.div>
+      </RevealSection>
 
-      <section className="facilities" id="facilities">
-        <div className="facilities-inner">
-          <div className="facilities-copy">
+      <RevealSection className="facilities" id="facilities">
+        <motion.div className="facilities-inner" variants={sectionRevealVariants}>
+          <motion.div className="facilities-copy" variants={itemRevealVariants}>
             <div className="section-label">For healthcare facilities</div>
             <h2>
               Fill critical shifts with verified local professionals.
@@ -504,28 +548,28 @@ export default function HomePage() {
             </p>
             <div className="facility-proof-grid" aria-label="Facility coverage proof">
               {facilityProof.map(([title, copy]) => (
-                <div key={title}>
+                <motion.div key={title} variants={itemRevealVariants}>
                   <span>{title}</span>
                   <strong>{copy}</strong>
-                </div>
+                </motion.div>
               ))}
             </div>
             <div className="feature-list">
               {facilityFeatures.map((feature) => (
-                <article className="feature-item" key={feature.title}>
+                <motion.article className="feature-item" key={feature.title} variants={itemRevealVariants}>
                   <div className="feature-icon">{feature.icon}</div>
                   <div>
                     <div className="feature-title">{feature.title}</div>
                     <div className="feature-desc">{feature.copy}</div>
                   </div>
-                </article>
+                </motion.article>
               ))}
             </div>
             <a className="btn-primary facility-cta" href="#signup">
               Get Early Access →
             </a>
-          </div>
-          <div className="facility-command-panel" aria-label="Facility coverage preview">
+          </motion.div>
+          <motion.div className="facility-command-panel" aria-label="Facility coverage preview" variants={itemRevealVariants}>
             <div className="facility-command-header">
               <div>
                 <span>Coverage command</span>
@@ -535,31 +579,31 @@ export default function HomePage() {
             </div>
             <div className="facility-command-list">
               {facilityPreviewShifts.map(([role, time, matches]) => (
-                <article key={`${role}-${time}`}>
+                <motion.article key={`${role}-${time}`} variants={itemRevealVariants}>
                   <div className="facility-role-badge">{role}</div>
                   <div>
                     <strong>{time}</strong>
                     <span>{matches}</span>
                   </div>
                   <Check size={16} aria-hidden="true" />
-                </article>
+                </motion.article>
               ))}
             </div>
             <div className="stats-grid">
               {stats.map(([number, label]) => (
-                <article className="stat-card" key={label}>
+                <motion.article className="stat-card" key={label} variants={itemRevealVariants}>
                   <div className="stat-num">{number}</div>
                   <div className="stat-label">{label}</div>
-                </article>
+                </motion.article>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
+          </motion.div>
+        </motion.div>
+      </RevealSection>
 
-      <section className="workers" id="workers">
-        <div className="workers-inner">
-          <div className="worker-preview-panel" aria-label="Worker shift board preview">
+      <RevealSection className="workers" id="workers">
+        <motion.div className="workers-inner" variants={sectionRevealVariants}>
+          <motion.div className="worker-preview-panel" aria-label="Worker shift board preview" variants={itemRevealVariants}>
             <div className="worker-preview-header">
               <div>
                 <span>Shift board</span>
@@ -569,14 +613,14 @@ export default function HomePage() {
             </div>
             <div className="worker-preview-list">
               {workerPreviewShifts.map(([role, facilityType, rate, distance]) => (
-                <article key={`${role}-${facilityType}`}>
+                <motion.article key={`${role}-${facilityType}`} variants={itemRevealVariants}>
                   <div className="worker-role-badge">{role}</div>
                   <div>
                     <strong>{facilityType}</strong>
                     <span>{distance} away</span>
                   </div>
                   <em>{rate}</em>
-                </article>
+                </motion.article>
               ))}
             </div>
             <div className="worker-preview-footer">
@@ -589,8 +633,8 @@ export default function HomePage() {
                 <strong>25 km</strong>
               </div>
             </div>
-          </div>
-          <div className="workers-copy">
+          </motion.div>
+          <motion.div className="workers-copy" variants={itemRevealVariants}>
             <div className="section-label">For healthcare professionals</div>
             <h2>
               Pick up verified shifts without agency friction.
@@ -600,33 +644,33 @@ export default function HomePage() {
             </p>
             <div className="worker-proof-row" aria-label="Healthcare professional benefits">
               {workerProof.map((item) => (
-                <span key={item}>
+                <motion.span key={item} variants={itemRevealVariants}>
                   <Check size={14} aria-hidden="true" />
                   {item}
-                </span>
+                </motion.span>
               ))}
             </div>
             <div className="worker-perk-grid">
               {workerPerks.map((perk) => (
-                <article className="perk-card" key={perk.title}>
+                <motion.article className="perk-card" key={perk.title} variants={itemRevealVariants}>
                   <div className="perk-icon">{perk.icon}</div>
                   <div>
                     <div className="perk-title">{perk.title}</div>
                     <div className="perk-desc">{perk.copy}</div>
                   </div>
-                </article>
+                </motion.article>
               ))}
             </div>
             <a className="btn-primary worker-cta" href="#signup">
               Join the Waitlist →
             </a>
-          </div>
-        </div>
-      </section>
+          </motion.div>
+        </motion.div>
+      </RevealSection>
 
-      <section className="signup" id="signup">
-        <div className="signup-inner">
-          <div className="signup-copy">
+      <RevealSection className="signup" id="signup">
+        <motion.div className="signup-inner" variants={sectionRevealVariants}>
+          <motion.div className="signup-copy" variants={itemRevealVariants}>
             <div className="section-label">Be first in line</div>
             <h2>Join the MedShift Waitlist</h2>
             <p className="section-sub">
@@ -634,22 +678,22 @@ export default function HomePage() {
               your inbox.
             </p>
             <div className="signup-highlights" aria-label="Waitlist benefits">
-              <div>
+              <motion.div variants={itemRevealVariants}>
                 <Clock size={18} aria-hidden="true" />
                 <span>Launch alerts</span>
-              </div>
-              <div>
+              </motion.div>
+              <motion.div variants={itemRevealVariants}>
                 <MapPin size={18} aria-hidden="true" />
                 <span>Alberta first</span>
-              </div>
-              <div>
+              </motion.div>
+              <motion.div variants={itemRevealVariants}>
                 <Calendar size={18} aria-hidden="true" />
                 <span>Early access</span>
-              </div>
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="signup-card">
+          <motion.div className="signup-card" variants={itemRevealVariants}>
             <div className="signup-card-header">
               <span>Choose your waitlist</span>
               <strong>{waitlistOption.title}</strong>
@@ -894,25 +938,25 @@ export default function HomePage() {
                 {message}
               </p>
             ) : null}
-          </div>
-        </div>
-      </section>
+          </motion.div>
+        </motion.div>
+      </RevealSection>
 
-      <section className="values">
-        <div className="values-inner">
-          <div className="section-label">What we stand for</div>
-          <h2>Built on values that matter in healthcare</h2>
-          <div className="values-grid">
+      <RevealSection className="values">
+        <motion.div className="values-inner" variants={sectionRevealVariants}>
+          <motion.div className="section-label" variants={itemRevealVariants}>What we stand for</motion.div>
+          <motion.h2 variants={itemRevealVariants}>Built on values that matter in healthcare</motion.h2>
+          <motion.div className="values-grid" variants={sectionRevealVariants}>
             {values.map(([icon, title, copy]) => (
-              <article className="value-card" key={title}>
+              <motion.article className="value-card" key={title} variants={itemRevealVariants}>
                 <div className="value-icon">{icon}</div>
                 <div className="value-title">{title}</div>
                 <div className="value-desc">{copy}</div>
-              </article>
+              </motion.article>
             ))}
-          </div>
-        </div>
-      </section>
+          </motion.div>
+        </motion.div>
+      </RevealSection>
 
       <footer className="marketing-footer">
         <div>
@@ -930,6 +974,33 @@ export default function HomePage() {
         <div className="footer-copy">© 2026 MedShift. All rights reserved.</div>
       </footer>
     </main>
+  );
+}
+
+function RevealSection({
+  children,
+  className,
+  id,
+  variants = sectionRevealVariants
+}: {
+  children: ReactNode;
+  className: string;
+  id?: string;
+  variants?: Variants;
+}) {
+  const shouldReduceMotion = useReducedMotion();
+
+  return (
+    <motion.section
+      className={className}
+      id={id}
+      initial={shouldReduceMotion ? false : "hidden"}
+      variants={variants}
+      viewport={{ once: true, amount: 0.22, margin: "0px 0px -12% 0px" }}
+      whileInView="show"
+    >
+      {children}
+    </motion.section>
   );
 }
 
@@ -981,15 +1052,6 @@ function CalendarIcon() {
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
       <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  );
-}
-
-function PinIcon() {
-  return (
-    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-      <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   );
 }

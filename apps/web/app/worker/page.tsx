@@ -220,13 +220,14 @@ export default function WorkerDashboardPage() {
         setMessage("Your onboarding is under review. Live dashboard data is visible, but shift acceptance is locked.");
       }
     } catch {
-      setOpenShifts(demoOpenShifts);
-      setWorkerShifts(demoWorkerShifts);
+      setOpenShifts([]);
+      setWorkerShifts([]);
       setReviews([]);
       setWorkerProfile(null);
-      setIsPreviewMode(true);
-      setSelectedShiftId(demoShifts[0]?.id ?? "");
-      setMessage("Live worker dashboard data is unavailable, so this board is using preview shifts.");
+      setOnboardingStatus(null);
+      setIsPreviewMode(false);
+      setSelectedShiftId("");
+      setMessage("Live worker dashboard data is unavailable. Check API connectivity, then refresh this workspace.");
     } finally {
       setIsLoadingDashboard(false);
     }
@@ -246,8 +247,7 @@ export default function WorkerDashboardPage() {
 
     import("socket.io-client")
       .then(({ io }) => {
-        socket = io(`${apiUrl}/shifts`, { transports: ["websocket"] });
-        socket.emit("join.worker", { id: "current-worker" });
+        socket = io(`${apiUrl}/shifts`, { auth: { token }, transports: ["websocket"] });
         socket.on("shift.created", () => {
           loadOpenShifts(token, workerProfile)
             .then((result) => {

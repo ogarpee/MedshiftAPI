@@ -124,6 +124,25 @@ const previewOverview: AdminOverview = {
   }
 };
 
+const emptyOverview: AdminOverview = {
+  users: [],
+  workers: [],
+  facilities: [],
+  shifts: [],
+  metrics: {
+    totalUsers: 0,
+    totalFacilities: 0,
+    totalWorkers: 0,
+    activeShifts: 0,
+    openShifts: 0,
+    completedShifts: 0,
+    pendingApprovals: 0,
+    verifiedWorkerRate: 0,
+    activeSocketConnections: 0,
+    averageFillTimeMinutes: null
+  }
+};
+
 export default function AdminPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const [overview, setOverview] = useState<AdminOverview>(previewOverview);
@@ -166,7 +185,8 @@ export default function AdminPage() {
       setOverview(result);
       setMessage("Live admin data loaded.");
     } catch {
-      setMessage("Showing preview data. Sign in as an admin to load live operations.");
+      setOverview(emptyOverview);
+      setMessage("Live admin data is unavailable. Check API connectivity or sign in again, then refresh.");
     } finally {
       setIsLoading(false);
     }

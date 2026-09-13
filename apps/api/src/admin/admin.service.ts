@@ -281,11 +281,7 @@ export class AdminService {
   }
 
   private isWorkerPendingReview(worker: Pick<WorkerProfile, "backgroundCheck" | "credentials" | "onboarding">) {
-    return (
-      worker.onboarding?.verificationStatus === OnboardingStatus.PendingReview ||
-      worker.backgroundCheck?.status !== BackgroundCheckStatus.Passed ||
-      worker.credentials.some((credential) => !credential.isVerified)
-    );
+    return worker.onboarding?.verificationStatus === OnboardingStatus.PendingReview;
   }
 
   private isFacilityPendingReview(facility: Pick<FacilityProfile, "onboarding">) {

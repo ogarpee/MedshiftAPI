@@ -13,6 +13,8 @@ interface EnvironmentConfig {
   RESEND_WORKER_SEGMENT_ID?: string;
   PORT?: string;
   WEB_ORIGIN?: string;
+  ADMIN_ORIGIN?: string;
+  SOCKET_ORIGINS?: string;
 }
 
 const requiredKeys: Array<keyof EnvironmentConfig> = ["MONGODB_URI", "JWT_SECRET"];

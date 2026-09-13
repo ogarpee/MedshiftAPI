@@ -74,10 +74,13 @@ export class FacilityProfilesService {
   async update(currentUser: AuthUser, id: string, dto: UpdateFacilityProfileDto) {
     const profile = await this.findDocument(id);
     this.assertCanManage(currentUser, profile);
+    const shouldResetReview = this.shouldResetApprovedReview(profile, dto);
     profile.set(dto);
     profile.set({
       billingStatus: dto.billingStatus ?? profile.billingStatus,
-      onboarding: this.buildOnboardingState(profile)
+      onboarding: this.buildOnboardingState(profile, {
+        preserveApproved: profile.onboarding?.verificationStatus === OnboardingStatus.Approved && !shouldResetReview
+      })
     });
 
     return this.serialize(await profile.save());
@@ -140,7 +143,7 @@ export class FacilityProfilesService {
     };
   }
 
-  private buildOnboardingState(source: FacilityOnboardingSource) {
+  private buildOnboardingState(source: FacilityOnboardingSource, options: { preserveApproved?: boolean } = {}) {
     const hasProfile = Boolean(source.name?.trim() && source.facilityType);
     const hasAddress = Boolean(
       source.address?.street?.trim() &&
@@ -158,11 +161,36 @@ export class FacilityProfilesService {
         source.readiness?.acceptedTermsAt
     );
     const isComplete = hasProfile && hasAddress && hasLocation && hasContact && hasBillingReadiness;
+    const currentOnboarding = source.onboarding;
+
+    if (options.preserveApproved && isComplete) {
+      return {
+        completedAt: currentOnboarding?.completedAt ?? new Date(),
+        rejectedReason: undefined,
+        verificationStatus: OnboardingStatus.Approved
+      };
+    }
 
     return {
-      completedAt: isComplete ? new Date() : undefined,
+      completedAt: isComplete ? currentOnboarding?.completedAt ?? new Date() : undefined,
       verificationStatus: isComplete ? OnboardingStatus.PendingReview : OnboardingStatus.Incomplete
     };
+  }
+
+  private shouldResetApprovedReview(profile: FacilityProfileDocument, dto: UpdateFacilityProfileDto) {
+    if (profile.onboarding?.verificationStatus !== OnboardingStatus.Approved) {
+      return false;
+    }
+
+    return (
+      dto.name !== undefined ||
+      dto.facilityType !== undefined ||
+      dto.address !== undefined ||
+      dto.location !== undefined ||
+      dto.contactPerson !== undefined ||
+      dto.billingStatus !== undefined ||
+      dto.readiness !== undefined
+    );
   }
 }
 
@@ -173,6 +201,7 @@ type FacilityOnboardingSource = {
   contactPerson?: { name?: string; phone?: string; email?: string };
   billingStatus?: "ACTIVE" | "INACTIVE";
   location?: { type?: string; coordinates?: number[] };
+  onboarding?: { completedAt?: string | Date; verificationStatus?: OnboardingStatus; rejectedReason?: string };
   readiness?: {
     acceptedTermsAt?: string | Date;
     billingContactEmail?: string;
