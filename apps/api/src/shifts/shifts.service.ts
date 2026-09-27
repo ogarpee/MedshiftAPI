@@ -7,6 +7,7 @@ import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/fa
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
+import { MatchingService } from "../matching/matching.service";
 import { NotificationService } from "../notifications/notification.service";
 import { ShiftsGateway } from "../realtime/shifts.gateway";
 import { CreateShiftDto } from "./dto/create-shift.dto";
@@ -24,6 +25,7 @@ export class ShiftsService {
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>,
     @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    private readonly matchingService: MatchingService,
     private readonly notificationService: NotificationService,
     private readonly shiftsGateway: ShiftsGateway
   ) {}
@@ -51,8 +53,8 @@ export class ShiftsService {
       startTime: shift.startTime
     };
 
-    const matchingWorkerUserIds = await this.notificationService.findMatchingWorkerUserIdsForShift(matchingShiftPayload);
-    await this.notificationService.notifyMatchingWorkersForShift(matchingShiftPayload);
+    const matchingWorkerUserIds = await this.matchingService.findMatchingWorkerUserIdsForShift(matchingShiftPayload);
+    await this.notificationService.notifyMatchingWorkersForShift({ ...matchingShiftPayload, workerUserIds: matchingWorkerUserIds });
     const serialized = this.serialize(shift);
     this.shiftsGateway.emitShiftCreatedToWorkers(matchingWorkerUserIds, serialized);
 
@@ -154,6 +156,14 @@ export class ShiftsService {
     }
 
     if (dto.status !== undefined) {
+      if (previousStatus === ShiftStatus.Open && dto.status === ShiftStatus.Matched && !shift.filledAt) {
+        shift.filledAt = new Date();
+      }
+
+      if (dto.status === ShiftStatus.Open) {
+        shift.filledAt = undefined;
+      }
+
       shift.status = dto.status;
     }
 
@@ -185,7 +195,7 @@ export class ShiftsService {
     const shift = await this.shifts
       .findOneAndUpdate(
         { _id: id, status: ShiftStatus.Open },
-        { status: ShiftStatus.Matched, matchedWorkerId: worker._id },
+        { status: ShiftStatus.Matched, matchedWorkerId: worker._id, filledAt: new Date() },
         { new: true }
       )
       .exec();
@@ -214,7 +224,7 @@ export class ShiftsService {
       activeShifts,
       upcomingShifts,
       completedShifts,
-      averageFillTimeMinutes: null
+      averageFillTimeMinutes: calculateAverageFillTimeMinutes(shifts)
     };
   }
 
@@ -398,6 +408,7 @@ export class ShiftsService {
       endTime: shift.endTime,
       hourlyRate: shift.hourlyRate,
       status: shift.status,
+      filledAt: shift.filledAt,
       matchedWorkerId: shift.matchedWorkerId?.toString() ?? null,
       location: shift.location,
       description: shift.description,
@@ -412,4 +423,38 @@ export class ShiftsService {
         : undefined
     };
   }
+}
+
+function calculateAverageFillTimeMinutes(shifts: Array<{ createdAt?: unknown; filledAt?: unknown; status?: unknown; updatedAt?: unknown }>) {
+  const fillDurations = shifts
+    .map((shift) => {
+      const createdAt = toDate(shift.createdAt);
+      const filledAt = toDate(shift.filledAt) ?? (shift.status === ShiftStatus.Open ? null : toDate(shift.updatedAt));
+
+      if (!createdAt || !filledAt || filledAt.getTime() < createdAt.getTime()) {
+        return null;
+      }
+
+      return Math.round((filledAt.getTime() - createdAt.getTime()) / 60000);
+    })
+    .filter((value): value is number => typeof value === "number");
+
+  if (!fillDurations.length) {
+    return null;
+  }
+
+  return Math.round(fillDurations.reduce((sum, value) => sum + value, 0) / fillDurations.length);
+}
+
+function toDate(value: unknown) {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
 }

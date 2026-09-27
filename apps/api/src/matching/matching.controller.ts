@@ -5,6 +5,7 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { BrowseOpenShiftsDto } from "./dto/browse-open-shifts.dto";
+import { SearchWorkersDto } from "./dto/search-workers.dto";
 import { MatchingService } from "./matching.service";
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -16,5 +17,11 @@ export class MatchingController {
   @Get("open-shifts")
   browseOpenShifts(@Req() request: AuthRequest, @Query() query: BrowseOpenShiftsDto) {
     return this.matchingService.browseOpenShifts(request.user, query);
+  }
+
+  @Roles(UserRole.Facility, UserRole.Admin)
+  @Get("workers")
+  searchWorkers(@Req() request: AuthRequest, @Query() query: SearchWorkersDto) {
+    return this.matchingService.searchWorkers(request.user, query);
   }
 }

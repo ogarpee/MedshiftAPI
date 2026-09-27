@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsEnum, IsNumber, IsOptional, Max, Min } from "class-validator";
+import { IsDateString, IsEnum, IsIn, IsNumber, IsOptional, Max, Min } from "class-validator";
 import { ClinicalRole, FacilityType } from "@medshift/shared-types";
 
 export class BrowseOpenShiftsDto {
@@ -38,4 +38,22 @@ export class BrowseOpenShiftsDto {
   @Min(1)
   @Max(24)
   maxShiftHours?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  minHourlyRate?: number;
+
+  @IsOptional()
+  @IsDateString()
+  startAfter?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startBefore?: string;
+
+  @IsOptional()
+  @IsIn(["DISTANCE", "START_TIME", "HOURLY_RATE"])
+  sort?: "DISTANCE" | "START_TIME" | "HOURLY_RATE";
 }

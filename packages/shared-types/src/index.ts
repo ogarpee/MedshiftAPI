@@ -140,6 +140,7 @@ export interface ShiftSummary {
   status: ShiftStatus;
   location: GeoPoint;
   description?: string;
+  filledAt?: string | null;
 }
 
 export interface MatchedShiftSummary extends ShiftSummary {
@@ -169,6 +170,58 @@ export interface ShiftMetrics {
   upcomingShifts: number;
   completedShifts: number;
   averageFillTimeMinutes: number | null;
+}
+
+export type ShiftSearchSort = "DISTANCE" | "START_TIME" | "HOURLY_RATE";
+
+export interface ShiftSearchQuery {
+  facilityType?: FacilityType;
+  latitude?: number;
+  longitude?: number;
+  maxShiftHours?: number;
+  minHourlyRate?: number;
+  radiusKm?: number;
+  roleRequired?: ClinicalRole;
+  sort?: ShiftSearchSort;
+  startAfter?: string;
+  startBefore?: string;
+}
+
+export interface WorkerSearchQuery {
+  availableDay?: string;
+  backgroundCheckStatus?: BackgroundCheckStatus;
+  clinicalRole?: ClinicalRole;
+  latitude?: number;
+  limit?: number;
+  longitude?: number;
+  minRating?: number;
+  radiusKm?: number;
+  shiftType?: string;
+  verificationStatus?: OnboardingStatus;
+}
+
+export interface WorkerSearchResult {
+  id: string;
+  firstName: string;
+  lastName: string;
+  title: ClinicalRole;
+  distanceKm?: number;
+  location: GeoPoint;
+  availability: {
+    availableDays: string[];
+    preferredShiftTypes: string[];
+    maxDistanceKm: number;
+  };
+  credentials: {
+    total: number;
+    verified: number;
+  };
+  backgroundCheckStatus?: BackgroundCheckStatus;
+  onboardingStatus: OnboardingStatus;
+  stats: {
+    averageRating: number;
+    totalShiftsCompleted: number;
+  };
 }
 
 export interface ReviewSummary {

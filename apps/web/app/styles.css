@@ -1748,9 +1748,12 @@ html {
 }
 
 .medshift-logo-mark {
+  background: var(--navy);
+  border-radius: 8px;
   display: block;
   flex: 0 0 auto;
   height: 36px;
+  object-fit: cover;
   width: 36px;
 }
 
@@ -2584,6 +2587,10 @@ html {
 }
 
 .facility-shift-table-wrap {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(11, 31, 58, 0.07);
   overflow-x: auto;
 }
 
@@ -2602,12 +2609,15 @@ html {
 }
 
 .facility-shift-table th {
-  background: rgba(11, 31, 58, 0.04);
+  background: rgba(11, 31, 58, 0.055);
   color: rgba(11, 31, 58, 0.52);
   font-size: 0.72rem;
   font-weight: 800;
+  position: sticky;
+  top: 0;
   text-transform: uppercase;
   white-space: nowrap;
+  z-index: 1;
 }
 
 .facility-shift-table td {
@@ -2620,7 +2630,8 @@ html {
 }
 
 .facility-shift-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 3px 0 0 rgba(212, 175, 55, 0.28);
 }
 
 .facility-shift-table tbody tr.is-reviewable {
@@ -2632,15 +2643,49 @@ html {
   box-shadow: inset 3px 0 0 var(--gold);
 }
 
-.facility-shift-table td > strong,
-.facility-shift-table td > span {
+.facility-shift-role-cell,
+.facility-shift-window-cell,
+.facility-shift-description-cell,
+.facility-shift-rate-cell {
   display: block;
 }
 
-.facility-shift-table td > span {
+.facility-shift-role-cell strong,
+.facility-shift-window-cell strong,
+.facility-shift-description-cell strong,
+.facility-shift-rate-cell strong {
+  color: var(--navy);
+  display: block;
+  font-weight: 700;
+}
+
+.facility-shift-role-cell strong {
+  align-items: center;
+  background: rgba(11, 31, 58, 0.07);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.78rem;
+  padding: 5px 9px;
+}
+
+.facility-shift-role-cell span,
+.facility-shift-window-cell span,
+.facility-shift-description-cell span,
+.facility-shift-rate-cell span {
   color: rgba(11, 31, 58, 0.46);
   font-size: 0.78rem;
   margin-top: 3px;
+}
+
+.facility-shift-description-cell strong {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facility-shift-rate-cell strong {
+  color: #876800;
 }
 
 .facility-table-actions {
@@ -3007,6 +3052,81 @@ html {
 .metric-pill em.danger {
   background: rgba(244, 63, 94, 0.12);
   color: #be123c;
+}
+
+.worker-filter-panel {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+}
+
+.worker-filter-heading,
+.worker-filter-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.worker-filter-heading h2 {
+  color: var(--navy);
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.worker-filter-heading p {
+  color: rgba(11, 31, 58, 0.48);
+  margin: 3px 0 0;
+}
+
+.worker-filter-grid,
+.facility-worker-filter-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.worker-filter-grid label,
+.facility-worker-filter-grid label {
+  color: rgba(11, 31, 58, 0.58);
+  display: grid;
+  font-size: 0.76rem;
+  font-weight: 700;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.worker-filter-grid input,
+.worker-filter-grid select,
+.facility-worker-filter-grid input,
+.facility-worker-filter-grid select {
+  background: #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.14);
+  border-radius: 8px;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.9rem;
+  min-height: 42px;
+  padding: 0 10px;
+}
+
+.worker-filter-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.worker-filter-actions span {
+  background: rgba(212, 175, 55, 0.16);
+  border-radius: 999px;
+  color: var(--navy);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 10px;
 }
 
 .worker-dashboard-grid {
@@ -4023,6 +4143,53 @@ html {
   margin: 0;
 }
 
+.facility-worker-search {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 16px 38px rgba(11, 31, 58, 0.06);
+  display: grid;
+  gap: 14px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 18px;
+}
+
+.facility-worker-search p {
+  color: rgba(11, 31, 58, 0.5);
+  margin: 4px 0 0;
+}
+
+.facility-worker-results {
+  display: grid;
+  gap: 10px;
+}
+
+.facility-worker-card {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.facility-worker-card > div {
+  display: grid;
+  gap: 4px;
+}
+
+.facility-worker-card strong {
+  color: var(--navy);
+}
+
+.facility-worker-card span,
+.facility-worker-card small {
+  color: rgba(11, 31, 58, 0.52);
+}
+
 .facility-panel-heading p {
   color: rgba(11, 31, 58, 0.48);
   font-size: 0.78rem;
@@ -4276,10 +4443,16 @@ html {
 }
 
 .worker-shift-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 246, 241, 0.92)),
+    #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-left: 4px solid rgba(212, 175, 55, 0.65);
+  border-radius: 8px;
   cursor: pointer;
   display: grid;
-  gap: 8px;
-  min-height: 132px;
+  gap: 12px;
+  min-height: 176px;
   padding: 18px;
   text-align: left;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
@@ -4319,15 +4492,77 @@ html {
   font-style: normal;
 }
 
-.worker-shift-card span {
-  color: var(--navy);
-  font-size: 0.92rem;
+.worker-shift-card .worker-shift-card-topline {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
 }
 
-.worker-shift-card strong {
+.worker-shift-card .worker-shift-card-topline > span {
   color: var(--navy);
-  font-size: 1.05rem;
-  font-weight: 500;
+  font-size: 0.92rem;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.worker-shift-card .status-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.worker-shift-card > strong {
+  color: var(--navy);
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.worker-shift-card-meta {
+  display: grid;
+  gap: 7px;
+}
+
+.worker-shift-card-meta small {
+  align-items: center;
+  color: rgba(11, 31, 58, 0.58);
+  display: flex;
+  gap: 7px;
+  line-height: 1.35;
+}
+
+.worker-shift-card-meta svg {
+  color: #9a7600;
+  flex: 0 0 auto;
+  height: 16px;
+  width: 16px;
+}
+
+.worker-shift-card-footer {
+  align-items: end;
+  border-top: 1px solid rgba(11, 31, 58, 0.08);
+  display: grid;
+  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 12px;
+}
+
+.worker-shift-card-footer em {
+  color: rgba(11, 31, 58, 0.54);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.worker-shift-card-footer strong {
+  color: var(--navy);
+  font-size: 1.24rem;
+  font-weight: 800;
+  grid-row: span 2;
+}
+
+.worker-shift-card-footer small {
+  color: rgba(11, 31, 58, 0.48);
+  font-size: 0.78rem;
 }
 
 .shift-map-panel {
@@ -4493,11 +4728,31 @@ html {
 }
 
 .shift-detail-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 246, 241, 0.92)),
+    #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 18px 44px rgba(11, 31, 58, 0.08);
   display: grid;
   gap: 20px;
   padding: 22px;
   position: sticky;
   top: 18px;
+}
+
+.shift-detail-heading {
+  align-items: start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.shift-detail-heading > strong {
+  color: var(--navy);
+  font-size: 1.38rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .shift-detail-panel h2 {
@@ -4515,17 +4770,20 @@ html {
 
 .shift-detail-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
 }
 
 .shift-detail-list div {
-  align-items: center;
-  border-bottom: 1px solid rgba(11, 31, 58, 0.08);
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  padding-bottom: 12px;
+  align-items: start;
+  background: rgba(11, 31, 58, 0.045);
+  border: 1px solid rgba(11, 31, 58, 0.06);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px;
 }
 
 .shift-detail-list dt,
@@ -4535,8 +4793,16 @@ html {
 
 .shift-detail-list dd {
   color: var(--navy);
-  font-weight: 500;
-  text-align: right;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.shift-detail-list dt {
+  color: rgba(11, 31, 58, 0.48);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .shift-detail-panel .auth-submit:disabled {

@@ -327,7 +327,7 @@ export default function AdminPage() {
         { label: "Facilities", active: activeSection === "facilities", onClick: () => setActiveSection("facilities") },
         { label: "Shifts", active: activeSection === "shifts", onClick: () => setActiveSection("shifts") }
       ]}
-      title="Admin console"
+      title={getAdminDashboardTitle(activeSection)}
       userLabel="Admin workspace"
     >
       <section className="workspace">
@@ -383,12 +383,30 @@ export default function AdminPage() {
 }
 
 function OverviewSection({ overview, workerQueue, facilityQueue }: { overview: AdminOverview; workerQueue: AdminWorker[]; facilityQueue: AdminFacility[] }) {
+  const openUnmatchedShifts = overview.shifts.filter((shift) => shift.status === ShiftStatus.Open && !shift.matchedWorkerId);
+  const pendingReviews = workerQueue.length + facilityQueue.length;
+  const verifiedCapacityByRole = countBy(
+    overview.workers.filter((worker) => worker.onboarding?.verificationStatus === OnboardingStatus.Approved && worker.backgroundCheck?.status === "PASSED"),
+    (worker) => worker.title
+  );
+  const facilityDemandByRole = countBy(
+    overview.shifts.filter((shift) => shift.status === ShiftStatus.Open || shift.status === ShiftStatus.Matched),
+    (shift) => shift.roleRequired
+  );
+
   return (
     <>
       <section className="health-panel">
         <HealthBar label="Open shift load" value={ratio(overview.metrics.openShifts, overview.metrics.activeShifts)} />
         <HealthBar label="Worker verification" value={overview.metrics.verifiedWorkerRate} />
         <HealthBar label="Socket activity" value={Math.min(100, overview.metrics.activeSocketConnections * 10)} />
+      </section>
+      <section className="operations-grid" aria-label="Operational signals">
+        <OperationsCard title="Unmatched open shifts" value={openUnmatchedShifts.length} detail="Need worker supply" items={openUnmatchedShifts.slice(0, 3).map((shift) => `${shift.roleRequired} · ${formatDate(shift.startTime)}`)} />
+        <OperationsCard title="Pending reviews" value={pendingReviews} detail="Worker and facility approvals" items={[`${workerQueue.length} worker checks`, `${facilityQueue.length} facility checks`]} />
+        <OperationsCard title="Verified capacity" value={sumRecord(verifiedCapacityByRole)} detail="Approved workers by role" items={recordItems(verifiedCapacityByRole)} />
+        <OperationsCard title="Facility demand" value={sumRecord(facilityDemandByRole)} detail="Active shifts by role" items={recordItems(facilityDemandByRole)} />
+        <OperationsCard title="Average fill time" value={formatFillTime(overview.metrics.averageFillTimeMinutes)} detail="Open to matched transition" items={["Computed from filled shifts"]} />
       </section>
       <section className="admin-grid">
         <Panel title="Action queue" badge={`${workerQueue.length + facilityQueue.length} pending`}>
@@ -399,14 +417,53 @@ function OverviewSection({ overview, workerQueue, facilityQueue }: { overview: A
           </div>
         </Panel>
         <Panel title="Recent shifts" badge={`${overview.shifts.length} total`}>
-          <div className="compact-list">
+          <div className="compact-list admin-shift-compact-list">
             {overview.shifts.slice(0, 6).map((shift) => (
-              <article key={shift.id}><strong>{shift.roleRequired} · ${shift.hourlyRate}/hr</strong><span>{shift.status} · {formatDate(shift.startTime)}</span></article>
+              <article key={shift.id}>
+                <div>
+                  <strong>{shift.roleRequired} coverage</strong>
+                  <span>{formatDate(shift.startTime)}</span>
+                </div>
+                <StatusBadge tone={statusTone(shift.status)}>{labelize(shift.status)}</StatusBadge>
+              </article>
             ))}
           </div>
         </Panel>
       </section>
     </>
+  );
+}
+
+function getAdminDashboardTitle(section: AdminSection) {
+  if (section === "verification") {
+    return "Verification workspace";
+  }
+
+  if (section === "users") {
+    return "User management";
+  }
+
+  if (section === "facilities") {
+    return "Facility management";
+  }
+
+  if (section === "shifts") {
+    return "Shift operations";
+  }
+
+  return "Admin overview";
+}
+
+function OperationsCard({ detail, items, title, value }: { detail: string; items: string[]; title: string; value: number | string }) {
+  return (
+    <article>
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+      <div>
+        {items.length ? items.map((item) => <em key={item}>{item}</em>) : <em>No active signals</em>}
+      </div>
+    </article>
   );
 }
 
@@ -536,14 +593,24 @@ function ShiftsSection(props: {
           <thead><tr><th>Role</th><th>Status</th><th>Rate</th><th>Window</th><th>Matched</th><th>Manage</th></tr></thead>
           <tbody>
             {props.shifts.map((shift) => (
-              <tr key={shift.id}>
-                <td>{shift.roleRequired}</td>
-                <td><StatusBadge tone={shift.status === ShiftStatus.Open ? "green" : shift.status === ShiftStatus.Cancelled ? "red" : "gold"}>{shift.status}</StatusBadge></td>
-                <td>${shift.hourlyRate}/hr</td>
-                <td>{formatDate(shift.startTime)}{shift.endTime ? ` - ${formatDate(shift.endTime)}` : ""}</td>
-                <td>{shift.matchedWorkerId ? "Matched" : "Unfilled"}</td>
+              <tr className="admin-shift-row" key={shift.id}>
                 <td>
-                  <select value={shift.status} onChange={(event) => props.onStatusChange(shift, event.target.value as ShiftStatus)}>
+                  <div className="admin-shift-role-cell">
+                    <strong>{shift.roleRequired}</strong>
+                    <span>{shift.description || "Shift coverage"}</span>
+                  </div>
+                </td>
+                <td><StatusBadge tone={statusTone(shift.status)}>{labelize(shift.status)}</StatusBadge></td>
+                <td>
+                  <div className="admin-shift-rate-cell">
+                    <strong>${shift.hourlyRate}/hr</strong>
+                    <span>{shift.endTime ? `${calculateAdminShiftHours(shift)} hr shift` : "Duration pending"}</span>
+                  </div>
+                </td>
+                <td>{formatDate(shift.startTime)}{shift.endTime ? ` - ${formatDate(shift.endTime)}` : ""}</td>
+                <td><span className={shift.matchedWorkerId ? "admin-match-pill matched" : "admin-match-pill"}>{shift.matchedWorkerId ? "Matched" : "Unfilled"}</span></td>
+                <td>
+                  <select className="admin-shift-status-select" value={shift.status} onChange={(event) => props.onStatusChange(shift, event.target.value as ShiftStatus)}>
                     {Object.values(ShiftStatus).map((status) => <option key={status} value={status}>{labelize(status)}</option>)}
                   </select>
                 </td>
@@ -628,6 +695,62 @@ function isFacilityPendingReview(facility: AdminFacility) {
 
 function ratio(value: number, total: number) {
   return total ? Math.round((value / total) * 100) : 0;
+}
+
+function countBy<T>(items: T[], getKey: (item: T) => string) {
+  return items.reduce<Record<string, number>>((counts, item) => {
+    const key = getKey(item);
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function sumRecord(record: Record<string, number>) {
+  return Object.values(record).reduce((sum, value) => sum + value, 0);
+}
+
+function recordItems(record: Record<string, number>) {
+  return Object.entries(record)
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, 4)
+    .map(([key, value]) => `${labelize(key)} · ${value}`);
+}
+
+function formatFillTime(value: number | null) {
+  if (value === null) {
+    return "Pending";
+  }
+
+  if (value < 60) {
+    return `${Math.round(value)}m`;
+  }
+
+  return `${(value / 60).toFixed(1)}h`;
+}
+
+function calculateAdminShiftHours(shift: AdminShift) {
+  if (!shift.endTime) {
+    return 0;
+  }
+
+  const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3_600_000;
+  return Math.max(1, Math.round(hours));
+}
+
+function statusTone(status: ShiftStatus): "gold" | "green" | "navy" | "red" {
+  if (status === ShiftStatus.Cancelled) {
+    return "red";
+  }
+
+  if (status === ShiftStatus.Open) {
+    return "gold";
+  }
+
+  if (status === ShiftStatus.Completed) {
+    return "green";
+  }
+
+  return "navy";
 }
 
 function formatDate(value: string) {

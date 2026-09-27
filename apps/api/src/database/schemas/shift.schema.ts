@@ -33,6 +33,9 @@ export class Shift {
   @Prop({ enum: ShiftStatus, default: ShiftStatus.Open })
   status!: ShiftStatus;
 
+  @Prop()
+  filledAt?: Date;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "WorkerProfile", default: null })
   matchedWorkerId?: Types.ObjectId | null;
 

@@ -8,7 +8,14 @@ async function bootstrap() {
   const config = app.get(ConfigService);
 
   app.enableCors({
-    origin: config.get<string>("WEB_ORIGIN", "http://localhost:3000"),
+    origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+      if (!origin || allowedOrigins(config).includes(normalizeOrigin(origin))) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
     credentials: true
   });
   app.useGlobalPipes(
@@ -22,3 +29,20 @@ async function bootstrap() {
 }
 
 void bootstrap();
+
+function allowedOrigins(config: ConfigService) {
+  const configuredOrigins = [
+    config.get<string>("WEB_ORIGIN", "http://localhost:3000"),
+    config.get<string>("ADMIN_ORIGIN", "http://localhost:3001"),
+    config.get<string>("SOCKET_ORIGINS")
+  ];
+
+  return configuredOrigins
+    .flatMap((value) => value?.split(",") ?? [])
+    .map(normalizeOrigin)
+    .filter((value, index, origins) => Boolean(value) && origins.indexOf(value) === index);
+}
+
+function normalizeOrigin(origin: string) {
+  return origin.trim().replace(/\/$/, "");
+}

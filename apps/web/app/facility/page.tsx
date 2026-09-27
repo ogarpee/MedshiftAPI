@@ -2,7 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ClinicalRole, GeoPoint, NotificationSummary, OnboardingStatus, ReviewSummary, ShiftMetrics, ShiftStatus, ShiftSummary } from "@medshift/shared-types";
+import { usePathname } from "next/navigation";
+import { BackgroundCheckStatus, ClinicalRole, GeoPoint, NotificationSummary, OnboardingStatus, ReviewSummary, ShiftMetrics, ShiftStatus, ShiftSummary, WorkerSearchResult } from "@medshift/shared-types";
 import { DashboardShell, StatusBadge } from "@medshift/ui-components";
 import {
   Calendar,
@@ -75,6 +76,16 @@ type FacilityShiftSummary = ShiftSummary & {
   matchedWorkerId?: string | null;
 };
 
+type WorkerSearchFilters = {
+  availableDay: string;
+  clinicalRole: "" | ClinicalRole;
+  minRating: string;
+  radiusKm: string;
+  shiftType: string;
+};
+
+type FacilityDashboardSection = "overview" | "shifts" | "workers" | "roster" | "reviews";
+
 type ScheduleDay = {
   active: boolean;
   day: number;
@@ -89,6 +100,9 @@ type StaffingTimelineSlot = {
 };
 
 export default function FacilityDashboardPage() {
+  const pathname = usePathname();
+  const activeSection = getFacilityDashboardSection(pathname);
+  const pageTitle = getFacilityDashboardTitle(activeSection);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [shifts, setShifts] = useState<FacilityShiftSummary[]>(demoShifts);
   const [message, setMessage] = useState("");
@@ -106,6 +120,16 @@ export default function FacilityDashboardPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedReviewShiftId, setSelectedReviewShiftId] = useState("");
   const [editingShiftId, setEditingShiftId] = useState("");
+  const [workerResults, setWorkerResults] = useState<WorkerSearchResult[]>([]);
+  const [isSearchingWorkers, setIsSearchingWorkers] = useState(false);
+  const [workerSearchMessage, setWorkerSearchMessage] = useState("Search approved workers by role, distance, availability, and rating.");
+  const [workerFilters, setWorkerFilters] = useState<WorkerSearchFilters>({
+    availableDay: "",
+    clinicalRole: "",
+    minRating: "",
+    radiusKm: "25",
+    shiftType: ""
+  });
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
   const {
@@ -137,6 +161,7 @@ export default function FacilityDashboardPage() {
   const reviewCards = useMemo(() => buildWorkerReviewCards(shifts, reviews), [reviews, shifts]);
   const selectedWeekDate = useMemo(() => addDays(startOfWeek(new Date()), weekOffset * 7), [weekOffset]);
   const defaultShiftLocation = facilityProfile?.location ?? { type: "Point" as const, coordinates: [-114.0719, 51.0447] as [number, number] };
+  const verifiedWorkerCapacity = workerResults.filter((worker) => worker.backgroundCheckStatus === BackgroundCheckStatus.Passed).length;
 
   const loadFacilityDashboard = useCallback(async () => {
     const token = window.localStorage.getItem("medshift.accessToken");
@@ -223,6 +248,67 @@ export default function FacilityDashboardPage() {
       socket?.disconnect();
     };
   }, [apiUrl, facilityProfile?.id, loadNotifications, onboardingStatus?.profileId]);
+
+  async function searchWorkers() {
+    const token = window.localStorage.getItem("medshift.accessToken");
+
+    if (!token) {
+      setWorkerSearchMessage("Sign in as a facility to search live workers.");
+      return;
+    }
+
+    setIsSearchingWorkers(true);
+
+    try {
+      const [longitude, latitude] = defaultShiftLocation.coordinates;
+      const query = new URLSearchParams({
+        longitude: String(longitude),
+        latitude: String(latitude),
+        radiusKm: workerFilters.radiusKm || "25"
+      });
+
+      if (workerFilters.clinicalRole) {
+        query.set("clinicalRole", workerFilters.clinicalRole);
+      }
+
+      if (workerFilters.availableDay) {
+        query.set("availableDay", workerFilters.availableDay);
+      }
+
+      if (workerFilters.shiftType) {
+        query.set("shiftType", workerFilters.shiftType);
+      }
+
+      if (workerFilters.minRating) {
+        query.set("minRating", workerFilters.minRating);
+      }
+
+      const response = await fetch(`${apiUrl}/matching/workers?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error("Worker search failed");
+      }
+
+      const workers = (await response.json()) as WorkerSearchResult[];
+      setWorkerResults(workers);
+      setWorkerSearchMessage(`${workers.length} approved worker${workers.length === 1 ? "" : "s"} found.`);
+    } catch {
+      setWorkerResults([]);
+      setWorkerSearchMessage("Worker search is unavailable. Check API connectivity and facility approval.");
+    } finally {
+      setIsSearchingWorkers(false);
+    }
+  }
+
+  function postShiftForWorker(worker: WorkerSearchResult) {
+    setRoleRequired(worker.title);
+    setDescription(`Priority ${worker.title} coverage for worker pool near ${worker.distanceKm ?? "your facility"} km.`);
+    setHourlyRate(worker.title === ClinicalRole.Rn ? "52" : worker.title === ClinicalRole.Lpn ? "44" : "36");
+    setIsModalOpen(true);
+    setMessage(`Posting form prepared for ${worker.title} coverage.`);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -469,13 +555,17 @@ export default function FacilityDashboardPage() {
       className="facility-page"
       eyebrow={<StatusBadge tone="navy">Facility roster</StatusBadge>}
       navItems={[
-        { label: "Roster", href: "/facility", active: true }
+        { label: "Overview", href: "/facility", active: activeSection === "overview" },
+        { label: "Shifts", href: "/facility/shifts", active: activeSection === "shifts" },
+        { label: "Find Workers", href: "/facility/workers", active: activeSection === "workers" },
+        { label: "Roster", href: "/facility/roster", active: activeSection === "roster" },
+        { label: "Reviews", href: "/facility/reviews", active: activeSection === "reviews" }
       ]}
       notificationLoading={isLoadingNotifications}
       notifications={notifications}
       onMarkAllNotificationsRead={markAllNotificationsRead}
       onNotificationClick={(notification) => void markNotificationRead(notification as NotificationSummary)}
-      title="Shift command centre"
+      title={pageTitle}
       unreadNotificationCount={unreadNotificationCount}
       userLabel="Facility workspace"
     >
@@ -492,16 +582,20 @@ export default function FacilityDashboardPage() {
             </a>
           </section>
         ) : null}
-        <section className="worker-metric-strip facility-metric-strip" aria-label="Facility metrics">
-          <MetricPill icon={<Timer aria-hidden="true" />} label="Average fill time" value={metrics.averageFillTimeMinutes ? `${metrics.averageFillTimeMinutes}m` : "<2h"} trend="+12%" />
-          <MetricPill icon={<Users aria-hidden="true" />} label="Active shifts" value={String(metrics.activeShifts)} trend="+5%" />
-          <MetricPill icon={<Calendar aria-hidden="true" />} label="Upcoming shifts" value={String(metrics.upcomingShifts)} />
-          <MetricPill icon={<FileCheck aria-hidden="true" />} label="Completed" value={String(metrics.completedShifts)} trend="+8%" />
-        </section>
+        {activeSection === "overview" ? (
+          <section className="worker-metric-strip facility-metric-strip" aria-label="Facility metrics">
+            <MetricPill icon={<Timer aria-hidden="true" />} label="Average fill time" value={metrics.averageFillTimeMinutes ? `${metrics.averageFillTimeMinutes}m` : "<2h"} trend="+12%" />
+            <MetricPill icon={<Users aria-hidden="true" />} label="Active shifts" value={String(metrics.activeShifts)} trend="+5%" />
+            <MetricPill icon={<Calendar aria-hidden="true" />} label="Upcoming shifts" value={String(metrics.upcomingShifts)} />
+            <MetricPill icon={<FileCheck aria-hidden="true" />} label="Completed" value={String(metrics.completedShifts)} trend="+8%" />
+            <MetricPill icon={<ShieldCheck aria-hidden="true" />} label="Worker search" value={String(verifiedWorkerCapacity)} />
+          </section>
+        ) : null}
 
         {message || isLoadingDashboard ? <p className="facility-message">{isLoadingDashboard ? "Loading live facility dashboard..." : message}</p> : null}
 
         <section className="facility-dashboard-grid">
+          {activeSection === "overview" || activeSection === "shifts" ? (
           <section className="facility-board facility-open-board" id="facility-shifts">
             <div className="facility-board-heading">
               <div>
@@ -534,12 +628,29 @@ export default function FacilityDashboardPage() {
                       }}
                     >
                       <td>
-                        <strong>{formatRoleLabel(shift.roleRequired)}</strong>
-                        <span>{formatShortDate(shift.startTime)}</span>
+                        <div className="facility-shift-role-cell">
+                          <strong>{formatRoleLabel(shift.roleRequired)}</strong>
+                          <span>{formatShortDate(shift.startTime)}</span>
+                        </div>
                       </td>
-                      <td>{formatTimeRange(shift.startTime, shift.endTime)}</td>
-                      <td>{shift.description || "No description"}</td>
-                      <td>${shift.hourlyRate}/hr</td>
+                      <td>
+                        <div className="facility-shift-window-cell">
+                          <strong>{formatTimeRange(shift.startTime, shift.endTime)}</strong>
+                          <span>{calculateFacilityShiftHours(shift)} hr shift</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="facility-shift-description-cell">
+                          <strong>{shift.description || "No description"}</strong>
+                          <span>{shift.matchedWorkerId ? "Worker matched" : "Awaiting match"}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="facility-shift-rate-cell">
+                          <strong>${shift.hourlyRate}/hr</strong>
+                          <span>${calculateFacilityShiftPay(shift)} est.</span>
+                        </div>
+                      </td>
                       <td>
                         <StatusBadge tone={shift.status === ShiftStatus.Open ? "gold" : shift.status === ShiftStatus.Cancelled ? "red" : "green"}>{formatStatusLabel(shift.status)}</StatusBadge>
                       </td>
@@ -590,8 +701,67 @@ export default function FacilityDashboardPage() {
               </table>
             </div>
           </section>
+          ) : null}
 
+          {activeSection === "workers" || activeSection === "roster" || activeSection === "reviews" ? (
           <section className="facility-insight-grid" aria-label="Facility insights">
+            {activeSection === "workers" ? (
+            <section className="facility-worker-search" aria-label="Find workers">
+              <div className="facility-panel-heading">
+                <div>
+                  <h2>Find workers</h2>
+                  <p>{workerSearchMessage}</p>
+                </div>
+                <button type="button" onClick={searchWorkers} disabled={isSearchingWorkers}>{isSearchingWorkers ? "Searching..." : "Search"}</button>
+              </div>
+              <div className="facility-worker-filter-grid">
+                <label>
+                  Role
+                  <select value={workerFilters.clinicalRole} onChange={(event) => setWorkerFilters((current) => ({ ...current, clinicalRole: event.target.value as WorkerSearchFilters["clinicalRole"] }))}>
+                    <option value="">Any</option>
+                    {Object.values(ClinicalRole).map((role) => <option key={role} value={role}>{role}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Radius
+                  <input inputMode="numeric" value={workerFilters.radiusKm} onChange={(event) => setWorkerFilters((current) => ({ ...current, radiusKm: event.target.value }))} />
+                </label>
+                <label>
+                  Day
+                  <select value={workerFilters.availableDay} onChange={(event) => setWorkerFilters((current) => ({ ...current, availableDay: event.target.value }))}>
+                    <option value="">Any day</option>
+                    {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => <option key={day} value={day}>{formatEnumLabel(day)}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Shift
+                  <select value={workerFilters.shiftType} onChange={(event) => setWorkerFilters((current) => ({ ...current, shiftType: event.target.value }))}>
+                    <option value="">Any shift</option>
+                    {["DAY", "EVENING", "NIGHT", "WEEKEND"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Min rating
+                  <input inputMode="decimal" value={workerFilters.minRating} onChange={(event) => setWorkerFilters((current) => ({ ...current, minRating: event.target.value }))} placeholder="4.5" />
+                </label>
+              </div>
+              <div className="facility-worker-results">
+                {workerResults.map((worker) => (
+                  <article className="facility-worker-card" key={worker.id}>
+                    <div>
+                      <strong>{worker.firstName} {worker.lastName}</strong>
+                      <span>{worker.title} · {worker.distanceKm ?? "Nearby"} km · {worker.stats.averageRating.toFixed(1)}★</span>
+                      <small>{worker.credentials.verified}/{worker.credentials.total} credentials verified · {worker.stats.totalShiftsCompleted} shifts</small>
+                    </div>
+                    <button type="button" onClick={() => postShiftForWorker(worker)}>Post matching shift</button>
+                  </article>
+                ))}
+                {!workerResults.length ? <div className="worker-empty-state">No searched workers yet.</div> : null}
+              </div>
+            </section>
+            ) : null}
+
+            {activeSection === "roster" ? (
             <section className="facility-roster-panel" aria-label="Facility roster calendar and timeline">
               <section className="schedule-card" aria-label="Facility roster calendar">
                 <div className="schedule-heading">
@@ -629,7 +799,9 @@ export default function FacilityDashboardPage() {
                 {!timelineSlots.length ? <div className="worker-empty-state">No shifts scheduled for this week.</div> : null}
               </section>
             </section>
+            ) : null}
 
+            {activeSection === "reviews" ? (
             <section className="facility-review-queue" id="reviews" aria-label="Worker review queue">
               <div className="facility-panel-heading">
                 <div>
@@ -652,7 +824,9 @@ export default function FacilityDashboardPage() {
                 {!reviewCards.length ? <div className="worker-empty-state">Completed matched shifts ready for worker review will appear here.</div> : null}
               </div>
             </section>
+            ) : null}
           </section>
+          ) : null}
         </section>
       </section>
 
@@ -845,6 +1019,22 @@ function formatStatusLabel(status: ShiftStatus) {
   return status.toLowerCase().replace(/_/g, " ");
 }
 
+function calculateFacilityShiftHours(shift: ShiftSummary) {
+  const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3_600_000;
+  return Math.max(1, Math.round(hours));
+}
+
+function calculateFacilityShiftPay(shift: ShiftSummary) {
+  return calculateFacilityShiftHours(shift) * shift.hourlyRate;
+}
+
+function formatEnumLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function getFacilityShiftRowClass(shift: ShiftSummary, selectedReviewShiftId: string) {
   return [
     shift.status === ShiftStatus.Completed ? "is-reviewable" : "",
@@ -930,6 +1120,46 @@ function getWorkerDisplayName(id?: string | null) {
   }
 
   return `Worker ${id.slice(-4).toUpperCase()}`;
+}
+
+function getFacilityDashboardSection(pathname: string): FacilityDashboardSection {
+  if (pathname.endsWith("/facility/shifts")) {
+    return "shifts";
+  }
+
+  if (pathname.endsWith("/facility/workers")) {
+    return "workers";
+  }
+
+  if (pathname.endsWith("/facility/roster")) {
+    return "roster";
+  }
+
+  if (pathname.endsWith("/facility/reviews")) {
+    return "reviews";
+  }
+
+  return "overview";
+}
+
+function getFacilityDashboardTitle(section: FacilityDashboardSection) {
+  if (section === "shifts") {
+    return "Shift operations";
+  }
+
+  if (section === "workers") {
+    return "Find workers";
+  }
+
+  if (section === "roster") {
+    return "Roster";
+  }
+
+  if (section === "reviews") {
+    return "Reviews";
+  }
+
+  return "Facility overview";
 }
 
 function startOfWeek(date: Date) {

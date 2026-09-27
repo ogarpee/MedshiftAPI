@@ -83,9 +83,12 @@ body {
 }
 
 .medshift-logo-mark {
+  background: var(--navy);
+  border-radius: 8px;
   display: block;
   flex: 0 0 auto;
   height: 36px;
+  object-fit: cover;
   width: 36px;
 }
 
@@ -394,6 +397,57 @@ button:hover {
   transition: width 0.35s ease;
 }
 
+.operations-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.operations-grid article {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(11, 31, 58, 0.06);
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.operations-grid span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.operations-grid strong {
+  color: var(--navy);
+  font-size: 1.45rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.operations-grid small {
+  color: rgba(11, 31, 58, 0.48);
+  font-size: 0.75rem;
+}
+
+.operations-grid div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.operations-grid em {
+  background: rgba(11, 31, 58, 0.06);
+  border-radius: 999px;
+  color: var(--navy);
+  font-size: 0.72rem;
+  font-style: normal;
+  padding: 5px 8px;
+}
+
 .table-panel {
   margin-bottom: 18px;
   overflow: hidden;
@@ -450,6 +504,66 @@ tbody tr {
 
 tbody tr:hover {
   background: rgba(255, 255, 255, 0.52);
+}
+
+.admin-shift-row td {
+  vertical-align: middle;
+}
+
+.admin-shift-role-cell,
+.admin-shift-rate-cell {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-shift-role-cell strong,
+.admin-shift-rate-cell strong {
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.admin-shift-role-cell span,
+.admin-shift-rate-cell span {
+  color: rgba(11, 31, 58, 0.48);
+  font-size: 0.78rem;
+}
+
+.admin-match-pill {
+  background: rgba(11, 31, 58, 0.07);
+  border-radius: 999px;
+  color: var(--navy);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.admin-match-pill.matched {
+  background: rgba(74, 222, 128, 0.18);
+  color: #15803d;
+}
+
+.admin-shift-status-select {
+  background:
+    linear-gradient(180deg, #ffffff, rgba(248, 246, 241, 0.9)),
+    #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.14);
+  border-radius: 8px;
+  color: var(--navy);
+  font-weight: 700;
+  min-height: 38px;
+}
+
+.admin-shift-compact-list article {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.admin-shift-compact-list article > div {
+  display: grid;
+  gap: 4px;
 }
 
 th {
@@ -654,6 +768,7 @@ th {
   .admin-command-bar,
   .admin-command-bar > div,
   .admin-grid,
+  .operations-grid,
   .facility-grid {
     align-items: stretch;
     display: grid;

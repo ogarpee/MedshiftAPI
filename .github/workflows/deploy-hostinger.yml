@@ -1,0 +1,75 @@
+name: Deploy Hostinger VPS
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+concurrency:
+  group: deploy-hostinger-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Install SSH key
+        env:
+          HOSTINGER_SSH_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$HOSTINGER_SSH_KEY" > ~/.ssh/hostinger
+          chmod 600 ~/.ssh/hostinger
+
+      - name: Add VPS host key
+        env:
+          HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST }}
+          HOSTINGER_SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+        run: |
+          port="${HOSTINGER_SSH_PORT:-22}"
+          ssh-keyscan -p "$port" "$HOSTINGER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        env:
+          HOSTINGER_HOST: ${{ secrets.HOSTINGER_HOST }}
+          HOSTINGER_USER: ${{ secrets.HOSTINGER_USER }}
+          HOSTINGER_SSH_PORT: ${{ secrets.HOSTINGER_SSH_PORT }}
+          HOSTINGER_DEPLOY_PATH: ${{ secrets.HOSTINGER_DEPLOY_PATH }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          port="${HOSTINGER_SSH_PORT:-22}"
+          deploy_path="${HOSTINGER_DEPLOY_PATH:-/opt/medshift}"
+
+          ssh -i ~/.ssh/hostinger -p "$port" "$HOSTINGER_USER@$HOSTINGER_HOST" \
+            "DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_PATH='$deploy_path' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          cd "$DEPLOY_PATH"
+          git fetch origin "$DEPLOY_SHA"
+          git checkout --force "$DEPLOY_SHA"
+
+          if [ ! -f .env.production ]; then
+            echo ".env.production is missing on the VPS at $DEPLOY_PATH" >&2
+            exit 1
+          fi
+
+          docker compose --env-file .env.production -f docker-compose.prod.yml build
+          docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+          docker compose -f docker-compose.prod.yml ps
+          docker image prune -f
+          REMOTE

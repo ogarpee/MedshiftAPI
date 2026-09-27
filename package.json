@@ -12,7 +12,10 @@
     "uat:smoke": "node scripts/uat-smoke.mjs",
     "api:dev": "pnpm --filter @medshift/api dev",
     "web:dev": "pnpm --filter @medshift/web dev",
-    "admin:dev": "pnpm --filter @medshift/admin dev"
+    "admin:dev": "pnpm --filter @medshift/admin dev",
+    "deploy:build": "docker compose --env-file .env.production -f docker-compose.prod.yml build",
+    "deploy:up": "docker compose --env-file .env.production -f docker-compose.prod.yml up -d",
+    "deploy:logs": "docker compose -f docker-compose.prod.yml logs -f"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

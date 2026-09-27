@@ -232,3 +232,42 @@
 ### Story 7.8: Public Site Hero Polish
 - [x] Make the hero shift preview card non-clickable.
 - [x] Add Framer Motion reveal animations to landing page sections.
+
+## Sprint 8: Production Deployment
+**Goal**: Prepare MedShift for repeatable VPS deployment and launch operations.
+
+### Story 8.1: Hostinger VPS Deployment
+- [x] Add Docker, Nginx, environment, and runbook support for Hostinger VPS deployment.
+
+### Story 8.2: CI/CD Pipeline
+- [x] Add GitHub Actions checks and Hostinger VPS deployment automation.
+
+## Sprint 9: Caregiver Mobile App
+**Goal**: Build a Flutter mobile app for healthcare workers to onboard, browse shifts, accept work, manage credentials, and receive notifications.
+
+### Story 9.1: Flutter Worker Mobile App
+- [x] Create `apps/mobile` with a Riverpod-based Flutter architecture for worker auth, onboarding, shift discovery, notifications, and settings.
+
+## Sprint 10: Search & Dashboard Remediation
+**Goal**: Add richer worker/shift search, facility worker discovery, real fill metrics, and dashboard improvements across web and mobile.
+
+### Story 10.1: Matching Search & Dashboard Improvements
+- [x] Implement filtered worker shift search, facility worker search, real fill-time metrics, dashboard filters, and mobile notification/search fixes.
+
+## Sprint 11: Brand Polish
+**Goal**: Replace placeholder branding with the professional MedShift logo mark across web, admin, and mobile surfaces.
+
+### Story 11.1: Brand Logo Icon Refresh
+- [x] Extract and apply the MedShift logo icon asset across shared web/admin branding, favicons, and Flutter mobile branding.
+
+## Sprint 12: Shift UI Refinement
+**Goal**: Make shift cards, shift details, and shift operations tables feel more professional, scannable, and consistent across web, admin, and mobile.
+
+### Story 12.1: Shift Cards & Tables Polish
+- [x] Refine worker shift cards/details, facility shift tables, admin shift tables, and mobile shift cards without changing shift workflows or APIs.
+
+## Sprint 13: Dashboard Navigation & Separation
+**Goal**: Organize dashboards into clear functional sections with consistent navigation across web and mobile.
+
+### Story 13.1: Dashboard Functional Routes
+- [x] Add worker and facility dashboard section routes, clarify admin workspaces, and align mobile drawer navigation.

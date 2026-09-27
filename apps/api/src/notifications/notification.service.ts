@@ -126,6 +126,7 @@ type MatchingShiftNotificationPayload = {
   roleRequired: ClinicalRole;
   shiftId: string;
   startTime: Date | string;
+  workerUserIds?: string[];
 };
 
 type ReviewAvailableNotificationPayload = {
@@ -203,21 +204,21 @@ export class NotificationService {
   }
 
   async notifyMatchingWorkersForShift(payload: MatchingShiftNotificationPayload) {
-    const matchingWorkers = await this.findMatchingWorkersForShift(payload);
+    const workerUserIds = payload.workerUserIds ?? (await this.findMatchingWorkerUserIdsForShift(payload));
 
-    if (!matchingWorkers.length) {
+    if (!workerUserIds.length) {
       return [];
     }
 
     return Promise.all(
-      matchingWorkers.map((worker) =>
+      workerUserIds.map((workerUserId) =>
         this.createInAppNotification({
           body: `${payload.facilityName ?? "A facility"} posted a ${payload.roleRequired} shift for ${this.formatDate(payload.startTime)} at $${payload.hourlyRate}/hr.`,
           href: "/worker",
           metadata: { shiftId: payload.shiftId, roleRequired: payload.roleRequired },
           title: "New nearby shift posted",
           type: NotificationType.ShiftCreated,
-          userId: worker.userId
+          userId: workerUserId
         })
       )
     );

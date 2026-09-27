@@ -102,8 +102,13 @@ export class AdminService {
     const previousStatus = shift.status;
     shift.status = status;
 
+    if (previousStatus === ShiftStatus.Open && status === ShiftStatus.Matched && !shift.filledAt) {
+      shift.filledAt = new Date();
+    }
+
     if (status === ShiftStatus.Open) {
       shift.matchedWorkerId = null;
+      shift.filledAt = undefined;
     }
 
     const savedShift = await shift.save();
@@ -264,7 +269,7 @@ export class AdminService {
       pendingApprovals: users.filter((user) => user.status === AccountStatus.Pending).length + pendingWorkerApprovals + pendingFacilityApprovals,
       verifiedWorkerRate: workers.length ? Math.round((verifiedWorkers / workers.length) * 100) : 0,
       activeSocketConnections: this.shiftsGateway.getActiveConnectionCount(),
-      averageFillTimeMinutes: null
+      averageFillTimeMinutes: calculateAverageFillTimeMinutes(shifts)
     };
   }
 
@@ -296,4 +301,38 @@ export class AdminService {
       id: _id.toString()
     };
   }
+}
+
+function calculateAverageFillTimeMinutes(shifts: Array<{ createdAt?: unknown; filledAt?: unknown; status?: unknown; updatedAt?: unknown }>) {
+  const fillDurations = shifts
+    .map((shift) => {
+      const createdAt = toDate(shift.createdAt);
+      const filledAt = toDate(shift.filledAt) ?? (shift.status === ShiftStatus.Open ? null : toDate(shift.updatedAt));
+
+      if (!createdAt || !filledAt || filledAt.getTime() < createdAt.getTime()) {
+        return null;
+      }
+
+      return Math.round((filledAt.getTime() - createdAt.getTime()) / 60000);
+    })
+    .filter((value): value is number => typeof value === "number");
+
+  if (!fillDurations.length) {
+    return null;
+  }
+
+  return Math.round(fillDurations.reduce((sum, value) => sum + value, 0) / fillDurations.length);
+}
+
+function toDate(value: unknown) {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  return null;
 }
