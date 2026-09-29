@@ -74,7 +74,7 @@ const initialDraft: WorkerDraft = {
 
 export default function WorkerOnboardingPage() {
   const { notify } = useToast();
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
   const googlePlacesApiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const [currentStep, setCurrentStep] = useState(0);

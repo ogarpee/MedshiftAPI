@@ -8,6 +8,7 @@ import { AdminModule } from "./admin/admin.module";
 import { AuthModule } from "./auth/auth.module";
 import { ProfilesModule } from "./profiles/profiles.module";
 import { MatchingModule } from "./matching/matching.module";
+import { MarketplaceModule } from "./marketplace/marketplace.module";
 import { NotificationModule } from "./notifications/notification.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { ReviewsModule } from "./reviews/reviews.module";
@@ -33,6 +34,7 @@ import { ShiftsModule } from "./shifts/shifts.module";
     RealtimeModule,
     NotificationModule,
     MatchingModule,
+    MarketplaceModule,
     ReviewsModule,
     ShiftsModule
   ],

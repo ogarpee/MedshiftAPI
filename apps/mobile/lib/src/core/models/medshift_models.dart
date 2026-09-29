@@ -16,7 +16,61 @@ enum FacilityType {
 
 enum OnboardingStatus { incomplete, pendingReview, approved, rejected }
 
-enum ShiftStatus { open, matched, inProgress, completed, cancelled }
+enum ShiftStatus {
+  draft,
+  published,
+  matching,
+  open,
+  assigned,
+  upcoming,
+  matched,
+  inProgress,
+  completed,
+  timesheetSubmitted,
+  facilityApproved,
+  paymentProcessing,
+  paid,
+  cancelled,
+  expired,
+  noShow,
+  disputed,
+}
+
+enum ShiftApplicationStatus {
+  applied,
+  underReview,
+  selected,
+  confirmed,
+  declined,
+  withdrawn,
+}
+
+enum ShiftInvitationStatus { pending, accepted, declined, cancelled, expired }
+
+enum ShiftAssignmentStatus {
+  confirmed,
+  inProgress,
+  completed,
+  cancelled,
+  noShow,
+}
+
+enum AttendanceEventType {
+  clockIn,
+  breakStart,
+  breakEnd,
+  clockOut,
+  manualAdjustment,
+}
+
+enum TimesheetStatus {
+  draft,
+  submitted,
+  approved,
+  rejected,
+  correctionRequested,
+  disputed,
+}
 
 enum ShiftSearchSort { distance, startTime, hourlyRate }
 
@@ -152,11 +206,98 @@ OnboardingStatus onboardingStatusFromApi(String? value) => switch (value) {
 };
 
 ShiftStatus shiftStatusFromApi(String? value) => switch (value) {
+  'DRAFT' => ShiftStatus.draft,
+  'PUBLISHED' => ShiftStatus.published,
+  'MATCHING' => ShiftStatus.matching,
+  'ASSIGNED' => ShiftStatus.assigned,
+  'UPCOMING' => ShiftStatus.upcoming,
   'MATCHED' => ShiftStatus.matched,
   'IN_PROGRESS' => ShiftStatus.inProgress,
   'COMPLETED' => ShiftStatus.completed,
+  'TIMESHEET_SUBMITTED' => ShiftStatus.timesheetSubmitted,
+  'FACILITY_APPROVED' => ShiftStatus.facilityApproved,
+  'PAYMENT_PROCESSING' => ShiftStatus.paymentProcessing,
+  'PAID' => ShiftStatus.paid,
   'CANCELLED' => ShiftStatus.cancelled,
+  'EXPIRED' => ShiftStatus.expired,
+  'NO_SHOW' => ShiftStatus.noShow,
+  'DISPUTED' => ShiftStatus.disputed,
   _ => ShiftStatus.open,
+};
+
+String shiftStatusToApi(ShiftStatus status) => switch (status) {
+  ShiftStatus.draft => 'DRAFT',
+  ShiftStatus.published => 'PUBLISHED',
+  ShiftStatus.matching => 'MATCHING',
+  ShiftStatus.open => 'OPEN',
+  ShiftStatus.assigned => 'ASSIGNED',
+  ShiftStatus.upcoming => 'UPCOMING',
+  ShiftStatus.matched => 'MATCHED',
+  ShiftStatus.inProgress => 'IN_PROGRESS',
+  ShiftStatus.completed => 'COMPLETED',
+  ShiftStatus.timesheetSubmitted => 'TIMESHEET_SUBMITTED',
+  ShiftStatus.facilityApproved => 'FACILITY_APPROVED',
+  ShiftStatus.paymentProcessing => 'PAYMENT_PROCESSING',
+  ShiftStatus.paid => 'PAID',
+  ShiftStatus.cancelled => 'CANCELLED',
+  ShiftStatus.expired => 'EXPIRED',
+  ShiftStatus.noShow => 'NO_SHOW',
+  ShiftStatus.disputed => 'DISPUTED',
+};
+
+ShiftApplicationStatus shiftApplicationStatusFromApi(String? value) =>
+    switch (value) {
+      'UNDER_REVIEW' => ShiftApplicationStatus.underReview,
+      'SELECTED' => ShiftApplicationStatus.selected,
+      'CONFIRMED' => ShiftApplicationStatus.confirmed,
+      'DECLINED' => ShiftApplicationStatus.declined,
+      'WITHDRAWN' => ShiftApplicationStatus.withdrawn,
+      _ => ShiftApplicationStatus.applied,
+    };
+
+String shiftInvitationStatusToApi(ShiftInvitationStatus status) =>
+    switch (status) {
+      ShiftInvitationStatus.accepted => 'ACCEPTED',
+      ShiftInvitationStatus.declined => 'DECLINED',
+      ShiftInvitationStatus.cancelled => 'CANCELLED',
+      ShiftInvitationStatus.expired => 'EXPIRED',
+      ShiftInvitationStatus.pending => 'PENDING',
+    };
+
+ShiftInvitationStatus shiftInvitationStatusFromApi(String? value) =>
+    switch (value) {
+      'ACCEPTED' => ShiftInvitationStatus.accepted,
+      'DECLINED' => ShiftInvitationStatus.declined,
+      'CANCELLED' => ShiftInvitationStatus.cancelled,
+      'EXPIRED' => ShiftInvitationStatus.expired,
+      _ => ShiftInvitationStatus.pending,
+    };
+
+ShiftAssignmentStatus shiftAssignmentStatusFromApi(String? value) =>
+    switch (value) {
+      'IN_PROGRESS' => ShiftAssignmentStatus.inProgress,
+      'COMPLETED' => ShiftAssignmentStatus.completed,
+      'CANCELLED' => ShiftAssignmentStatus.cancelled,
+      'NO_SHOW' => ShiftAssignmentStatus.noShow,
+      _ => ShiftAssignmentStatus.confirmed,
+    };
+
+AttendanceEventType attendanceEventTypeFromApi(String? value) =>
+    switch (value) {
+      'BREAK_START' => AttendanceEventType.breakStart,
+      'BREAK_END' => AttendanceEventType.breakEnd,
+      'CLOCK_OUT' => AttendanceEventType.clockOut,
+      'MANUAL_ADJUSTMENT' => AttendanceEventType.manualAdjustment,
+      _ => AttendanceEventType.clockIn,
+    };
+
+TimesheetStatus timesheetStatusFromApi(String? value) => switch (value) {
+  'APPROVED' => TimesheetStatus.approved,
+  'REJECTED' => TimesheetStatus.rejected,
+  'CORRECTION_REQUESTED' => TimesheetStatus.correctionRequested,
+  'DISPUTED' => TimesheetStatus.disputed,
+  'DRAFT' => TimesheetStatus.draft,
+  _ => TimesheetStatus.submitted,
 };
 
 String readableEnum(String value) {
@@ -423,6 +564,132 @@ class ShiftSummary {
       filledAt: json['filledAt'] == null
           ? null
           : DateTime.tryParse(json['filledAt'].toString()),
+    );
+  }
+}
+
+class ShiftApplicationSummary {
+  const ShiftApplicationSummary({
+    required this.id,
+    required this.shiftId,
+    required this.workerId,
+    required this.status,
+    this.message,
+  });
+
+  final String id;
+  final String shiftId;
+  final String workerId;
+  final ShiftApplicationStatus status;
+  final String? message;
+
+  factory ShiftApplicationSummary.fromJson(Map<String, dynamic> json) {
+    return ShiftApplicationSummary(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      shiftId: (json['shiftId'] ?? '').toString(),
+      workerId: (json['workerId'] ?? '').toString(),
+      status: shiftApplicationStatusFromApi(json['status']?.toString()),
+      message: json['message']?.toString(),
+    );
+  }
+}
+
+class ShiftInvitationSummary {
+  const ShiftInvitationSummary({
+    required this.id,
+    required this.shiftId,
+    required this.workerId,
+    required this.status,
+    this.message,
+  });
+
+  final String id;
+  final String shiftId;
+  final String workerId;
+  final ShiftInvitationStatus status;
+  final String? message;
+
+  factory ShiftInvitationSummary.fromJson(Map<String, dynamic> json) {
+    return ShiftInvitationSummary(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      shiftId: (json['shiftId'] ?? '').toString(),
+      workerId: (json['workerId'] ?? '').toString(),
+      status: shiftInvitationStatusFromApi(json['status']?.toString()),
+      message: json['message']?.toString(),
+    );
+  }
+}
+
+class ShiftAssignmentSummary {
+  const ShiftAssignmentSummary({
+    required this.id,
+    required this.shiftId,
+    required this.workerId,
+    required this.status,
+  });
+
+  final String id;
+  final String shiftId;
+  final String workerId;
+  final ShiftAssignmentStatus status;
+
+  factory ShiftAssignmentSummary.fromJson(Map<String, dynamic> json) {
+    return ShiftAssignmentSummary(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      shiftId: (json['shiftId'] ?? '').toString(),
+      workerId: (json['workerId'] ?? '').toString(),
+      status: shiftAssignmentStatusFromApi(json['status']?.toString()),
+    );
+  }
+}
+
+class AttendanceEventSummary {
+  const AttendanceEventSummary({
+    required this.id,
+    required this.shiftId,
+    required this.eventType,
+    required this.occurredAt,
+  });
+
+  final String id;
+  final String shiftId;
+  final AttendanceEventType eventType;
+  final DateTime occurredAt;
+
+  factory AttendanceEventSummary.fromJson(Map<String, dynamic> json) {
+    return AttendanceEventSummary(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      shiftId: (json['shiftId'] ?? '').toString(),
+      eventType: attendanceEventTypeFromApi(json['eventType']?.toString()),
+      occurredAt:
+          DateTime.tryParse((json['occurredAt'] ?? '').toString()) ??
+          DateTime.now(),
+    );
+  }
+}
+
+class TimesheetSummary {
+  const TimesheetSummary({
+    required this.id,
+    required this.shiftId,
+    required this.status,
+    required this.workedMinutes,
+    this.facilityNotes,
+  });
+
+  final String id;
+  final String shiftId;
+  final TimesheetStatus status;
+  final int workedMinutes;
+  final String? facilityNotes;
+
+  factory TimesheetSummary.fromJson(Map<String, dynamic> json) {
+    return TimesheetSummary(
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      shiftId: (json['shiftId'] ?? '').toString(),
+      status: timesheetStatusFromApi(json['status']?.toString()),
+      workedMinutes: ((json['workedMinutes'] ?? 0) as num).toInt(),
+      facilityNotes: json['facilityNotes']?.toString(),
     );
   }
 }

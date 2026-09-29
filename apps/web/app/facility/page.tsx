@@ -1,61 +1,21 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { BackgroundCheckStatus, ClinicalRole, GeoPoint, NotificationSummary, OnboardingStatus, ReviewSummary, ShiftMetrics, ShiftStatus, ShiftSummary, WorkerSearchResult } from "@medshift/shared-types";
+import { ClinicalRole, GeoPoint, NotificationSummary, OnboardingStatus, ReviewSummary, ShiftMetrics, ShiftStatus, ShiftSummary, WorkerSearchResult } from "@medshift/shared-types";
 import { DashboardShell, StatusBadge } from "@medshift/ui-components";
 import {
   Calendar,
   ChevronLeft,
   ChevronRight,
   Clock,
-  FileCheck,
   Pencil,
   ShieldCheck,
-  Timer,
   Trash2,
-  Users,
   X
 } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { useDashboardNotifications } from "../use-dashboard-notifications";
-
-const demoShifts: ShiftSummary[] = [
-  {
-    id: "demo-1",
-    facilityId: "demo-facility",
-    roleRequired: ClinicalRole.Hca,
-    startTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 11 * 60 * 60 * 1000).toISOString(),
-    hourlyRate: 34,
-    status: ShiftStatus.Open,
-    location: { type: "Point", coordinates: [-114.0719, 51.0447] },
-    description: "Memory care wing coverage"
-  },
-  {
-    id: "demo-2",
-    facilityId: "demo-facility",
-    roleRequired: ClinicalRole.Rn,
-    startTime: new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 38 * 60 * 60 * 1000).toISOString(),
-    hourlyRate: 52,
-    status: ShiftStatus.Matched,
-    location: { type: "Point", coordinates: [-114.0719, 51.0447] },
-    description: "Evening medication pass"
-  },
-  {
-    id: "demo-3",
-    facilityId: "demo-facility",
-    roleRequired: ClinicalRole.Lpn,
-    startTime: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(),
-    hourlyRate: 44,
-    status: ShiftStatus.Completed,
-    location: { type: "Point", coordinates: [-114.0719, 51.0447] },
-    description: "Post-shift review ready"
-  }
-];
 
 type FacilityOnboardingStatus = {
   completed?: boolean;
@@ -84,7 +44,7 @@ type WorkerSearchFilters = {
   shiftType: string;
 };
 
-type FacilityDashboardSection = "overview" | "shifts" | "workers" | "roster" | "reviews";
+type FacilityDashboardSection = "shifts" | "workers" | "roster" | "reviews";
 
 type ScheduleDay = {
   active: boolean;
@@ -104,7 +64,7 @@ export default function FacilityDashboardPage() {
   const activeSection = getFacilityDashboardSection(pathname);
   const pageTitle = getFacilityDashboardTitle(activeSection);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [shifts, setShifts] = useState<FacilityShiftSummary[]>(demoShifts);
+  const [shifts, setShifts] = useState<FacilityShiftSummary[]>([]);
   const [message, setMessage] = useState("");
   const [roleRequired, setRoleRequired] = useState<ClinicalRole>(ClinicalRole.Hca);
   const [startTime, setStartTime] = useState("");
@@ -131,7 +91,7 @@ export default function FacilityDashboardPage() {
     shiftType: ""
   });
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
   const {
     isLoadingNotifications,
     loadNotifications,
@@ -140,7 +100,7 @@ export default function FacilityDashboardPage() {
     notifications,
     unreadNotificationCount
   } = useDashboardNotifications(apiUrl);
-  const approvedForPosting = !onboardingStatus || onboardingStatus.verificationStatus === OnboardingStatus.Approved;
+  const approvedForPosting = onboardingStatus?.verificationStatus === OnboardingStatus.Approved;
   const reviewShiftIds = useMemo(() => new Set(reviews.map((review) => review.shiftId)), [reviews]);
   const selectedReviewShift = shifts.find((shift) => shift.id === selectedReviewShiftId && shift.status === ShiftStatus.Completed && !reviewShiftIds.has(shift.id));
 
@@ -161,17 +121,16 @@ export default function FacilityDashboardPage() {
   const reviewCards = useMemo(() => buildWorkerReviewCards(shifts, reviews), [reviews, shifts]);
   const selectedWeekDate = useMemo(() => addDays(startOfWeek(new Date()), weekOffset * 7), [weekOffset]);
   const defaultShiftLocation = facilityProfile?.location ?? { type: "Point" as const, coordinates: [-114.0719, 51.0447] as [number, number] };
-  const verifiedWorkerCapacity = workerResults.filter((worker) => worker.backgroundCheckStatus === BackgroundCheckStatus.Passed).length;
 
   const loadFacilityDashboard = useCallback(async () => {
     const token = window.localStorage.getItem("medshift.accessToken");
 
     if (!token) {
-      setShifts(demoShifts);
+      setShifts([]);
       setReviews([]);
       setFacilityProfile(null);
       setOnboardingStatus(null);
-      setMessage("Showing dashboard preview. Sign in as a facility to manage live shifts.");
+      setMessage("Sign in as a facility to manage live shifts.");
       return;
     }
 
@@ -358,21 +317,17 @@ export default function FacilityDashboardPage() {
       return;
     }
 
-    if (token && !approvedForPosting) {
+    if (!token) {
+      setMessage("Sign in as a facility to publish live shifts.");
+      return;
+    }
+
+    if (!approvedForPosting) {
       setMessage("Complete onboarding and wait for approval before posting live shifts.");
       return;
     }
 
     if (existingShift) {
-      const nextShift: ShiftSummary = { ...existingShift, ...payload };
-
-      if (!token || existingShift.id.startsWith("demo-") || existingShift.id.startsWith("draft-")) {
-        setShifts((current) => current.map((shift) => (shift.id === existingShift.id ? nextShift : shift)));
-        setMessage("Preview shift updated.");
-        closeShiftModal();
-        return;
-      }
-
       const response = await fetch(`${apiUrl}/shifts/${existingShift.id}`, {
         method: "PATCH",
         headers: {
@@ -394,34 +349,22 @@ export default function FacilityDashboardPage() {
       return;
     }
 
-    const draftShift: FacilityShiftSummary = {
-      id: `draft-${Date.now()}`,
-      facilityId: "current-facility",
-      ...payload,
-      status: ShiftStatus.Open
-    };
+    const response = await fetch(`${apiUrl}/shifts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
 
-    if (token) {
-      const response = await fetch(`${apiUrl}/shifts`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        const savedShift = (await response.json()) as FacilityShiftSummary;
-        setShifts((current) => [savedShift, ...current]);
-        setMessage("Shift published and broadcast to available workers.");
-      } else {
-        setMessage("Shift could not be published. Confirm onboarding approval and API connectivity.");
-        return;
-      }
+    if (response.ok) {
+      const savedShift = (await response.json()) as FacilityShiftSummary;
+      setShifts((current) => [savedShift, ...current]);
+      setMessage("Shift published and broadcast to available workers.");
     } else {
-      setShifts((current) => [draftShift, ...current]);
-      setMessage("Saved as a local preview. Sign in to publish to the network.");
+      setMessage("Shift could not be published. Confirm onboarding approval and API connectivity.");
+      return;
     }
 
     closeShiftModal();
@@ -432,9 +375,8 @@ export default function FacilityDashboardPage() {
     const comment = (reviewComments[shift.id] ?? "").trim();
     const token = window.localStorage.getItem("medshift.accessToken");
 
-    if (!token || shift.id.startsWith("demo-")) {
-      setMessage(`Preview review submitted with ${rating} stars.`);
-      setSelectedReviewShiftId("");
+    if (!token) {
+      setMessage("Sign in as a facility to submit worker reviews.");
       return;
     }
 
@@ -492,9 +434,8 @@ export default function FacilityDashboardPage() {
   async function updateShiftStatus(shift: FacilityShiftSummary, status: ShiftStatus) {
     const token = window.localStorage.getItem("medshift.accessToken");
 
-    if (!token || shift.id.startsWith("demo-") || shift.id.startsWith("draft-")) {
-      setShifts((current) => current.map((item) => (item.id === shift.id ? { ...item, status } : item)));
-      setMessage(`Preview shift moved to ${formatStatusLabel(status)}.`);
+    if (!token) {
+      setMessage("Sign in as a facility to update shift status.");
       return;
     }
 
@@ -521,9 +462,8 @@ export default function FacilityDashboardPage() {
   async function removeShift(shift: FacilityShiftSummary) {
     const token = window.localStorage.getItem("medshift.accessToken");
 
-    if (!token || shift.id.startsWith("demo-") || shift.id.startsWith("draft-")) {
-      setShifts((current) => current.filter((item) => item.id !== shift.id));
-      setMessage("Preview shift removed.");
+    if (!token) {
+      setMessage("Sign in as a facility to remove shifts.");
       return;
     }
 
@@ -555,11 +495,12 @@ export default function FacilityDashboardPage() {
       className="facility-page"
       eyebrow={<StatusBadge tone="navy">Facility roster</StatusBadge>}
       navItems={[
-        { label: "Overview", href: "/facility", active: activeSection === "overview" },
-        { label: "Shifts", href: "/facility/shifts", active: activeSection === "shifts" },
+        { label: "Shifts", href: "/facility", active: activeSection === "shifts" },
         { label: "Find Workers", href: "/facility/workers", active: activeSection === "workers" },
         { label: "Roster", href: "/facility/roster", active: activeSection === "roster" },
-        { label: "Reviews", href: "/facility/reviews", active: activeSection === "reviews" }
+        { label: "Reviews", href: "/facility/reviews", active: activeSection === "reviews" },
+        { label: "Marketplace", href: "/facility/marketplace" },
+        { label: "Settings", href: "/facility/settings" }
       ]}
       notificationLoading={isLoadingNotifications}
       notifications={notifications}
@@ -575,27 +516,17 @@ export default function FacilityDashboardPage() {
             <div>
               <span>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Facility setup required" : "Verification pending"}</span>
               <h3>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Complete facility onboarding to post live shifts." : "Your facility registration is under review."}</h3>
-              <p>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Finish profile, service location, contact, and billing readiness." : "Roster data can be previewed while posting stays locked until approval."}</p>
+              <p>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Finish profile, service location, contact, and billing readiness." : "Roster data remains live while posting stays locked until approval."}</p>
             </div>
             <a className="dashboard-banner-action" href="/facility/onboarding">
               {onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Continue onboarding" : "Review onboarding"}
             </a>
           </section>
         ) : null}
-        {activeSection === "overview" ? (
-          <section className="worker-metric-strip facility-metric-strip" aria-label="Facility metrics">
-            <MetricPill icon={<Timer aria-hidden="true" />} label="Average fill time" value={metrics.averageFillTimeMinutes ? `${metrics.averageFillTimeMinutes}m` : "<2h"} trend="+12%" />
-            <MetricPill icon={<Users aria-hidden="true" />} label="Active shifts" value={String(metrics.activeShifts)} trend="+5%" />
-            <MetricPill icon={<Calendar aria-hidden="true" />} label="Upcoming shifts" value={String(metrics.upcomingShifts)} />
-            <MetricPill icon={<FileCheck aria-hidden="true" />} label="Completed" value={String(metrics.completedShifts)} trend="+8%" />
-            <MetricPill icon={<ShieldCheck aria-hidden="true" />} label="Worker search" value={String(verifiedWorkerCapacity)} />
-          </section>
-        ) : null}
-
         {message || isLoadingDashboard ? <p className="facility-message">{isLoadingDashboard ? "Loading live facility dashboard..." : message}</p> : null}
 
         <section className="facility-dashboard-grid">
-          {activeSection === "overview" || activeSection === "shifts" ? (
+          {activeSection === "shifts" ? (
           <section className="facility-board facility-open-board" id="facility-shifts">
             <div className="facility-board-heading">
               <div>
@@ -954,29 +885,6 @@ export default function FacilityDashboardPage() {
   );
 }
 
-function MetricPill({
-  icon,
-  label,
-  trend,
-  value
-}: {
-  icon: ReactNode;
-  label: string;
-  trend?: string;
-  value: string;
-}) {
-  return (
-    <article className="metric-pill">
-      <span>{icon}</span>
-      <div>
-        <small>{label}</small>
-        <strong>{value}</strong>
-      </div>
-      {trend ? <em>{trend}</em> : null}
-    </article>
-  );
-}
-
 function formatShortDate(date: string) {
   return new Intl.DateTimeFormat("en-CA", {
     month: "short",
@@ -1139,7 +1047,7 @@ function getFacilityDashboardSection(pathname: string): FacilityDashboardSection
     return "reviews";
   }
 
-  return "overview";
+  return "shifts";
 }
 
 function getFacilityDashboardTitle(section: FacilityDashboardSection) {
@@ -1159,7 +1067,7 @@ function getFacilityDashboardTitle(section: FacilityDashboardSection) {
     return "Reviews";
   }
 
-  return "Facility overview";
+  return "Shift operations";
 }
 
 function startOfWeek(date: Date) {

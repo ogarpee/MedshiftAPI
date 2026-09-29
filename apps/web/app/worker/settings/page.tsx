@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { BackgroundCheckStatus, ClinicalRole, GeoPoint, NotificationSummary, OnboardingStatus } from "@medshift/shared-types";
 import { DashboardShell, StatusBadge } from "@medshift/ui-components";
-import { FileText, LocateFixed, MapPin, Save, Settings, UserRound } from "lucide-react";
+import { FileText, LocateFixed, MapPin, Save, Settings, ShieldCheck, UserRound } from "lucide-react";
 import { CloudinaryUploadField } from "../../cloudinary-upload-field";
 import { GooglePlacesSearch } from "../../google-places-search";
 import type { GooglePlaceSelection } from "../../google-places-search";
@@ -18,7 +18,8 @@ const settingsTabs = [
   { id: "profile", label: "Profile" },
   { id: "matching", label: "Matching" },
   { id: "availability", label: "Availability" },
-  { id: "credentials", label: "Credentials" }
+  { id: "credentials", label: "Credentials" },
+  { id: "security", label: "Security" }
 ] as const;
 
 type SettingsTab = (typeof settingsTabs)[number]["id"];
@@ -53,6 +54,12 @@ type WorkerProfile = {
   };
 };
 
+type SecurityForm = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
 const initialForm: WorkerSettingsForm = {
   availableDays: ["MONDAY", "TUESDAY", "WEDNESDAY"],
   backgroundConsent: false,
@@ -67,9 +74,15 @@ const initialForm: WorkerSettingsForm = {
   title: ClinicalRole.Hca
 };
 
+const initialSecurityForm: SecurityForm = {
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: ""
+};
+
 export default function WorkerSettingsPage() {
   const { notify } = useToast();
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
   const {
     isLoadingNotifications,
     markAllNotificationsRead,
@@ -80,8 +93,10 @@ export default function WorkerSettingsPage() {
   const googlePlacesApiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const [form, setForm] = useState<WorkerSettingsForm>(initialForm);
+  const [securityForm, setSecurityForm] = useState<SecurityForm>(initialSecurityForm);
   const [profile, setProfile] = useState<WorkerProfile | null>(null);
   const [, setMessage] = useState("Loading your worker settings...");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
@@ -149,6 +164,11 @@ export default function WorkerSettingsPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (activeTab === "security") {
+      await handlePasswordChange();
+      return;
+    }
+
     if (!profile?.id) {
       setMessage("Complete worker onboarding before saving settings.");
       notify("Complete worker onboarding before saving settings.", "error");
@@ -204,6 +224,60 @@ export default function WorkerSettingsPage() {
     }
   }
 
+  async function handlePasswordChange() {
+    const validationMessage = validateSecurityForm(securityForm);
+
+    if (validationMessage) {
+      setMessage(validationMessage);
+      notify(validationMessage, "error");
+      return;
+    }
+
+    const token = window.localStorage.getItem("medshift.accessToken");
+
+    if (!token) {
+      setNeedsAuth(true);
+      const signInMessage = "Sign in again before changing your password.";
+      setMessage(signInMessage);
+      notify(signInMessage, "error");
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/auth/password`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          currentPassword: securityForm.currentPassword,
+          newPassword: securityForm.newPassword
+        })
+      });
+      const result = await readApiResponse(response);
+
+      if (!response.ok) {
+        const errorMessage = formatApiMessage(result, "Password could not be updated.");
+        setMessage(errorMessage);
+        notify(errorMessage, "error");
+        return;
+      }
+
+      setSecurityForm(initialSecurityForm);
+      setMessage("Password updated.");
+      notify("Password updated.", "success");
+    } catch {
+      const errorMessage = "Unable to reach the MedShift API. Try again after checking the API server.";
+      setMessage(errorMessage);
+      notify(errorMessage, "error");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  }
+
   const onboardingStatus = profile?.onboarding?.verificationStatus ?? OnboardingStatus.Incomplete;
   const statusTone = onboardingStatus === OnboardingStatus.Approved ? "green" : onboardingStatus === OnboardingStatus.Rejected ? "red" : "gold";
   const profileLabel = `${form.firstName || "Worker"} ${form.lastName || "settings"}`.trim();
@@ -213,7 +287,11 @@ export default function WorkerSettingsPage() {
       className="worker-page"
       eyebrow={<StatusBadge tone={statusTone}>{formatStatusLabel(onboardingStatus)}</StatusBadge>}
       navItems={[
-        { label: "Shift board", href: "/worker" },
+        { label: "Overview", href: "/worker" },
+        { label: "Find Shifts", href: "/worker/shifts" },
+        { label: "My Work", href: "/worker/work" },
+        { label: "Reviews", href: "/worker/reviews" },
+        { label: "Marketplace", href: "/worker/marketplace" },
         { label: "Settings", href: "/worker/settings", active: true }
       ]}
       notificationLoading={isLoadingNotifications}
@@ -367,18 +445,45 @@ export default function WorkerSettingsPage() {
                     ) : null}
                   </>
                 ) : null}
+
+                {activeTab === "security" ? (
+                  <>
+                    <SectionHeading icon={<ShieldCheck aria-hidden="true" />} title="Security" caption="Change the password for this worker account." />
+                    <div className="settings-field-grid profile-field-stack">
+                      <label>
+                        Current password
+                        <input autoComplete="current-password" disabled={isChangingPassword} value={securityForm.currentPassword} onChange={(event) => setSecurityForm({ ...securityForm, currentPassword: event.target.value })} minLength={8} required type="password" />
+                      </label>
+                      <label>
+                        New password
+                        <input autoComplete="new-password" disabled={isChangingPassword} value={securityForm.newPassword} onChange={(event) => setSecurityForm({ ...securityForm, newPassword: event.target.value })} minLength={8} required type="password" />
+                      </label>
+                      <label>
+                        Confirm new password
+                        <input autoComplete="new-password" disabled={isChangingPassword} value={securityForm.confirmPassword} onChange={(event) => setSecurityForm({ ...securityForm, confirmPassword: event.target.value })} minLength={8} required type="password" />
+                      </label>
+                    </div>
+                  </>
+                ) : null}
               </section>
             </div>
 
             <footer className="worker-settings-actions">
               <div>
-                <strong>{formatStatusLabel(onboardingStatus)}</strong>
-                <span>Changes can return your profile to review.</span>
+                <strong>{activeTab === "security" ? "Security" : formatStatusLabel(onboardingStatus)}</strong>
+                <span>{activeTab === "security" ? "Password changes apply immediately." : "Changes can return your profile to review."}</span>
               </div>
-              <button className="auth-submit" disabled={isSaving || isLoading} type="submit">
-                <Save aria-hidden="true" />
-                {isSaving ? "Saving..." : "Save settings"}
-              </button>
+              {activeTab === "security" ? (
+                <button className="auth-submit" disabled={isChangingPassword || isLoading} type="button" onClick={() => void handlePasswordChange()}>
+                  <ShieldCheck aria-hidden="true" />
+                  {isChangingPassword ? "Updating..." : "Update password"}
+                </button>
+              ) : (
+                <button className="auth-submit" disabled={isSaving || isLoading} type="submit">
+                  <Save aria-hidden="true" />
+                  {isSaving ? "Saving..." : "Save settings"}
+                </button>
+              )}
             </footer>
           </form>
         )}
@@ -462,6 +567,22 @@ function validateForm(form: WorkerSettingsForm) {
 
   if (!form.backgroundConsent) {
     return "Confirm background-check consent before saving worker settings.";
+  }
+
+  return "";
+}
+
+function validateSecurityForm(form: SecurityForm) {
+  if (form.currentPassword.length < 8) {
+    return "Enter your current password.";
+  }
+
+  if (form.newPassword.length < 8) {
+    return "New password must be at least 8 characters.";
+  }
+
+  if (form.newPassword !== form.confirmPassword) {
+    return "New password and confirmation must match.";
   }
 
   return "";

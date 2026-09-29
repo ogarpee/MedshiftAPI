@@ -8,6 +8,8 @@ import { AccountStatus, AuthResponse, AuthTokenPayload, UserRole } from "@medshi
 import { RegistrationAttempt, RegistrationAttemptDocument } from "../database/schemas/registration-attempt.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
 import { NotificationService } from "../notifications/notification.service";
+import { AuthUser } from "./auth-user";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { CompleteRegistrationDto } from "./dto/complete-registration.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
@@ -70,6 +72,10 @@ interface PasswordResetRequestResponse {
 }
 
 interface PasswordResetResponse {
+  message: string;
+}
+
+interface PasswordChangeResponse {
   message: string;
 }
 
@@ -352,6 +358,29 @@ export class AuthService {
 
     return {
       message: "Password reset. You can now sign in with your new password."
+    };
+  }
+
+  async changePassword(currentUser: AuthUser, dto: ChangePasswordDto): Promise<PasswordChangeResponse> {
+    const user = await this.users.findById(currentUser.sub).exec();
+
+    if (!user) {
+      throw new UnauthorizedException("Sign in again before changing your password.");
+    }
+
+    if (!(await this.passwordService.verify(dto.currentPassword, user.passwordHash))) {
+      throw new UnauthorizedException("Current password is incorrect.");
+    }
+
+    user.passwordHash = await this.passwordService.hash(dto.newPassword);
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetTokenExpiresAt = undefined;
+    user.passwordResetSentAt = undefined;
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    return {
+      message: "Password updated."
     };
   }
 

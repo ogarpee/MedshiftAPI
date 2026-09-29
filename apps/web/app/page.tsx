@@ -308,7 +308,7 @@ export default function HomePage() {
     setMessageTone("success");
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/waitlist`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/waitlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

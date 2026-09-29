@@ -271,3 +271,42 @@
 
 ### Story 13.1: Dashboard Functional Routes
 - [x] Add worker and facility dashboard section routes, clarify admin workspaces, and align mobile drawer navigation.
+
+## Sprint 14: Live Data Hardening
+**Goal**: Remove runtime demo data and require live API configuration across web, admin, and mobile clients.
+
+### Story 14.1: Live API Data Cleanup
+- [x] Remove demo/mock fallback data from web, admin, and mobile surfaces and harden mobile API configuration.
+
+## Sprint 15: Dashboard Settings & Navigation
+**Goal**: Simplify the facility dashboard landing experience and add profile/security settings across worker and facility dashboards.
+
+### Story 15.1: Facility Default View & Dashboard Settings
+- [x] Remove the facility overview landing section, add facility settings, and add password security settings to worker and facility dashboards.
+
+## Sprint 16: Runtime Configuration Hardening
+**Goal**: Ensure deployed clients use explicit environment-provided API origins.
+
+### Story 16.1: API Base URL Environment Configuration
+- [x] Require web and admin dashboards to read API base URLs from environment configuration instead of localhost fallbacks.
+
+## Sprint 17: Marketplace Core Gap Closure
+**Goal**: Add the core caregiver marketplace workflow from the external specification without removing existing Worker, Facility, Shift, or profile fields.
+
+### Story 17.1: Additive Marketplace Core
+- [x] Add worker/facility/shift marketplace fields, applications, invitations, assignments, GPS attendance, timesheets, disputes, audit events, and web dashboard workflows.
+
+## Sprint 18: Dashboard UI Alignment
+**Goal**: Align operational dashboard controls with the marketplace specification and MedShift UI guidelines.
+
+### Story 18.1: Filter Control Polish
+- [x] Replace noisy dashboard filter button strips with compact select controls and keep marketplace dashboard UI aligned with the specification.
+
+### Story 18.2: Admin Dashboard Visual Refresh
+- [x] Refresh the admin dashboard visual system using the supplied clean SaaS dashboard reference while preserving MedShift branding and live data workflows.
+
+## Sprint 19: Marketplace Gap Closure Across API/Web/Mobile
+**Goal**: Close remaining marketplace API, web dashboard, admin, and mobile app gaps with live API workflows only.
+
+### Story 19.1: Marketplace API, Web, And Mobile Gap Closure
+- [x] Harden marketplace APIs, expand web/admin operations, and connect Flutter mobile to applications, invitations, assignments, attendance, timesheets, and estimated earnings.

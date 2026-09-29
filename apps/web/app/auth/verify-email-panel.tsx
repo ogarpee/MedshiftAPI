@@ -18,7 +18,7 @@ type VerificationState = "checking" | "success" | "error";
 export function VerifyEmailPanel() {
   const { notify } = useToast();
   const searchParams = useSearchParams();
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
   const initialEmail = searchParams.get("email") ?? "";
   const token = searchParams.get("token") ?? "";
   const [email, setEmail] = useState(initialEmail);

@@ -23,7 +23,18 @@ const checks = [
   {
     name: "facility portal includes posting and review flow",
     file: "apps/web/app/facility/page.tsx",
-    includes: ["DashboardShell", "/shifts", "/reviews/shifts/", "review-inline-form", "facility-profiles/onboarding-status", "/facility/onboarding"]
+    includes: ["DashboardShell", "/shifts", "/reviews/shifts/", "review-inline-form", "facility-profiles/onboarding-status", "/facility/onboarding", "/facility/settings", "/facility/marketplace"],
+    excludes: ["label: \"Overview\""]
+  },
+  {
+    name: "facility marketplace manages live applications invitations timesheets and disputes",
+    file: "apps/web/app/facility/marketplace/page.tsx",
+    includes: ["DashboardShell", "marketplace-select-field", "/shifts/${shiftId}/matches", "/shifts/${shiftId}/applications", "/shifts/${shiftId}/invitations", "/applications/${application.id}/status", "/timesheets/${timesheet.id}", "/disputes", "Live marketplace"]
+  },
+  {
+    name: "facility settings uses live profile and password APIs",
+    file: "apps/web/app/facility/settings/page.tsx",
+    includes: ["DashboardShell", "facility-profiles/me", "facility-profiles/${profile.id}", "auth/password", "Profile", "Service Area", "Billing", "Security"]
   },
   {
     name: "facility onboarding captures profile billing readiness and review submission",
@@ -49,7 +60,7 @@ const checks = [
   {
     name: "admin portal includes live overview and credential review",
     file: "apps/admin/app/page.tsx",
-    includes: ["DashboardShell", "/admin/overview", "/credentials/", "facilityQueue", "queueFilter", "reviewWorkerOnboarding", "reviewFacilityOnboarding", "health-bar"]
+    includes: ["DashboardShell", "/admin/overview", "/credentials/", "facilityQueue", "queueFilter", "verification-filter", "user-role-filter", "shift-status-filter", "reviewWorkerOnboarding", "reviewFacilityOnboarding", "health-bar", "Marketplace oversight", "/audit-events", "/timesheets", "/disputes"]
   },
   {
     name: "api supports admin worker and facility onboarding reviews",
@@ -69,7 +80,7 @@ const checks = [
   {
     name: "api exposes auth, shifts, matching, notifications, reviews, and admin modules",
     file: "apps/api/src/app.module.ts",
-    includes: ["AuthModule", "ShiftsModule", "MatchingModule", "NotificationModule", "ReviewsModule", "AdminModule"]
+    includes: ["AuthModule", "ShiftsModule", "MatchingModule", "NotificationModule", "ReviewsModule", "AdminModule", "MarketplaceModule"]
   },
   {
     name: "auth recovery and toast feedback are implemented",
@@ -134,8 +145,18 @@ const checks = [
   {
     name: "worker portal uses shared dashboard shell",
     file: "apps/web/app/worker/page.tsx",
-    includes: ["DashboardShell", "navItems", "Shift board", "Requests", "worker-profiles/onboarding-status", "dashboard-onboarding-banner", "Continue onboarding", "/worker/onboarding"],
-    excludes: ["label: \"Onboarding\"", "label: \"Reviews\"", "label: \"Facility portal\""]
+    includes: ["DashboardShell", "navItems", "Find Shifts", "My Work", "Reviews", "worker-profiles/onboarding-status", "dashboard-onboarding-banner", "Continue onboarding", "/worker/onboarding", "/worker/marketplace"],
+    excludes: ["label: \"Onboarding\"", "label: \"Facility portal\""]
+  },
+  {
+    name: "worker marketplace uses live matching attendance timesheet and dispute APIs",
+    file: "apps/web/app/worker/marketplace/page.tsx",
+    includes: ["DashboardShell", "/matching/open-shifts", "/attendance/clock-in", "/attendance/break/start", "/attendance/break/end", "/attendance/clock-out", "/timesheets", "/disputes", "Live worker marketplace"]
+  },
+  {
+    name: "worker settings uses live profile and password APIs",
+    file: "apps/web/app/worker/settings/page.tsx",
+    includes: ["DashboardShell", "worker-profiles/me", "worker-profiles/${profile.id}", "auth/password", "Overview", "Find Shifts", "My Work", "Reviews", "Security"]
   },
   {
     name: "worker onboarding captures profile credentials and consent",

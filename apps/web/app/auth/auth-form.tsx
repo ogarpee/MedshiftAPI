@@ -77,9 +77,10 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
   const adminUrl = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001", []);
   const endpoint = useMemo(() => `${apiUrl}/auth/${mode}`, [apiUrl, mode]);
+  const hasApiUrl = apiUrl.trim().length > 0;
   const otp = otpDigits.join("");
   const isOtpStep = mode === "register" && registrationStep === "otp";
   const isRegistrationSuccess = mode === "register" && registrationStep === "success";
@@ -111,6 +112,13 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     if (validationMessage) {
       setMessage(validationMessage);
       notify(validationMessage, "error");
+      return;
+    }
+
+    if (!hasApiUrl) {
+      const configMessage = getMissingApiUrlMessage();
+      setMessage(configMessage);
+      notify(configMessage, "error");
       return;
     }
 
@@ -236,6 +244,13 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     if (mode === "register" && role === UserRole.Facility && !isFacilityWorkEmail(targetEmail)) {
       setResendMessage("Use your facility work email address to register a facility account.");
       notify("Use your facility work email address to register a facility account.", "error");
+      return;
+    }
+
+    if (!hasApiUrl) {
+      const configMessage = getMissingApiUrlMessage();
+      setResendMessage(configMessage);
+      notify(configMessage, "error");
       return;
     }
 
@@ -561,6 +576,10 @@ function formatAuthError(result: AuthApiResult) {
   }
 
   return result.message ?? "Unable to continue";
+}
+
+function getMissingApiUrlMessage() {
+  return "MedShift API URL is not configured. Set NEXT_PUBLIC_API_URL to your API origin and redeploy.";
 }
 
 function getRegistrationStepCopy(step: RegistrationStep, email: string, fallback: string) {

@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Schema as MongooseSchema, Types } from "mongoose";
-import { FacilityType, OnboardingStatus } from "@medshift/shared-types";
+import { FacilityType, OnboardingStatus, VerificationDocumentStatus } from "@medshift/shared-types";
 
 export type FacilityProfileDocument = HydratedDocument<FacilityProfile>;
 
@@ -44,6 +44,36 @@ class ContactPerson {
 }
 
 @Schema({ _id: false })
+class FacilityDocument {
+  @Prop()
+  type?: string;
+
+  @Prop()
+  documentUrl?: string;
+
+  @Prop({ enum: VerificationDocumentStatus, default: VerificationDocumentStatus.Pending })
+  verificationStatus!: VerificationDocumentStatus;
+
+  @Prop()
+  reviewedAt?: Date;
+}
+
+@Schema({ _id: false })
+class FacilityLocation {
+  @Prop()
+  name?: string;
+
+  @Prop({ type: Address, default: () => ({}) })
+  address!: Address;
+
+  @Prop({ type: GeoPoint })
+  location?: GeoPoint;
+
+  @Prop({ default: true })
+  isActive!: boolean;
+}
+
+@Schema({ _id: false })
 class FacilityStats {
   @Prop({ default: 0 })
   averageRating!: number;
@@ -84,8 +114,20 @@ export class FacilityProfile {
   @Prop({ required: true, trim: true })
   name!: string;
 
+  @Prop()
+  organizationName?: string;
+
+  @Prop()
+  organizationId?: string;
+
   @Prop({ enum: FacilityType })
   facilityType?: FacilityType;
+
+  @Prop()
+  website?: string;
+
+  @Prop({ type: Map, of: String, default: {} })
+  registrationInfo!: Record<string, string>;
 
   @Prop({ type: Address, default: () => ({}) })
   address!: Address;
@@ -95,6 +137,12 @@ export class FacilityProfile {
 
   @Prop({ type: ContactPerson, default: () => ({}) })
   contactPerson!: ContactPerson;
+
+  @Prop({ type: [FacilityLocation], default: [] })
+  locations!: FacilityLocation[];
+
+  @Prop({ type: [FacilityDocument], default: [] })
+  verificationDocuments!: FacilityDocument[];
 
   @Prop({ enum: ["ACTIVE", "INACTIVE"], default: "INACTIVE" })
   billingStatus!: "ACTIVE" | "INACTIVE";

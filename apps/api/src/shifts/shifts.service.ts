@@ -35,12 +35,21 @@ export class ShiftsService {
     const facility = await this.resolveFacilityForCreate(currentUser, dto.facilityId);
     const shift = await this.shifts.create({
       roleRequired: dto.roleRequired,
+      title: dto.title,
       startTime: dto.startTime,
       endTime: dto.endTime,
       hourlyRate: dto.hourlyRate,
+      breakMinutes: dto.breakMinutes ?? 0,
+      caregiversRequired: dto.caregiversRequired ?? 1,
+      payAmount: dto.payAmount ?? dto.hourlyRate,
+      currency: dto.currency ?? "CAD",
+      payType: dto.payType,
+      visibility: dto.visibility,
+      requirements: normalizeShiftRequirements(dto.requirements),
       description: dto.description,
       location: dto.location,
       facilityId: facility._id,
+      createdBy: new Types.ObjectId(currentUser.sub),
       status: ShiftStatus.Open
     });
 
@@ -48,9 +57,11 @@ export class ShiftsService {
       facilityName: facility.name,
       hourlyRate: shift.hourlyRate,
       location: shift.location,
+      requirements: shift.requirements,
       roleRequired: shift.roleRequired,
       shiftId: shift.id,
-      startTime: shift.startTime
+      startTime: shift.startTime,
+      endTime: shift.endTime
     };
 
     const matchingWorkerUserIds = await this.matchingService.findMatchingWorkerUserIdsForShift(matchingShiftPayload);
@@ -85,7 +96,18 @@ export class ShiftsService {
       {
         $match: {
           matchedWorkerId: worker._id,
-          status: { $in: [ShiftStatus.Matched, ShiftStatus.InProgress, ShiftStatus.Completed] }
+          status: {
+            $in: [
+              ShiftStatus.Matched,
+              ShiftStatus.Assigned,
+              ShiftStatus.Upcoming,
+              ShiftStatus.InProgress,
+              ShiftStatus.Completed,
+              ShiftStatus.TimesheetSubmitted,
+              ShiftStatus.FacilityApproved,
+              ShiftStatus.Disputed
+            ]
+          }
         }
       },
       {
@@ -135,6 +157,10 @@ export class ShiftsService {
       shift.roleRequired = dto.roleRequired;
     }
 
+    if (dto.title !== undefined) {
+      shift.title = dto.title;
+    }
+
     if (dto.startTime !== undefined) {
       shift.startTime = dto.startTime;
     }
@@ -145,6 +171,34 @@ export class ShiftsService {
 
     if (dto.hourlyRate !== undefined) {
       shift.hourlyRate = dto.hourlyRate;
+    }
+
+    if (dto.breakMinutes !== undefined) {
+      shift.breakMinutes = dto.breakMinutes;
+    }
+
+    if (dto.caregiversRequired !== undefined) {
+      shift.caregiversRequired = dto.caregiversRequired;
+    }
+
+    if (dto.payAmount !== undefined) {
+      shift.payAmount = dto.payAmount;
+    }
+
+    if (dto.currency !== undefined) {
+      shift.currency = dto.currency;
+    }
+
+    if (dto.payType !== undefined) {
+      shift.payType = dto.payType;
+    }
+
+    if (dto.visibility !== undefined) {
+      shift.visibility = dto.visibility;
+    }
+
+    if (dto.requirements !== undefined) {
+      shift.requirements = normalizeShiftRequirements(dto.requirements)!;
     }
 
     if (dto.location !== undefined) {
@@ -407,6 +461,14 @@ export class ShiftsService {
       startTime: shift.startTime,
       endTime: shift.endTime,
       hourlyRate: shift.hourlyRate,
+      title: shift.title,
+      breakMinutes: shift.breakMinutes,
+      caregiversRequired: shift.caregiversRequired,
+      payAmount: shift.payAmount,
+      currency: shift.currency,
+      payType: shift.payType,
+      visibility: shift.visibility,
+      requirements: shift.requirements,
       status: shift.status,
       filledAt: shift.filledAt,
       matchedWorkerId: shift.matchedWorkerId?.toString() ?? null,
@@ -423,6 +485,20 @@ export class ShiftsService {
         : undefined
     };
   }
+}
+
+function normalizeShiftRequirements(requirements?: CreateShiftDto["requirements"]) {
+  if (!requirements) {
+    return undefined;
+  }
+
+  return {
+    caregiverType: requirements.caregiverType,
+    requiredQualifications: requirements.requiredQualifications ?? [],
+    requiredSkills: requirements.requiredSkills ?? [],
+    requiredCertifications: requirements.requiredCertifications ?? [],
+    minimumExperienceYears: requirements.minimumExperienceYears ?? 0
+  };
 }
 
 function calculateAverageFillTimeMinutes(shifts: Array<{ createdAt?: unknown; filledAt?: unknown; status?: unknown; updatedAt?: unknown }>) {

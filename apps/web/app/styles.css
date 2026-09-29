@@ -3115,6 +3115,36 @@ html {
   padding: 0 10px;
 }
 
+.marketplace-select-field {
+  color: rgba(11, 31, 58, 0.58);
+  display: grid;
+  font-size: 0.76rem;
+  font-weight: 800;
+  gap: 6px;
+  margin-top: 14px;
+  max-width: 420px;
+  text-transform: uppercase;
+}
+
+.marketplace-select-field select {
+  background: #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.14);
+  border-radius: 8px;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  min-height: 42px;
+  padding: 0 10px;
+  text-transform: none;
+}
+
+.marketplace-select-field select:focus-visible {
+  border-color: rgba(212, 175, 55, 0.72);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18);
+  outline: none;
+}
+
 .worker-filter-actions {
   flex-wrap: wrap;
   justify-content: flex-start;

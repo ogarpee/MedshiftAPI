@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Schema as MongooseSchema, Types } from "mongoose";
-import { ClinicalRole, ShiftStatus } from "@medshift/shared-types";
+import { ClinicalRole, PayType, ShiftStatus, ShiftVisibility } from "@medshift/shared-types";
 
 export type ShiftDocument = HydratedDocument<Shift>;
 
@@ -13,6 +13,24 @@ class GeoPoint {
   coordinates!: [number, number];
 }
 
+@Schema({ _id: false })
+class ShiftRequirements {
+  @Prop()
+  caregiverType?: string;
+
+  @Prop({ type: [String], default: [] })
+  requiredQualifications!: string[];
+
+  @Prop({ type: [String], default: [] })
+  requiredSkills!: string[];
+
+  @Prop({ type: [String], default: [] })
+  requiredCertifications!: string[];
+
+  @Prop({ default: 0 })
+  minimumExperienceYears!: number;
+}
+
 @Schema({ collection: "shifts", timestamps: true })
 export class Shift {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "FacilityProfile", required: true })
@@ -20,6 +38,9 @@ export class Shift {
 
   @Prop({ enum: ClinicalRole, required: true })
   roleRequired!: ClinicalRole;
+
+  @Prop()
+  title?: string;
 
   @Prop({ required: true })
   startTime!: Date;
@@ -30,11 +51,35 @@ export class Shift {
   @Prop({ required: true, min: 0 })
   hourlyRate!: number;
 
+  @Prop({ default: 0, min: 0 })
+  breakMinutes!: number;
+
+  @Prop({ default: 1, min: 1 })
+  caregiversRequired!: number;
+
+  @Prop({ min: 0 })
+  payAmount?: number;
+
+  @Prop({ default: "CAD" })
+  currency!: string;
+
+  @Prop({ enum: PayType, default: PayType.Hourly })
+  payType!: PayType;
+
+  @Prop({ enum: ShiftVisibility, default: ShiftVisibility.Open })
+  visibility!: ShiftVisibility;
+
   @Prop({ enum: ShiftStatus, default: ShiftStatus.Open })
   status!: ShiftStatus;
 
   @Prop()
   filledAt?: Date;
+
+  @Prop({ type: ShiftRequirements, default: () => ({}) })
+  requirements!: ShiftRequirements;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: "User" })
+  createdBy?: Types.ObjectId;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "WorkerProfile", default: null })
   matchedWorkerId?: Types.ObjectId | null;

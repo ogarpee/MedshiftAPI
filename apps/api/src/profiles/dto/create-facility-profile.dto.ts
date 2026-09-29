@@ -1,5 +1,5 @@
 import { Type } from "class-transformer";
-import { IsBoolean, IsDateString, IsEmail, IsEnum, IsOptional, IsString, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsObject, IsOptional, IsString, IsUrl, ValidateNested } from "class-validator";
 import { FacilityType } from "@medshift/shared-types";
 import { GeoPointDto } from "./geo-point.dto";
 
@@ -57,13 +57,55 @@ class FacilityReadinessDto {
   acceptedTermsAt?: string;
 }
 
+class FacilityDocumentDto {
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  documentUrl?: string;
+}
+
+class FacilityLocationDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddressDto)
+  address?: AddressDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GeoPointDto)
+  location?: GeoPointDto;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
 export class CreateFacilityProfileDto {
   @IsString()
   name!: string;
 
   @IsOptional()
+  @IsString()
+  organizationName?: string;
+
+  @IsOptional()
+  @IsString()
+  organizationId?: string;
+
+  @IsOptional()
   @IsEnum(FacilityType)
   facilityType?: FacilityType;
+
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  website?: string;
 
   @IsOptional()
   @ValidateNested()
@@ -78,6 +120,22 @@ export class CreateFacilityProfileDto {
   @ValidateNested()
   @Type(() => ContactPersonDto)
   contactPerson?: ContactPersonDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FacilityLocationDto)
+  locations?: FacilityLocationDto[];
+
+  @IsOptional()
+  @IsObject()
+  registrationInfo?: Record<string, string>;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => FacilityDocumentDto)
+  verificationDocuments?: FacilityDocumentDto[];
 
   @IsOptional()
   @IsEnum(["ACTIVE", "INACTIVE"])

@@ -4,7 +4,7 @@ import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { AccountStatus, ClinicalRole, FacilityType, OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
 import { DashboardShell, StatusBadge } from "@medshift/ui-components";
 
-type AdminSection = "overview" | "verification" | "users" | "facilities" | "shifts";
+type AdminSection = "overview" | "verification" | "users" | "facilities" | "shifts" | "marketplace";
 
 type AdminUser = {
   id: string;
@@ -68,60 +68,42 @@ type AdminOverview = {
   metrics: AdminMetrics;
 };
 
-const previewOverview: AdminOverview = {
-  users: [
-    { id: "u1", email: "sarah@demo.medshift", role: UserRole.Worker, status: AccountStatus.Pending, emailVerified: true },
-    { id: "u2", email: "ops@bowvalley.ca", role: UserRole.Facility, status: AccountStatus.Active, emailVerified: true },
-    { id: "u3", email: "admin@medshift.ca", role: UserRole.Admin, status: AccountStatus.Active, emailVerified: true }
-  ],
-  workers: [
-    {
-      id: "w1",
-      firstName: "Sarah",
-      lastName: "Jensen",
-      title: ClinicalRole.Hca,
-      backgroundCheck: { status: "PENDING" },
-      credentials: [{ type: "HCA certificate", documentUrl: "#", isVerified: false }],
-      onboarding: { verificationStatus: OnboardingStatus.PendingReview }
-    },
-    {
-      id: "w2",
-      firstName: "Michael",
-      lastName: "Tran",
-      title: ClinicalRole.Rn,
-      backgroundCheck: { status: "PASSED" },
-      credentials: [{ type: "RN license", isVerified: true }],
-      onboarding: { verificationStatus: OnboardingStatus.Approved }
-    }
-  ],
-  facilities: [
-    {
-      id: "f1",
-      name: "Bow Valley Care Centre",
-      facilityType: FacilityType.LongTermCare,
-      billingStatus: "ACTIVE",
-      address: { city: "Calgary", province: "AB" },
-      contactPerson: { name: "Amara Singh", email: "ops@bowvalley.ca" },
-      onboarding: { verificationStatus: OnboardingStatus.PendingReview }
-    },
-    { id: "f2", name: "Prairie North Hospital", facilityType: FacilityType.Hospital, billingStatus: "INACTIVE", address: { city: "Calgary", province: "AB" } }
-  ],
-  shifts: [
-    { id: "s1", roleRequired: ClinicalRole.Hca, status: ShiftStatus.Open, hourlyRate: 34, startTime: new Date().toISOString() },
-    { id: "s2", roleRequired: ClinicalRole.Rn, status: ShiftStatus.Matched, hourlyRate: 52, startTime: new Date().toISOString(), matchedWorkerId: "w2" }
-  ],
-  metrics: {
-    totalUsers: 3,
-    totalFacilities: 2,
-    totalWorkers: 2,
-    activeShifts: 2,
-    openShifts: 1,
-    completedShifts: 18,
-    pendingApprovals: 2,
-    verifiedWorkerRate: 50,
-    activeSocketConnections: 0,
-    averageFillTimeMinutes: null
-  }
+type AdminMarketplaceRecord = {
+  id: string;
+  action?: string;
+  actorUserId?: string;
+  entityType?: string;
+  entityId?: string;
+  openedBy?: string;
+  reason?: string;
+  shiftId?: string;
+  status?: string;
+  workedMinutes?: number;
+  createdAt?: string;
+};
+
+type MarketplaceOverview = {
+  applications: number;
+  pendingApplications: number;
+  invitations: number;
+  pendingInvitations: number;
+  assignments: number;
+  activeAssignments: number;
+  attendanceEvents: number;
+  submittedTimesheets: number;
+  openDisputes: number;
+};
+
+const emptyMarketplaceOverview: MarketplaceOverview = {
+  applications: 0,
+  pendingApplications: 0,
+  invitations: 0,
+  pendingInvitations: 0,
+  assignments: 0,
+  activeAssignments: 0,
+  attendanceEvents: 0,
+  submittedTimesheets: 0,
+  openDisputes: 0
 };
 
 const emptyOverview: AdminOverview = {
@@ -144,15 +126,23 @@ const emptyOverview: AdminOverview = {
 };
 
 export default function AdminPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-  const [overview, setOverview] = useState<AdminOverview>(previewOverview);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const [overview, setOverview] = useState<AdminOverview>(emptyOverview);
   const [activeSection, setActiveSection] = useState<AdminSection>("overview");
   const [queueFilter, setQueueFilter] = useState<"all" | "workers" | "facilities">("all");
   const [userFilter, setUserFilter] = useState<"all" | UserRole>("all");
   const [shiftFilter, setShiftFilter] = useState<"all" | ShiftStatus>("all");
   const [search, setSearch] = useState("");
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState("Showing preview data until an admin token is available.");
+  const [auditEvents, setAuditEvents] = useState<AdminMarketplaceRecord[]>([]);
+  const [applications, setApplications] = useState<AdminMarketplaceRecord[]>([]);
+  const [assignments, setAssignments] = useState<AdminMarketplaceRecord[]>([]);
+  const [attendanceEvents, setAttendanceEvents] = useState<AdminMarketplaceRecord[]>([]);
+  const [disputes, setDisputes] = useState<AdminMarketplaceRecord[]>([]);
+  const [invitations, setInvitations] = useState<AdminMarketplaceRecord[]>([]);
+  const [marketplaceOverview, setMarketplaceOverview] = useState<MarketplaceOverview>(emptyMarketplaceOverview);
+  const [timesheets, setTimesheets] = useState<AdminMarketplaceRecord[]>([]);
+  const [message, setMessage] = useState("Sign in as an admin to manage live operations.");
   const [isLoading, setIsLoading] = useState(false);
 
   const loadOverview = useCallback(async () => {
@@ -166,16 +156,34 @@ export default function AdminPage() {
     const token = tokenFromHash ?? window.localStorage.getItem("medshift.accessToken");
 
     if (!token) {
-      setMessage("Showing preview data. Sign in as an admin to manage live operations.");
+      setOverview(emptyOverview);
+      setAuditEvents([]);
+      setApplications([]);
+      setInvitations([]);
+      setAssignments([]);
+      setAttendanceEvents([]);
+      setDisputes([]);
+      setTimesheets([]);
+      setMarketplaceOverview(emptyMarketplaceOverview);
+      setMessage("Sign in as an admin to manage live operations.");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${apiUrl}/admin/overview`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const headers = { Authorization: `Bearer ${token}` };
+      const [response, auditResponse, timesheetsResponse, disputesResponse, overviewResponse, applicationsResponse, invitationsResponse, assignmentsResponse, attendanceResponse] = await Promise.all([
+        fetch(`${apiUrl}/admin/overview`, { headers }),
+        fetch(`${apiUrl}/audit-events`, { headers }),
+        fetch(`${apiUrl}/timesheets`, { headers }),
+        fetch(`${apiUrl}/disputes`, { headers }),
+        fetch(`${apiUrl}/marketplace/overview`, { headers }),
+        fetch(`${apiUrl}/applications/me`, { headers }),
+        fetch(`${apiUrl}/invitations/me`, { headers }),
+        fetch(`${apiUrl}/assignments/me`, { headers }),
+        fetch(`${apiUrl}/attendance`, { headers })
+      ]);
 
       if (!response.ok) {
         throw new Error("Admin overview request failed");
@@ -183,9 +191,25 @@ export default function AdminPage() {
 
       const result = (await response.json()) as AdminOverview;
       setOverview(result);
+      setAuditEvents(auditResponse.ok ? ((await auditResponse.json()) as AdminMarketplaceRecord[]) : []);
+      setTimesheets(timesheetsResponse.ok ? ((await timesheetsResponse.json()) as AdminMarketplaceRecord[]) : []);
+      setDisputes(disputesResponse.ok ? ((await disputesResponse.json()) as AdminMarketplaceRecord[]) : []);
+      setMarketplaceOverview(overviewResponse.ok ? ((await overviewResponse.json()) as MarketplaceOverview) : emptyMarketplaceOverview);
+      setApplications(applicationsResponse.ok ? ((await applicationsResponse.json()) as AdminMarketplaceRecord[]) : []);
+      setInvitations(invitationsResponse.ok ? ((await invitationsResponse.json()) as AdminMarketplaceRecord[]) : []);
+      setAssignments(assignmentsResponse.ok ? ((await assignmentsResponse.json()) as AdminMarketplaceRecord[]) : []);
+      setAttendanceEvents(attendanceResponse.ok ? ((await attendanceResponse.json()) as AdminMarketplaceRecord[]) : []);
       setMessage("Live admin data loaded.");
     } catch {
       setOverview(emptyOverview);
+      setAuditEvents([]);
+      setApplications([]);
+      setInvitations([]);
+      setAssignments([]);
+      setAttendanceEvents([]);
+      setDisputes([]);
+      setTimesheets([]);
+      setMarketplaceOverview(emptyMarketplaceOverview);
       setMessage("Live admin data is unavailable. Check API connectivity or sign in again, then refresh.");
     } finally {
       setIsLoading(false);
@@ -312,8 +336,11 @@ export default function AdminPage() {
 
   function signOut() {
     window.localStorage.removeItem("medshift.accessToken");
-    setOverview(previewOverview);
-    setMessage("Signed out. Showing preview data.");
+    setOverview(emptyOverview);
+    setAuditEvents([]);
+    setDisputes([]);
+    setTimesheets([]);
+    setMessage("Signed out. Sign in as an admin to manage live operations.");
   }
 
   return (
@@ -325,7 +352,8 @@ export default function AdminPage() {
         { label: "Verification", active: activeSection === "verification", onClick: () => setActiveSection("verification") },
         { label: "Users", active: activeSection === "users", onClick: () => setActiveSection("users") },
         { label: "Facilities", active: activeSection === "facilities", onClick: () => setActiveSection("facilities") },
-        { label: "Shifts", active: activeSection === "shifts", onClick: () => setActiveSection("shifts") }
+        { label: "Shifts", active: activeSection === "shifts", onClick: () => setActiveSection("shifts") },
+        { label: "Marketplace", active: activeSection === "marketplace", onClick: () => setActiveSection("marketplace") }
       ]}
       title={getAdminDashboardTitle(activeSection)}
       userLabel="Admin workspace"
@@ -376,6 +404,10 @@ export default function AdminPage() {
 
         {activeSection === "shifts" ? (
           <ShiftsSection search={search} setSearch={setSearch} shiftFilter={shiftFilter} setShiftFilter={setShiftFilter} shifts={filteredShifts} onStatusChange={updateShiftStatus} />
+        ) : null}
+
+        {activeSection === "marketplace" ? (
+          <MarketplaceSection applications={applications} assignments={assignments} attendanceEvents={attendanceEvents} auditEvents={auditEvents} disputes={disputes} invitations={invitations} overview={marketplaceOverview} timesheets={timesheets} />
         ) : null}
       </section>
     </DashboardShell>
@@ -451,7 +483,79 @@ function getAdminDashboardTitle(section: AdminSection) {
     return "Shift operations";
   }
 
+  if (section === "marketplace") {
+    return "Marketplace oversight";
+  }
+
   return "Admin overview";
+}
+
+function MarketplaceSection({
+  applications,
+  assignments,
+  attendanceEvents,
+  auditEvents,
+  disputes,
+  invitations,
+  overview,
+  timesheets
+}: {
+  applications: AdminMarketplaceRecord[];
+  assignments: AdminMarketplaceRecord[];
+  attendanceEvents: AdminMarketplaceRecord[];
+  auditEvents: AdminMarketplaceRecord[];
+  disputes: AdminMarketplaceRecord[];
+  invitations: AdminMarketplaceRecord[];
+  overview: MarketplaceOverview;
+  timesheets: AdminMarketplaceRecord[];
+}) {
+  const marketplaceEvents = auditEvents.filter((event) => event.action?.startsWith("shift.") || event.action?.startsWith("attendance.") || event.action?.startsWith("timesheet.") || event.action?.startsWith("dispute."));
+
+  return (
+    <section className="admin-grid">
+      <Panel title="Marketplace performance" badge={`${overview.activeAssignments} active`}>
+        <div className="operations-strip">
+          <OperationsCard title="Applications" value={overview.applications} detail={`${overview.pendingApplications} pending`} items={applications.slice(0, 2).map((item) => item.status ?? item.id)} />
+          <OperationsCard title="Invitations" value={overview.invitations} detail={`${overview.pendingInvitations} pending`} items={invitations.slice(0, 2).map((item) => item.status ?? item.id)} />
+          <OperationsCard title="Assignments" value={overview.assignments} detail={`${overview.activeAssignments} active`} items={assignments.slice(0, 2).map((item) => item.status ?? item.shiftId ?? item.id)} />
+          <OperationsCard title="Attendance" value={overview.attendanceEvents} detail="GPS events" items={attendanceEvents.slice(0, 2).map((item) => item.status ?? item.shiftId ?? item.id)} />
+        </div>
+      </Panel>
+      <Panel title="Marketplace audit events" badge={`${marketplaceEvents.length} events`}>
+        <div className="compact-list">
+          {marketplaceEvents.slice(0, 12).map((event) => (
+            <article key={event.id}>
+              <strong>{labelize(event.action ?? "event")}</strong>
+              <span>{event.entityType ?? "Marketplace"} · {event.entityId ?? "No entity"} · {event.createdAt ? formatDate(event.createdAt) : "Live"}</span>
+            </article>
+          ))}
+          {!marketplaceEvents.length ? <article><strong>No marketplace audit events</strong><span>Applications, invitations, assignments, attendance, timesheets, and disputes will appear here as live actions happen.</span></article> : null}
+        </div>
+      </Panel>
+      <Panel title="Timesheet oversight" badge={`${timesheets.length} records`}>
+        <div className="compact-list">
+          {timesheets.slice(0, 8).map((timesheet) => (
+            <article key={timesheet.id}>
+              <strong>{timesheet.status ?? "SUBMITTED"}</strong>
+              <span>{timesheet.shiftId ?? "Shift pending"} · {timesheet.workedMinutes ?? 0} minutes</span>
+            </article>
+          ))}
+          {!timesheets.length ? <article><strong>No live timesheets</strong><span>Submitted worker timesheets will appear here.</span></article> : null}
+        </div>
+      </Panel>
+      <Panel title="Dispute oversight" badge={`${disputes.length} cases`}>
+        <div className="compact-list">
+          {disputes.slice(0, 8).map((dispute) => (
+            <article key={dispute.id}>
+              <strong>{dispute.status ?? "OPEN"}</strong>
+              <span>{dispute.reason ?? "No reason supplied"} · {dispute.shiftId ?? dispute.entityId ?? "No linked record"}</span>
+            </article>
+          ))}
+          {!disputes.length ? <article><strong>No live disputes</strong><span>Shift, timesheet, and review disputes will appear here.</span></article> : null}
+        </div>
+      </Panel>
+    </section>
+  );
 }
 
 function OperationsCard({ detail, items, title, value }: { detail: string; items: string[]; title: string; value: number | string }) {
@@ -482,11 +586,17 @@ function VerificationSection(props: {
 }) {
   return (
     <Panel title="Verification queue" badge={`${props.workerQueue.length + props.facilityQueue.length} pending`}>
-      <div className="queue-filter" aria-label="Verification queue filter">
-        {(["all", "workers", "facilities"] as const).map((filter) => (
-          <button className={props.queueFilter === filter ? "active" : ""} type="button" key={filter} onClick={() => props.setQueueFilter(filter)}>{labelize(filter)}</button>
-        ))}
-      </div>
+      <FilterSelect
+        id="verification-filter"
+        label="Queue"
+        value={props.queueFilter}
+        onChange={(value) => props.setQueueFilter(value as "all" | "workers" | "facilities")}
+        options={[
+          { label: "All reviews", value: "all" },
+          { label: "Workers", value: "workers" },
+          { label: "Facilities", value: "facilities" }
+        ]}
+      />
       <div className="verification-list">
         {props.visibleFacilityQueue.map((facility) => (
           <article key={facility.id}>
@@ -521,11 +631,13 @@ function UsersSection(props: {
   return (
     <Panel title="User management" badge={`${props.users.length} records`}>
       <TableToolbar search={props.search} setSearch={props.setSearch} placeholder="Search users" />
-      <div className="queue-filter">
-        {(["all", UserRole.Worker, UserRole.Facility, UserRole.Admin] as const).map((role) => (
-          <button key={role} type="button" className={props.userFilter === role ? "active" : ""} onClick={() => props.setUserFilter(role)}>{labelize(role)}</button>
-        ))}
-      </div>
+      <FilterSelect
+        id="user-role-filter"
+        label="Role"
+        value={props.userFilter}
+        onChange={(value) => props.setUserFilter(value as "all" | UserRole)}
+        options={(["all", UserRole.Worker, UserRole.Facility, UserRole.Admin] as const).map((role) => ({ label: role === "all" ? "All roles" : labelize(role), value: role }))}
+      />
       <div className="table-scroll">
         <table>
           <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Email</th><th>Created</th><th>Manage</th></tr></thead>
@@ -536,7 +648,7 @@ function UsersSection(props: {
                 <td>{user.role}</td>
                 <td><StatusBadge tone={user.status === AccountStatus.Active ? "green" : user.status === AccountStatus.Suspended ? "red" : "gold"}>{user.status}</StatusBadge></td>
                 <td>{user.emailVerified ? "Verified" : "Unverified"}</td>
-                <td>{user.createdAt ? formatDate(user.createdAt) : "Preview"}</td>
+                <td>{user.createdAt ? formatDate(user.createdAt) : "Pending"}</td>
                 <td>
                   <select value={user.status} onChange={(event) => props.onStatusChange(user, event.target.value as AccountStatus)}>
                     {Object.values(AccountStatus).map((status) => <option key={status} value={status}>{labelize(status)}</option>)}
@@ -583,11 +695,13 @@ function ShiftsSection(props: {
   return (
     <Panel title="Shift operations" badge={`${props.shifts.length} shifts`}>
       <TableToolbar search={props.search} setSearch={props.setSearch} placeholder="Search shifts" />
-      <div className="queue-filter">
-        {(["all", ...Object.values(ShiftStatus)] as Array<"all" | ShiftStatus>).map((status) => (
-          <button key={status} type="button" className={props.shiftFilter === status ? "active" : ""} onClick={() => props.setShiftFilter(status)}>{labelize(status)}</button>
-        ))}
-      </div>
+      <FilterSelect
+        id="shift-status-filter"
+        label="Status"
+        value={props.shiftFilter}
+        onChange={(value) => props.setShiftFilter(value as "all" | ShiftStatus)}
+        options={(["all", ...Object.values(ShiftStatus)] as Array<"all" | ShiftStatus>).map((status) => ({ label: status === "all" ? "All statuses" : labelize(status), value: status }))}
+      />
       <div className="table-scroll">
         <table>
           <thead><tr><th>Role</th><th>Status</th><th>Rate</th><th>Window</th><th>Matched</th><th>Manage</th></tr></thead>
@@ -638,6 +752,19 @@ function Panel({ badge, children, title }: { badge: string; children: ReactNode;
 
 function TableToolbar({ placeholder, search, setSearch }: { placeholder: string; search: string; setSearch: (value: string) => void }) {
   return <div className="table-toolbar"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={placeholder} /></div>;
+}
+
+function FilterSelect({ id, label, onChange, options, value }: { id: string; label: string; onChange: (value: string) => void; options: Array<{ label: string; value: string }>; value: string }) {
+  return (
+    <div className="admin-filter-row">
+      <label htmlFor={id}>{label}</label>
+      <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function HealthBar({ label, value }: { label: string; value: number }) {

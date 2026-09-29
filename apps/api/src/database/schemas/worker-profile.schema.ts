@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Schema as MongooseSchema, Types } from "mongoose";
-import { BackgroundCheckStatus, ClinicalRole, OnboardingStatus } from "@medshift/shared-types";
+import { BackgroundCheckStatus, ClinicalRole, OnboardingStatus, VerificationDocumentStatus } from "@medshift/shared-types";
 
 export type WorkerProfileDocument = HydratedDocument<WorkerProfile>;
 
@@ -17,6 +17,54 @@ class Credential {
 
   @Prop()
   verifiedAt?: Date;
+
+  @Prop()
+  institution?: string;
+
+  @Prop()
+  issueDate?: Date;
+
+  @Prop()
+  expiryDate?: Date;
+
+  @Prop()
+  certificateNumber?: string;
+
+  @Prop({ enum: VerificationDocumentStatus, default: VerificationDocumentStatus.Pending })
+  verificationStatus!: VerificationDocumentStatus;
+}
+
+@Schema({ _id: false })
+class WorkerDocument {
+  @Prop()
+  type?: string;
+
+  @Prop()
+  documentUrl?: string;
+
+  @Prop({ enum: VerificationDocumentStatus, default: VerificationDocumentStatus.Pending })
+  verificationStatus!: VerificationDocumentStatus;
+
+  @Prop()
+  reviewedAt?: Date;
+}
+
+@Schema({ _id: false })
+class WorkerAvailabilityWindow {
+  @Prop()
+  day?: string;
+
+  @Prop()
+  startTime?: string;
+
+  @Prop()
+  endTime?: string;
+
+  @Prop()
+  date?: Date;
+
+  @Prop({ default: false })
+  unavailable!: boolean;
 }
 
 @Schema({ _id: false })
@@ -53,6 +101,15 @@ class WorkerPreferences {
 
   @Prop({ type: [{ type: MongooseSchema.Types.ObjectId, ref: "FacilityProfile" }], default: [] })
   preferredFacilities!: Types.ObjectId[];
+
+  @Prop({ type: [WorkerAvailabilityWindow], default: [] })
+  availabilityWindows!: WorkerAvailabilityWindow[];
+
+  @Prop({ type: [Date], default: [] })
+  unavailableDates!: Date[];
+
+  @Prop({ type: [String], default: [] })
+  preferredWorkingHours!: string[];
 }
 
 @Schema({ _id: false })
@@ -62,6 +119,9 @@ class WorkerStats {
 
   @Prop({ default: 0 })
   totalShiftsCompleted!: number;
+
+  @Prop({ default: 0 })
+  reliabilityScore!: number;
 }
 
 @Schema({ _id: false })
@@ -90,11 +150,35 @@ export class WorkerProfile {
   @Prop()
   avatarUrl?: string;
 
+  @Prop()
+  phone?: string;
+
   @Prop({ enum: ClinicalRole, required: true })
   title!: ClinicalRole;
 
+  @Prop()
+  professionalSummary?: string;
+
+  @Prop({ min: 0, default: 0 })
+  yearsExperience!: number;
+
+  @Prop({ type: [String], default: [] })
+  specialties!: string[];
+
+  @Prop({ type: [String], default: [] })
+  skills!: string[];
+
   @Prop({ type: [Credential], default: [] })
   credentials!: Credential[];
+
+  @Prop({ type: [Credential], default: [] })
+  qualifications!: Credential[];
+
+  @Prop({ type: [Credential], default: [] })
+  certifications!: Credential[];
+
+  @Prop({ type: [WorkerDocument], default: [] })
+  documents!: WorkerDocument[];
 
   @Prop({ type: BackgroundCheck, default: () => ({}) })
   backgroundCheck!: BackgroundCheck;

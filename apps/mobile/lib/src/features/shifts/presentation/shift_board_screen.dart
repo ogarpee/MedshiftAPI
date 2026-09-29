@@ -36,6 +36,10 @@ class _ShiftBoardScreenState extends ConsumerState<ShiftBoardScreen> {
           children: [
             _StatusBanner(state: state),
             const SizedBox(height: 14),
+            _InvitationPanel(state: state),
+            const SizedBox(height: 14),
+            _ApplicationPanel(state: state),
+            const SizedBox(height: 14),
             ShiftFilterPanel(state: state),
             const SizedBox(height: 14),
             SegmentedButton<bool>(
@@ -70,6 +74,9 @@ class _ShiftBoardScreenState extends ConsumerState<ShiftBoardScreen> {
                       context,
                       shift,
                       state.onboarding.canAcceptShifts,
+                      state.applications.any(
+                        (application) => application.shiftId == shift.id,
+                      ),
                     ),
                   ),
                 ),
@@ -80,7 +87,12 @@ class _ShiftBoardScreenState extends ConsumerState<ShiftBoardScreen> {
     );
   }
 
-  void _showDetails(BuildContext context, ShiftSummary shift, bool canAccept) {
+  void _showDetails(
+    BuildContext context,
+    ShiftSummary shift,
+    bool canAccept,
+    bool alreadyApplied,
+  ) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -88,20 +100,21 @@ class _ShiftBoardScreenState extends ConsumerState<ShiftBoardScreen> {
       builder: (context) => ShiftDetailsSheet(
         shift: shift,
         canAccept: canAccept,
+        alreadyApplied: alreadyApplied,
         onAccept: () async {
           try {
             await ref
                 .read(shiftBoardControllerProvider.notifier)
-                .acceptShift(shift.id);
+                .applyToShift(shift.id);
             if (context.mounted) {
               Navigator.of(context).pop();
-              showAppSnack(context, 'Shift accepted.');
+              showAppSnack(context, 'Application submitted.');
             }
           } catch (error) {
             if (context.mounted) {
               showAppSnack(
                 context,
-                apiErrorMessage(error, 'Shift could not be accepted.'),
+                apiErrorMessage(error, 'Application could not be submitted.'),
                 isError: true,
               );
             }
@@ -119,6 +132,115 @@ class ShiftFilterPanel extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<ShiftFilterPanel> createState() => _ShiftFilterPanelState();
+}
+
+class _InvitationPanel extends ConsumerWidget {
+  const _InvitationPanel({required this.state});
+
+  final ShiftBoardState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = state.invitations
+        .where(
+          (invitation) => invitation.status == ShiftInvitationStatus.pending,
+        )
+        .toList();
+    if (pending.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Invitations',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 10),
+            ...pending.map(
+              (invitation) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        invitation.message?.isNotEmpty == true
+                            ? invitation.message!
+                            : 'Facility invited you to a shift.',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => ref
+                          .read(shiftBoardControllerProvider.notifier)
+                          .respondToInvitation(
+                            invitation.id,
+                            ShiftInvitationStatus.declined,
+                          ),
+                      child: const Text('Decline'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => ref
+                          .read(shiftBoardControllerProvider.notifier)
+                          .respondToInvitation(
+                            invitation.id,
+                            ShiftInvitationStatus.accepted,
+                          ),
+                      child: const Text('Accept'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ApplicationPanel extends StatelessWidget {
+  const _ApplicationPanel({required this.state});
+
+  final ShiftBoardState state;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.applications.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Applications',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: state.applications.take(4).map((application) {
+                return StatusPill(
+                  label: readableEnum(application.status.name),
+                  tone: AppColors.navy,
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _ShiftFilterPanelState extends ConsumerState<ShiftFilterPanel> {
@@ -448,11 +570,13 @@ class ShiftDetailsSheet extends StatelessWidget {
     super.key,
     required this.shift,
     required this.canAccept,
+    required this.alreadyApplied,
     required this.onAccept,
   });
 
   final ShiftSummary shift;
   final bool canAccept;
+  final bool alreadyApplied;
   final Future<void> Function() onAccept;
 
   @override
@@ -530,8 +654,14 @@ class ShiftDetailsSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: canAccept ? onAccept : null,
-            child: Text(canAccept ? 'Accept Shift' : 'Approval required'),
+            onPressed: canAccept && !alreadyApplied ? onAccept : null,
+            child: Text(
+              alreadyApplied
+                  ? 'Application submitted'
+                  : canAccept
+                  ? 'Apply for shift'
+                  : 'Approval required',
+            ),
           ),
         ],
       ),
@@ -757,20 +887,19 @@ int _shiftDurationHours(ShiftSummary shift) {
 }
 
 String _shiftStatusApi(ShiftStatus status) {
-  return switch (status) {
-    ShiftStatus.matched => 'MATCHED',
-    ShiftStatus.inProgress => 'IN_PROGRESS',
-    ShiftStatus.completed => 'COMPLETED',
-    ShiftStatus.cancelled => 'CANCELLED',
-    ShiftStatus.open => 'OPEN',
-  };
+  return shiftStatusToApi(status);
 }
 
 Color _shiftStatusTone(ShiftStatus status) {
   return switch (status) {
     ShiftStatus.cancelled => AppColors.danger,
+    ShiftStatus.disputed => AppColors.danger,
     ShiftStatus.completed => AppColors.success,
+    ShiftStatus.facilityApproved => AppColors.success,
+    ShiftStatus.paid => AppColors.success,
     ShiftStatus.open => AppColors.gold,
+    ShiftStatus.published => AppColors.gold,
+    ShiftStatus.matching => AppColors.gold,
     _ => AppColors.navy,
   };
 }

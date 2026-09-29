@@ -9,6 +9,7 @@ import '../../notifications/presentation/notifications_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../shifts/presentation/my_work_screen.dart';
 import '../../shifts/presentation/shift_board_screen.dart';
+import 'home_overview_screen.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, this.testScreens});
@@ -28,15 +29,31 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final screens =
         widget.testScreens ??
         const [
+          HomeOverviewScreen(),
           ShiftBoardScreen(),
           MyWorkScreen(),
-          NotificationsScreen(),
+          EarningsScreen(),
           SettingsScreen(),
         ];
+    const titles = ['Home', 'Shifts', 'Schedule', 'Earnings', 'Profile'];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(['Shifts', 'My work', 'Notifications', 'Settings'][_index]),
+        title: Text(titles[_index]),
+        actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: const Icon(Icons.notifications_none),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('Notifications')),
+                  body: const NotificationsScreen(),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       drawer: Drawer(
         child: SafeArea(
@@ -79,27 +96,48 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ),
               ListTile(
                 leading: const Icon(Icons.dashboard_outlined),
-                title: const Text('Shift board'),
+                title: const Text('Home'),
                 selected: _index == 0,
                 onTap: () => _selectDrawerTab(0),
               ),
               ListTile(
-                leading: const Icon(Icons.event_available_outlined),
-                title: const Text('My work'),
+                leading: const Icon(Icons.search),
+                title: const Text('Shifts'),
                 selected: _index == 1,
                 onTap: () => _selectDrawerTab(1),
               ),
               ListTile(
-                leading: const Icon(Icons.notifications_none),
-                title: const Text('Notifications'),
+                leading: const Icon(Icons.event_available_outlined),
+                title: const Text('Schedule'),
                 selected: _index == 2,
                 onTap: () => _selectDrawerTab(2),
               ),
               ListTile(
-                leading: const Icon(Icons.settings_outlined),
-                title: const Text('Settings'),
+                leading: const Icon(Icons.payments_outlined),
+                title: const Text('Earnings'),
                 selected: _index == 3,
                 onTap: () => _selectDrawerTab(3),
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: const Text('Profile'),
+                selected: _index == 4,
+                onTap: () => _selectDrawerTab(4),
+              ),
+              ListTile(
+                leading: const Icon(Icons.notifications_none),
+                title: const Text('Notifications'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Notifications')),
+                        body: const NotificationsScreen(),
+                      ),
+                    ),
+                  );
+                },
               ),
               const Divider(height: 18),
               ListTile(
@@ -128,18 +166,22 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         currentIndex: _index,
         onTap: (index) => setState(() => _index = index),
         items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined),
+            label: 'Home',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Shifts'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.work_outline),
-            label: 'My Work',
+            icon: Icon(Icons.event_available_outlined),
+            label: 'Schedule',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            label: 'Alerts',
+            icon: Icon(Icons.payments_outlined),
+            label: 'Earnings',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
-            label: 'Settings',
+            label: 'Profile',
           ),
         ],
       ),

@@ -81,18 +81,122 @@ export const OnboardingStatus = {
 export type OnboardingStatus = (typeof OnboardingStatus)[keyof typeof OnboardingStatus];
 
 export const ShiftStatus = {
+  Draft: "DRAFT",
+  Published: "PUBLISHED",
+  Matching: "MATCHING",
   Open: "OPEN",
+  Assigned: "ASSIGNED",
+  Upcoming: "UPCOMING",
   Matched: "MATCHED",
   InProgress: "IN_PROGRESS",
   Completed: "COMPLETED",
-  Cancelled: "CANCELLED"
+  TimesheetSubmitted: "TIMESHEET_SUBMITTED",
+  FacilityApproved: "FACILITY_APPROVED",
+  PaymentProcessing: "PAYMENT_PROCESSING",
+  Paid: "PAID",
+  Cancelled: "CANCELLED",
+  Expired: "EXPIRED",
+  NoShow: "NO_SHOW",
+  Disputed: "DISPUTED"
 } as const;
 
 export type ShiftStatus = (typeof ShiftStatus)[keyof typeof ShiftStatus];
 
+export const ShiftVisibility = {
+  Open: "OPEN",
+  Recommended: "RECOMMENDED",
+  Both: "BOTH"
+} as const;
+
+export type ShiftVisibility = (typeof ShiftVisibility)[keyof typeof ShiftVisibility];
+
+export const PayType = {
+  Hourly: "HOURLY",
+  PerShift: "PER_SHIFT"
+} as const;
+
+export type PayType = (typeof PayType)[keyof typeof PayType];
+
+export const VerificationDocumentStatus = {
+  Pending: "PENDING",
+  Verified: "VERIFIED",
+  Rejected: "REJECTED",
+  Expired: "EXPIRED"
+} as const;
+
+export type VerificationDocumentStatus = (typeof VerificationDocumentStatus)[keyof typeof VerificationDocumentStatus];
+
+export const ShiftApplicationStatus = {
+  Applied: "APPLIED",
+  UnderReview: "UNDER_REVIEW",
+  Selected: "SELECTED",
+  Confirmed: "CONFIRMED",
+  Declined: "DECLINED",
+  Withdrawn: "WITHDRAWN"
+} as const;
+
+export type ShiftApplicationStatus = (typeof ShiftApplicationStatus)[keyof typeof ShiftApplicationStatus];
+
+export const ShiftInvitationStatus = {
+  Pending: "PENDING",
+  Accepted: "ACCEPTED",
+  Declined: "DECLINED",
+  Cancelled: "CANCELLED",
+  Expired: "EXPIRED"
+} as const;
+
+export type ShiftInvitationStatus = (typeof ShiftInvitationStatus)[keyof typeof ShiftInvitationStatus];
+
+export const ShiftAssignmentStatus = {
+  Confirmed: "CONFIRMED",
+  InProgress: "IN_PROGRESS",
+  Completed: "COMPLETED",
+  Cancelled: "CANCELLED",
+  NoShow: "NO_SHOW"
+} as const;
+
+export type ShiftAssignmentStatus = (typeof ShiftAssignmentStatus)[keyof typeof ShiftAssignmentStatus];
+
+export const AttendanceEventType = {
+  ClockIn: "CLOCK_IN",
+  BreakStart: "BREAK_START",
+  BreakEnd: "BREAK_END",
+  ClockOut: "CLOCK_OUT",
+  ManualAdjustment: "MANUAL_ADJUSTMENT"
+} as const;
+
+export type AttendanceEventType = (typeof AttendanceEventType)[keyof typeof AttendanceEventType];
+
+export const TimesheetStatus = {
+  Draft: "DRAFT",
+  Submitted: "SUBMITTED",
+  Approved: "APPROVED",
+  Rejected: "REJECTED",
+  CorrectionRequested: "CORRECTION_REQUESTED",
+  Disputed: "DISPUTED"
+} as const;
+
+export type TimesheetStatus = (typeof TimesheetStatus)[keyof typeof TimesheetStatus];
+
+export const DisputeStatus = {
+  Open: "OPEN",
+  UnderReview: "UNDER_REVIEW",
+  Resolved: "RESOLVED",
+  Rejected: "REJECTED",
+  Cancelled: "CANCELLED"
+} as const;
+
+export type DisputeStatus = (typeof DisputeStatus)[keyof typeof DisputeStatus];
+
 export const NotificationType = {
   ShiftCreated: "SHIFT_CREATED",
   ShiftAccepted: "SHIFT_ACCEPTED",
+  MarketplaceApplication: "MARKETPLACE_APPLICATION",
+  MarketplaceInvitation: "MARKETPLACE_INVITATION",
+  MarketplaceAssignment: "MARKETPLACE_ASSIGNMENT",
+  MarketplaceAttendance: "MARKETPLACE_ATTENDANCE",
+  MarketplaceTimesheet: "MARKETPLACE_TIMESHEET",
+  MarketplaceDispute: "MARKETPLACE_DISPUTE",
   OnboardingApproved: "ONBOARDING_APPROVED",
   OnboardingRejected: "ONBOARDING_REJECTED",
   ReviewAvailable: "REVIEW_AVAILABLE"
@@ -141,6 +245,22 @@ export interface ShiftSummary {
   location: GeoPoint;
   description?: string;
   filledAt?: string | null;
+  title?: string;
+  breakMinutes?: number;
+  caregiversRequired?: number;
+  payAmount?: number;
+  currency?: string;
+  payType?: PayType;
+  visibility?: ShiftVisibility;
+  requirements?: ShiftRequirementSummary;
+}
+
+export interface ShiftRequirementSummary {
+  caregiverType?: string;
+  requiredQualifications?: string[];
+  requiredSkills?: string[];
+  requiredCertifications?: string[];
+  minimumExperienceYears?: number;
 }
 
 export interface MatchedShiftSummary extends ShiftSummary {
@@ -155,6 +275,90 @@ export interface MatchedShiftSummary extends ShiftSummary {
       averageRating: number;
     };
   };
+}
+
+export interface ShiftApplicationSummary {
+  id: string;
+  shiftId: string;
+  workerId: string;
+  status: ShiftApplicationStatus;
+  matchScore?: number;
+  message?: string;
+  appliedAt?: string;
+  reviewedAt?: string;
+  selectedAt?: string;
+}
+
+export interface ShiftInvitationSummary {
+  id: string;
+  shiftId: string;
+  workerId: string;
+  invitedBy: string;
+  status: ShiftInvitationStatus;
+  message?: string;
+  respondedAt?: string;
+}
+
+export interface ShiftAssignmentSummary {
+  id: string;
+  shiftId: string;
+  workerId: string;
+  applicationId?: string;
+  invitationId?: string;
+  status: ShiftAssignmentStatus;
+  confirmedAt?: string;
+}
+
+export interface AttendanceEventSummary {
+  id: string;
+  idempotencyKey: string;
+  shiftId: string;
+  workerId: string;
+  eventType: AttendanceEventType;
+  occurredAt: string;
+  location?: GeoPoint;
+  notes?: string;
+}
+
+export interface TimesheetSummary {
+  id: string;
+  shiftId: string;
+  workerId: string;
+  status: TimesheetStatus;
+  scheduledStartTime?: string;
+  scheduledEndTime?: string;
+  actualStartTime?: string;
+  actualEndTime?: string;
+  breakMinutes: number;
+  workedMinutes: number;
+  notes?: string;
+  facilityNotes?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+}
+
+export interface DisputeSummary {
+  id: string;
+  shiftId?: string;
+  timesheetId?: string;
+  reviewId?: string;
+  openedBy: string;
+  status: DisputeStatus;
+  reason: string;
+  resolutionNotes?: string;
+  resolvedAt?: string;
+}
+
+export interface MarketplaceOverviewSummary {
+  applications: number;
+  pendingApplications: number;
+  invitations: number;
+  pendingInvitations: number;
+  assignments: number;
+  activeAssignments: number;
+  attendanceEvents: number;
+  submittedTimesheets: number;
+  openDisputes: number;
 }
 
 export interface ShiftCreatedEvent {

@@ -55,68 +55,6 @@ type ScheduleSlot = {
   title: string;
 };
 
-const demoShifts: MatchedShiftSummary[] = [
-  {
-    id: "demo-worker-1",
-    facilityId: "demo-facility-1",
-    roleRequired: ClinicalRole.Hca,
-    startTime: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
-    hourlyRate: 34,
-    status: ShiftStatus.Open,
-    location: { type: "Point", coordinates: [-114.0719, 51.0447] },
-    description: "Memory care coverage with a small evening team.",
-    distanceKm: 4.8,
-    facility: {
-      id: "demo-facility-1",
-      name: "Bow Valley Care Centre",
-      facilityType: FacilityType.LongTermCare,
-      address: { city: "Calgary", province: "AB" },
-      stats: { averageRating: 4.8 }
-    }
-  },
-  {
-    id: "demo-worker-2",
-    facilityId: "demo-facility-2",
-    roleRequired: ClinicalRole.Rn,
-    startTime: new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString(),
-    hourlyRate: 52,
-    status: ShiftStatus.Open,
-    location: { type: "Point", coordinates: [-114.095, 51.05] },
-    description: "Medication pass and overnight admissions support.",
-    distanceKm: 8.2,
-    facility: {
-      id: "demo-facility-2",
-      name: "Prairie North Hospital",
-      facilityType: FacilityType.Hospital,
-      address: { city: "Calgary", province: "AB" },
-      stats: { averageRating: 4.6 }
-    }
-  },
-  {
-    id: "demo-worker-3",
-    facilityId: "demo-facility-3",
-    roleRequired: ClinicalRole.Lpn,
-    startTime: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
-    endTime: new Date(Date.now() - 22 * 60 * 60 * 1000).toISOString(),
-    hourlyRate: 44,
-    status: ShiftStatus.Completed,
-    location: { type: "Point", coordinates: [-114.081, 51.04] },
-    description: "Completed evening coverage ready for facility review.",
-    distanceKm: 5.4,
-    facility: {
-      id: "demo-facility-3",
-      name: "Foothills Community Clinic",
-      facilityType: FacilityType.Clinic,
-      address: { city: "Calgary", province: "AB" },
-      stats: { averageRating: 4.9 }
-    }
-  }
-];
-
-const demoOpenShifts = demoShifts.filter((shift) => shift.status === ShiftStatus.Open);
-const demoWorkerShifts = demoShifts.filter((shift) => shift.status !== ShiftStatus.Open);
 const initialShiftFilters: WorkerShiftFilters = {
   facilityType: "",
   maxShiftHours: "",
@@ -130,7 +68,7 @@ export default function WorkerDashboardPage() {
   const pathname = usePathname();
   const activeSection = getWorkerDashboardSection(pathname);
   const pageTitle = getWorkerDashboardTitle(activeSection);
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
   const {
     isLoadingNotifications,
     loadNotifications,
@@ -141,15 +79,14 @@ export default function WorkerDashboardPage() {
   } = useDashboardNotifications(apiUrl);
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedShiftId, setSelectedShiftId] = useState(demoShifts[0]?.id ?? "");
-  const [openShifts, setOpenShifts] = useState<MatchedShiftSummary[]>(demoOpenShifts);
-  const [workerShifts, setWorkerShifts] = useState<MatchedShiftSummary[]>(demoWorkerShifts);
+  const [selectedShiftId, setSelectedShiftId] = useState("");
+  const [openShifts, setOpenShifts] = useState<MatchedShiftSummary[]>([]);
+  const [workerShifts, setWorkerShifts] = useState<MatchedShiftSummary[]>([]);
   const [reviews, setReviews] = useState<ReviewSummary[]>([]);
   const [workerProfile, setWorkerProfile] = useState<WorkerProfileResponse | null>(null);
   const [message, setMessage] = useState("");
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
-  const [isPreviewMode, setIsPreviewMode] = useState(true);
   const [onboardingStatus, setOnboardingStatus] = useState<WorkerOnboardingStatus | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -213,14 +150,13 @@ export default function WorkerDashboardPage() {
     const token = window.localStorage.getItem("medshift.accessToken");
 
     if (!token) {
-      setOpenShifts(demoOpenShifts);
-      setWorkerShifts(demoWorkerShifts);
+      setOpenShifts([]);
+      setWorkerShifts([]);
       setReviews([]);
       setWorkerProfile(null);
       setOnboardingStatus(null);
-      setIsPreviewMode(true);
-      setSelectedShiftId(demoShifts[0]?.id ?? "");
-      setMessage("Showing a Calgary preview. Sign in as a worker to browse live matches.");
+      setSelectedShiftId("");
+      setMessage("Sign in as a worker to browse live matches.");
       return;
     }
 
@@ -250,7 +186,6 @@ export default function WorkerDashboardPage() {
       setOpenShifts(liveOpenShifts);
       setWorkerShifts(ownedShifts);
       setReviews(submittedReviews);
-      setIsPreviewMode(false);
       setSelectedShiftId(liveOpenShifts[0]?.id ?? ownedShifts[0]?.id ?? "");
 
       if (status.verificationStatus === OnboardingStatus.Approved) {
@@ -266,7 +201,6 @@ export default function WorkerDashboardPage() {
       setReviews([]);
       setWorkerProfile(null);
       setOnboardingStatus(null);
-      setIsPreviewMode(false);
       setSelectedShiftId("");
       setMessage("Live worker dashboard data is unavailable. Check API connectivity, then refresh this workspace.");
     } finally {
@@ -323,42 +257,36 @@ export default function WorkerDashboardPage() {
     void loadWorkerDashboard(initialShiftFilters);
   }
 
-  async function acceptShift(shift: MatchedShiftSummary) {
+  async function applyForShift(shift: MatchedShiftSummary) {
     const token = window.localStorage.getItem("medshift.accessToken");
 
-    if (!token || shift.id.startsWith("demo-")) {
-      setOpenShifts((current) =>
-        current.map((item) => (item.id === shift.id ? { ...item, status: ShiftStatus.Matched } : item))
-      );
-      setMessage("Preview accepted. Sign in as a worker to claim live shifts.");
+    if (!token) {
+      setMessage("Sign in as a worker to apply for live shifts.");
       return;
     }
 
     if (!approvedForLiveShifts) {
-      setMessage("Complete onboarding and wait for approval before accepting live shifts.");
+      setMessage("Complete onboarding and wait for approval before applying for live shifts.");
       return;
     }
 
     setIsAccepting(true);
 
     try {
-      const response = await fetch(`${apiUrl}/shifts/${shift.id}/accept`, {
+      const response = await fetch(`${apiUrl}/shifts/${shift.id}/applications`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!response.ok) {
-        throw new Error("Unable to accept shift");
+        throw new Error("Unable to apply for shift");
       }
 
-      const accepted = (await response.json()) as MatchedShiftSummary;
-      const acceptedShift = { ...shift, ...accepted, facility: shift.facility ?? accepted.facility };
       setOpenShifts((current) => current.filter((item) => item.id !== shift.id));
-      setWorkerShifts((current) => mergeShifts([acceptedShift], current));
-      setSelectedShiftId(acceptedShift.id);
-      setMessage("Shift accepted. The facility has been notified.");
+      setSelectedShiftId("");
+      setMessage("Application submitted. The facility can review and assign from the marketplace.");
     } catch {
-      setMessage("That shift could not be accepted. It may already be matched.");
+      setMessage("That application could not be submitted. It may already be filled or require updated credentials.");
     } finally {
       setIsAccepting(false);
     }
@@ -373,9 +301,8 @@ export default function WorkerDashboardPage() {
     const token = window.localStorage.getItem("medshift.accessToken");
     const comment = reviewComment.trim();
 
-    if (!token || shift.id.startsWith("demo-")) {
-      setMessage(`Preview facility review submitted with ${reviewRating} stars.`);
-      setReviewComment("");
+    if (!token) {
+      setMessage("Sign in as a worker to submit facility reviews.");
       return;
     }
 
@@ -408,6 +335,7 @@ export default function WorkerDashboardPage() {
         { label: "Find Shifts", href: "/worker/shifts", active: activeSection === "shifts" },
         { label: "My Work", href: "/worker/work", active: activeSection === "work" },
         { label: "Reviews", href: "/worker/reviews", active: activeSection === "reviews" },
+        { label: "Marketplace", href: "/worker/marketplace" },
         { label: "Settings", href: "/worker/settings" }
       ]}
       notificationLoading={isLoadingNotifications}
@@ -448,7 +376,7 @@ export default function WorkerDashboardPage() {
               <div className="work-overview-heading">
                 <div>
                   <h2>Work overview</h2>
-                  <p>{isPreviewMode ? "Preview data" : "Current year"} <span>{dashboardMetrics.completedShifts} completed</span></p>
+                  <p>Current year <span>{dashboardMetrics.completedShifts} completed</span></p>
                 </div>
                 <button className="soft-select-button" type="button">Year</button>
               </div>
@@ -494,7 +422,7 @@ export default function WorkerDashboardPage() {
                     </div>
                     <div className="request-actions">
                       <button aria-label="Decline request" type="button"><X aria-hidden="true" /></button>
-                      <button aria-label="Accept request" type="button" onClick={() => acceptShift(shift)} disabled={isAccepting || shift.status !== ShiftStatus.Open || (!isPreviewMode && !approvedForLiveShifts)}><Check aria-hidden="true" /></button>
+                      <button aria-label="Apply for request" type="button" onClick={() => applyForShift(shift)} disabled={isAccepting || shift.status !== ShiftStatus.Open || !approvedForLiveShifts}><Check aria-hidden="true" /></button>
                     </div>
                   </div>
                   <div className="request-meta">
@@ -737,11 +665,11 @@ export default function WorkerDashboardPage() {
 
                 <button
                   className="auth-submit"
-                  disabled={isAccepting || selectedShift.status !== ShiftStatus.Open || (!isPreviewMode && !approvedForLiveShifts)}
+                  disabled={isAccepting || selectedShift.status !== ShiftStatus.Open || !approvedForLiveShifts}
                   type="button"
-                  onClick={() => acceptShift(selectedShift)}
+                  onClick={() => applyForShift(selectedShift)}
                 >
-                  {selectedShift.status === ShiftStatus.Open ? (approvedForLiveShifts || isPreviewMode ? "Accept shift" : "Onboarding required") : "Matched"}
+                  {selectedShift.status === ShiftStatus.Open ? (approvedForLiveShifts ? "Apply for shift" : "Onboarding required") : "Matched"}
                 </button>
 
                 {selectedShift.status === ShiftStatus.Completed && !hasSelectedShiftReview ? (

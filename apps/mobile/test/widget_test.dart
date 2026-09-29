@@ -10,19 +10,21 @@ void main() {
         child: MaterialApp(
           home: HomeShell(
             testScreens: [
+              SizedBox(key: Key('home')),
               SizedBox(key: Key('shifts')),
-              SizedBox(key: Key('work')),
-              SizedBox(key: Key('alerts')),
-              SizedBox(key: Key('settings')),
+              SizedBox(key: Key('schedule')),
+              SizedBox(key: Key('earnings')),
+              SizedBox(key: Key('profile')),
             ],
           ),
         ),
       ),
     );
 
+    expect(find.text('Home'), findsWidgets);
     expect(find.text('Shifts'), findsWidgets);
-    expect(find.text('My Work'), findsOneWidget);
-    expect(find.text('Alerts'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Schedule'), findsOneWidget);
+    expect(find.text('Earnings'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
   });
 }

@@ -24,7 +24,7 @@ interface PasswordRecoveryPanelProps {
 export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
   const { notify } = useToast();
   const searchParams = useSearchParams();
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000", []);
+  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
   const initialEmail = searchParams.get("email") ?? "";
   const [email, setEmail] = useState(initialEmail);
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);

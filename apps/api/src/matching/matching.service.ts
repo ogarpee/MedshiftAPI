@@ -4,6 +4,7 @@ import { FilterQuery, Model, PipelineStage, Types } from "mongoose";
 import { BackgroundCheckStatus, OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
 import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
+import { ShiftAssignment, ShiftAssignmentDocument } from "../database/schemas/marketplace.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 import { BrowseOpenShiftsDto } from "./dto/browse-open-shifts.dto";
@@ -25,7 +26,8 @@ export class MatchingService {
   constructor(
     @InjectModel(Shift.name) private readonly shifts: Model<ShiftDocument>,
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>,
-    @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>
+    @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
+    @InjectModel(ShiftAssignment.name) private readonly assignments: Model<ShiftAssignmentDocument>
   ) {}
 
   async browseOpenShifts(currentUser: AuthUser, dto: BrowseOpenShiftsDto) {
@@ -39,12 +41,19 @@ export class MatchingService {
     }
 
     const match: FilterQuery<Shift> = {
-      status: ShiftStatus.Open,
+      status: { $in: [ShiftStatus.Open, ShiftStatus.Published, ShiftStatus.Matching] },
       startTime: { $gte: new Date() }
     };
 
     if (dto.roleRequired) {
       match.roleRequired = dto.roleRequired;
+    }
+
+    if (worker.yearsExperience !== undefined) {
+      match.$or = [
+        { "requirements.minimumExperienceYears": { $exists: false } },
+        { "requirements.minimumExperienceYears": { $lte: worker.yearsExperience } }
+      ];
     }
 
     if (dto.maxShiftHours) {
@@ -91,6 +100,16 @@ export class MatchingService {
       pipeline.push({ $match: { "facility.facilityType": dto.facilityType } });
     }
 
+    pipeline.push({
+      $match: {
+        $and: [
+          this.buildRequirementArrayMatch("requirements.requiredSkills", worker.skills ?? []),
+          this.buildRequirementArrayMatch("requirements.requiredQualifications", worker.qualifications?.map((item) => item.type).filter(Boolean) ?? []),
+          this.buildRequirementArrayMatch("requirements.requiredCertifications", worker.certifications?.map((item) => item.type).filter(Boolean) ?? [])
+        ]
+      }
+    });
+
     pipeline.push({ $sort: this.buildShiftSort(dto.sort) }, { $limit: 50 });
 
     const shifts = await this.shifts.aggregate<MatchedShiftDocument>(pipeline);
@@ -136,7 +155,7 @@ export class MatchingService {
           query: match
         }
       },
-      { $sort: { distanceMeters: 1, "stats.averageRating": -1, "stats.totalShiftsCompleted": -1 } },
+      { $sort: { distanceMeters: 1, "stats.reliabilityScore": -1, yearsExperience: -1, "stats.averageRating": -1, "stats.totalShiftsCompleted": -1 } },
       { $limit: limit }
     ]);
 
@@ -146,6 +165,14 @@ export class MatchingService {
   async findMatchingWorkerUserIdsForShift(payload: {
     location: { coordinates: [number, number]; type: "Point" };
     roleRequired: string;
+    requirements?: {
+      minimumExperienceYears?: number;
+      requiredCertifications?: string[];
+      requiredQualifications?: string[];
+      requiredSkills?: string[];
+    };
+    startTime?: Date;
+    endTime?: Date;
   }) {
     const [longitude, latitude] = payload.location.coordinates;
     const workers = await this.workerProfiles.aggregate<MatchedWorkerDocument>([
@@ -157,7 +184,8 @@ export class MatchingService {
           query: {
             "backgroundCheck.status": BackgroundCheckStatus.Passed,
             "onboarding.verificationStatus": OnboardingStatus.Approved,
-            title: payload.roleRequired
+            title: payload.roleRequired,
+            ...(payload.requirements?.minimumExperienceYears ? { yearsExperience: { $gte: payload.requirements.minimumExperienceYears } } : {})
           }
         }
       },
@@ -171,7 +199,10 @@ export class MatchingService {
       { $limit: 100 }
     ]);
 
-    return workers.map((worker) => worker.userId.toString());
+    const eligibleWorkers = workers.filter((worker) => this.workerMeetsRequirements(worker, payload.requirements));
+    const workersWithoutConflicts = await this.filterWorkersWithoutConflicts(eligibleWorkers, payload.startTime, payload.endTime);
+
+    return workersWithoutConflicts.map((worker) => worker.userId.toString());
   }
 
   private async resolveWorker(userId: string) {
@@ -182,6 +213,59 @@ export class MatchingService {
     }
 
     return worker;
+  }
+
+  private buildRequirementArrayMatch(requirementPath: string, workerValues: Array<string | undefined>) {
+    const normalizedWorkerValues = workerValues.filter(Boolean);
+    return {
+      $or: [
+        { [requirementPath]: { $exists: false } },
+        { [requirementPath]: { $size: 0 } },
+        { [requirementPath]: { $not: { $elemMatch: { $nin: normalizedWorkerValues } } } }
+      ]
+    };
+  }
+
+  private workerMeetsRequirements(worker: WorkerProfile, requirements?: { requiredCertifications?: string[]; requiredQualifications?: string[]; requiredSkills?: string[] }) {
+    if (!requirements) {
+      return true;
+    }
+
+    const skills = new Set((worker.skills ?? []).map((value) => value.toLowerCase()));
+    const qualifications = new Set((worker.qualifications ?? []).map((value) => value.type?.toLowerCase()).filter(Boolean));
+    const certifications = new Set((worker.certifications ?? []).map((value) => value.type?.toLowerCase()).filter(Boolean));
+
+    return (
+      (requirements.requiredSkills ?? []).every((value) => skills.has(value.toLowerCase())) &&
+      (requirements.requiredQualifications ?? []).every((value) => qualifications.has(value.toLowerCase())) &&
+      (requirements.requiredCertifications ?? []).every((value) => certifications.has(value.toLowerCase()))
+    );
+  }
+
+  private async filterWorkersWithoutConflicts(workers: MatchedWorkerDocument[], startTime?: Date, endTime?: Date) {
+    if (!startTime || !endTime || !workers.length) {
+      return workers;
+    }
+
+    const assignments = await this.assignments
+      .find({
+        workerId: { $in: workers.map((worker) => worker._id) },
+        status: { $in: ["CONFIRMED", "IN_PROGRESS"] }
+      })
+      .exec();
+    const assignedShiftIds = assignments.map((assignment) => assignment.shiftId);
+    const conflictingShifts = await this.shifts
+      .find({
+        _id: { $in: assignedShiftIds },
+        startTime: { $lt: endTime },
+        endTime: { $gt: startTime }
+      })
+      .select("_id")
+      .exec();
+    const conflictingShiftIds = new Set(conflictingShifts.map((shift) => shift._id.toString()));
+    const conflictingWorkerIds = new Set(assignments.filter((assignment) => conflictingShiftIds.has(assignment.shiftId.toString())).map((assignment) => assignment.workerId.toString()));
+
+    return workers.filter((worker) => !conflictingWorkerIds.has(worker._id.toString()));
   }
 
   private async resolveWorkerSearchOrigin(currentUser: AuthUser, dto: SearchWorkersDto) {
@@ -264,7 +348,8 @@ export class MatchingService {
       onboardingStatus: worker.onboarding?.verificationStatus ?? OnboardingStatus.Incomplete,
       stats: {
         averageRating: worker.stats?.averageRating ?? 0,
-        totalShiftsCompleted: worker.stats?.totalShiftsCompleted ?? 0
+        totalShiftsCompleted: worker.stats?.totalShiftsCompleted ?? 0,
+        reliabilityScore: worker.stats?.reliabilityScore ?? 0
       }
     };
   }

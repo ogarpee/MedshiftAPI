@@ -27,6 +27,54 @@ class CredentialDto {
   @IsOptional()
   @IsBoolean()
   isVerified?: boolean;
+
+  @IsOptional()
+  @IsString()
+  institution?: string;
+
+  @IsOptional()
+  @IsDateString()
+  issueDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expiryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  certificateNumber?: string;
+}
+
+class WorkerDocumentDto {
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  documentUrl?: string;
+}
+
+class WorkerAvailabilityWindowDto {
+  @IsOptional()
+  @IsString()
+  day?: string;
+
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
+
+  @IsOptional()
+  @IsDateString()
+  date?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  unavailable?: boolean;
 }
 
 class BackgroundCheckDto {
@@ -55,6 +103,22 @@ class WorkerPreferencesDto {
   @IsArray()
   @IsIn(["DAY", "EVENING", "NIGHT", "WEEKEND"], { each: true })
   preferredShiftTypes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkerAvailabilityWindowDto)
+  availabilityWindows?: WorkerAvailabilityWindowDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsDateString({}, { each: true })
+  unavailableDates?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  preferredWorkingHours?: string[];
 }
 
 export class CreateWorkerProfileDto {
@@ -68,14 +132,55 @@ export class CreateWorkerProfileDto {
   @IsString()
   avatarUrl?: string;
 
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @IsEnum(ClinicalRole)
   title!: ClinicalRole;
+
+  @IsOptional()
+  @IsString()
+  professionalSummary?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  yearsExperience?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  specialties?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  skills?: string[];
 
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CredentialDto)
   credentials?: CredentialDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CredentialDto)
+  qualifications?: CredentialDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CredentialDto)
+  certifications?: CredentialDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkerDocumentDto)
+  documents?: WorkerDocumentDto[];
 
   @IsOptional()
   @ValidateNested()

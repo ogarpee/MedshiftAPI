@@ -12,6 +12,11 @@ class ShiftBoardState {
   const ShiftBoardState({
     this.openShifts = const [],
     this.myShifts = const [],
+    this.applications = const [],
+    this.invitations = const [],
+    this.assignments = const [],
+    this.attendanceEvents = const [],
+    this.timesheets = const [],
     this.profile,
     this.onboarding = const OnboardingState(
       verificationStatus: OnboardingStatus.incomplete,
@@ -22,6 +27,11 @@ class ShiftBoardState {
 
   final List<ShiftSummary> openShifts;
   final List<ShiftSummary> myShifts;
+  final List<ShiftApplicationSummary> applications;
+  final List<ShiftInvitationSummary> invitations;
+  final List<ShiftAssignmentSummary> assignments;
+  final List<AttendanceEventSummary> attendanceEvents;
+  final List<TimesheetSummary> timesheets;
   final WorkerProfile? profile;
   final OnboardingState onboarding;
   final ShiftSearchFilters filters;
@@ -49,6 +59,13 @@ class ShiftBoardController extends AsyncNotifier<ShiftBoardState> {
     final onboarding = await workerRepository.onboardingStatus();
     final profile = await workerRepository.profile();
     final myShifts = await shiftRepository.myShifts();
+    final marketplaceResults = await Future.wait([
+      shiftRepository.applications(),
+      shiftRepository.invitations(),
+      shiftRepository.assignments(),
+      shiftRepository.attendance(),
+      shiftRepository.timesheets(),
+    ]);
     final openShifts = profile == null
         ? <ShiftSummary>[]
         : await shiftRepository.openShifts(
@@ -60,6 +77,11 @@ class ShiftBoardController extends AsyncNotifier<ShiftBoardState> {
     return ShiftBoardState(
       openShifts: openShifts,
       myShifts: myShifts,
+      applications: marketplaceResults[0] as List<ShiftApplicationSummary>,
+      invitations: marketplaceResults[1] as List<ShiftInvitationSummary>,
+      assignments: marketplaceResults[2] as List<ShiftAssignmentSummary>,
+      attendanceEvents: marketplaceResults[3] as List<AttendanceEventSummary>,
+      timesheets: marketplaceResults[4] as List<TimesheetSummary>,
       profile: profile,
       onboarding: onboarding,
       filters: filters,
@@ -67,7 +89,7 @@ class ShiftBoardController extends AsyncNotifier<ShiftBoardState> {
           ? filters.hasActiveFilters
                 ? 'Showing filtered shifts. ${openShifts.length} match${openShifts.length == 1 ? "" : "es"} found.'
                 : 'Live board connected to your saved radius.'
-          : 'Complete approval before accepting live shifts.',
+          : 'Complete approval before applying for live shifts.',
     );
   }
 
@@ -82,18 +104,44 @@ class ShiftBoardController extends AsyncNotifier<ShiftBoardState> {
     state = await AsyncValue.guard(() => _load(filters));
   }
 
-  Future<void> acceptShift(String shiftId) async {
+  Future<void> applyToShift(String shiftId) async {
     final current = state.value;
     if (current == null) {
       return;
     }
     if (!current.onboarding.canAcceptShifts) {
       throw const ApiException(
-        'Worker onboarding must be approved before accepting shifts.',
+        'Worker onboarding must be approved before applying to shifts.',
       );
     }
 
-    await ref.read(shiftRepositoryProvider).accept(shiftId);
+    await ref.read(shiftRepositoryProvider).apply(shiftId);
+    state = AsyncData(await _load());
+  }
+
+  Future<void> respondToInvitation(
+    String invitationId,
+    ShiftInvitationStatus status,
+  ) async {
+    await ref
+        .read(shiftRepositoryProvider)
+        .respondToInvitation(invitationId, status);
+    state = AsyncData(await _load());
+  }
+
+  Future<void> recordAttendance(
+    String shiftId,
+    AttendanceEventType type,
+  ) async {
+    final location = state.value?.profile?.location;
+    await ref
+        .read(shiftRepositoryProvider)
+        .recordAttendance(shiftId, type, location: location);
+    state = AsyncData(await _load());
+  }
+
+  Future<void> submitTimesheet(ShiftSummary shift) async {
+    await ref.read(shiftRepositoryProvider).submitTimesheet(shift);
     state = AsyncData(await _load());
   }
 
