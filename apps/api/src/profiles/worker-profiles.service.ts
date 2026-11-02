@@ -1,8 +1,16 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-import { BackgroundCheckStatus, OnboardingStatus, UserRole } from "@medshift/shared-types";
+import {
+  BackgroundCheckStatus,
+  OnboardingStatus,
+  RequiredWorkerDocumentCategories,
+  UserRole,
+  VerificationDocumentStatus,
+  WorkerDocumentCategory
+} from "@medshift/shared-types";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
+import { WorkerOnboardingDraft, WorkerOnboardingDraftDocument } from "../database/schemas/worker-onboarding-draft.schema";
 import { AuthUser } from "../auth/auth-user";
 import { CreateWorkerProfileDto } from "./dto/create-worker-profile.dto";
 import { UpdateWorkerProfileDto } from "./dto/update-worker-profile.dto";
@@ -11,27 +19,34 @@ import { UpdateWorkerProfileDto } from "./dto/update-worker-profile.dto";
 export class WorkerProfilesService {
   constructor(
     @InjectModel(WorkerProfile.name)
-    private readonly workerProfiles: Model<WorkerProfileDocument>
+    private readonly workerProfiles: Model<WorkerProfileDocument>,
+    @InjectModel(WorkerOnboardingDraft.name)
+    private readonly onboardingDrafts: Model<WorkerOnboardingDraftDocument>
   ) {}
 
-  async create(currentUser: AuthUser, dto: CreateWorkerProfileDto) {
-    const existingProfile = await this.workerProfiles.exists({ userId: currentUser.sub });
+  async saveMine(currentUser: AuthUser, dto: CreateWorkerProfileDto) {
+    const existingProfile = await this.workerProfiles.findOne({ userId: currentUser.sub }).exec();
+    if (existingProfile) return this.updateDocument(currentUser, existingProfile, dto);
 
-    if (existingProfile) {
-      throw new ConflictException("Worker profile already exists for this user");
+    try {
+      const profile = await this.workerProfiles.create({
+        ...dto,
+        documents: this.normalizeDocuments(currentUser, dto.documents ?? []),
+        backgroundCheck: {
+          status: dto.backgroundCheck?.status ?? BackgroundCheckStatus.Pending,
+          consentedAt: dto.backgroundCheck?.consentedAt
+        },
+        onboarding: this.buildOnboardingState(dto),
+        userId: new Types.ObjectId(currentUser.sub)
+      });
+      await this.onboardingDrafts.deleteOne({ userId: profile.userId }).exec();
+      return this.serialize(profile);
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) throw error;
+      const racedProfile = await this.workerProfiles.findOne({ userId: currentUser.sub }).exec();
+      if (!racedProfile) throw error;
+      return this.updateDocument(currentUser, racedProfile, dto);
     }
-
-    const profile = await this.workerProfiles.create({
-      ...dto,
-      backgroundCheck: {
-        status: dto.backgroundCheck?.status ?? BackgroundCheckStatus.Pending,
-        consentedAt: dto.backgroundCheck?.consentedAt
-      },
-      onboarding: this.buildOnboardingState(dto),
-      userId: new Types.ObjectId(currentUser.sub)
-    });
-
-    return this.serialize(profile);
   }
 
   async findAll() {
@@ -77,8 +92,15 @@ export class WorkerProfilesService {
   async update(currentUser: AuthUser, id: string, dto: UpdateWorkerProfileDto) {
     const profile = await this.findDocument(id);
     this.assertCanManage(currentUser, profile);
+    return this.updateDocument(currentUser, profile, dto);
+  }
+
+  private async updateDocument(currentUser: AuthUser, profile: WorkerProfileDocument, dto: UpdateWorkerProfileDto) {
     const shouldResetReview = this.shouldResetApprovedReview(profile, dto);
-    profile.set(dto);
+    profile.set({
+      ...dto,
+      ...(dto.documents ? { documents: this.normalizeDocuments(currentUser, dto.documents, profile) } : {})
+    });
     profile.set({
       backgroundCheck: {
         ...profile.backgroundCheck,
@@ -89,7 +111,9 @@ export class WorkerProfilesService {
       })
     });
 
-    return this.serialize(await profile.save());
+    const saved = await profile.save();
+    await this.onboardingDrafts.deleteOne({ userId: profile.userId }).exec();
+    return this.serialize(saved);
   }
 
   async remove(currentUser: AuthUser, id: string) {
@@ -153,9 +177,9 @@ export class WorkerProfilesService {
     const hasIdentity = Boolean(source.firstName?.trim() && source.lastName?.trim() && source.title);
     const hasLocation = source.location?.type === "Point" && source.location.coordinates?.length === 2;
     const hasPreferences = Boolean(source.preferences?.maxDistanceKm && source.preferences?.availableDays?.length);
-    const hasCredential = Boolean(source.credentials?.some((credential) => credential.type?.trim() && credential.documentUrl?.trim()));
-    const hasBackgroundConsent = Boolean(source.backgroundCheck?.consentedAt);
-    const isComplete = hasIdentity && hasLocation && hasPreferences && hasCredential && hasBackgroundConsent;
+    const uploadedCategories = new Set(source.documents?.filter(isUsableDocument).map((document) => document.category));
+    const hasRequiredDocuments = RequiredWorkerDocumentCategories.every((category) => uploadedCategories.has(category));
+    const isComplete = hasIdentity && hasLocation && hasPreferences && hasRequiredDocuments;
     const currentOnboarding = source.onboarding;
 
     if (options.preserveApproved && isComplete) {
@@ -177,7 +201,51 @@ export class WorkerProfilesService {
       return false;
     }
 
-    return dto.credentials !== undefined || dto.backgroundCheck !== undefined || dto.title !== undefined;
+    if (dto.title !== undefined && dto.title !== profile.title) return true;
+    if (dto.documents === undefined) return false;
+
+    const existingRequired = new Map(
+      profile.documents
+        .filter((document) => RequiredWorkerDocumentCategories.includes(document.category))
+        .map((document) => [document.category, document.id])
+    );
+    const submittedRequired = new Map(
+      dto.documents
+        .filter((document) => RequiredWorkerDocumentCategories.includes(document.category))
+        .map((document) => [document.category, document.id])
+    );
+
+    return RequiredWorkerDocumentCategories.some(
+      (category) => existingRequired.get(category) !== submittedRequired.get(category)
+    );
+  }
+
+  private normalizeDocuments(
+    currentUser: AuthUser,
+    documents: NonNullable<CreateWorkerProfileDto["documents"]>,
+    existingProfile?: WorkerProfileDocument
+  ) {
+    if (documents.length > 10) throw new BadRequestException("A worker profile can contain at most 10 documents");
+    const existingById = new Map(existingProfile?.documents.map((document) => [document.id, document]) ?? []);
+    const seen = new Set<string>();
+
+    return documents.map((document) => {
+      if (seen.has(document.id)) throw new BadRequestException("Worker document IDs must be unique");
+      seen.add(document.id);
+      const existing = existingById.get(document.id);
+      if (existing) return existing;
+      const legacy = Boolean(document.documentUrl && !document.cloudinaryPublicId);
+      if (legacy && currentUser.role !== UserRole.Admin) {
+        throw new BadRequestException("Manual worker document URLs are not allowed");
+      }
+      if (!legacy && currentUser.role !== UserRole.Admin && !document.cloudinaryPublicId?.startsWith(`medshift/workers/${currentUser.sub}/`)) {
+        throw new BadRequestException("Worker document upload is invalid");
+      }
+      if (!legacy && (!document.cloudinaryPublicId || !document.version || !document.format || !document.originalFilename || !document.bytes)) {
+        throw new BadRequestException("Worker document upload metadata is incomplete");
+      }
+      return { ...document, verificationStatus: VerificationDocumentStatus.Pending };
+    });
   }
 }
 
@@ -185,12 +253,20 @@ type WorkerOnboardingSource = {
   firstName?: string;
   lastName?: string;
   title?: unknown;
-  credentials?: Array<{ type?: string; documentUrl?: string }>;
-  backgroundCheck?: { consentedAt?: string | Date };
+  documents?: Array<{
+    id?: string;
+    category?: WorkerDocumentCategory;
+    documentUrl?: string;
+    cloudinaryPublicId?: string;
+  }>;
   location?: { type?: string; coordinates?: number[] };
   onboarding?: { completedAt?: string | Date; verificationStatus?: OnboardingStatus; rejectedReason?: string };
   preferences?: { availableDays?: string[]; maxDistanceKm?: number };
 };
+
+function isUsableDocument(document: NonNullable<WorkerOnboardingSource["documents"]>[number]) {
+  return Boolean(document.id && document.category && (document.cloudinaryPublicId || document.documentUrl));
+}
 
 function getWorkerNextStep(verificationStatus: OnboardingStatus, hasCompletedProfile: boolean) {
   if (!hasCompletedProfile) {
@@ -210,4 +286,8 @@ function getWorkerNextStep(verificationStatus: OnboardingStatus, hasCompletedPro
   }
 
   return "SUBMIT_FOR_REVIEW";
+}
+
+function isDuplicateKeyError(error: unknown): error is { code: number } {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === 11000);
 }

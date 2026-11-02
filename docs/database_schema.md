@@ -65,13 +65,30 @@ Stores specific information about healthcare professionals.
   title: { type: String, enum: ['HCA', 'RN', 'LPN', 'PSW'], required: true }, // Healthcare Assistant, Registered Nurse, etc.
   credentials: [{
     type: { type: String },
-    documentUrl: String, // Cloudinary secure_url from worker credential upload
+    documentUrl: String, // Legacy compatibility only
     isVerified: { type: Boolean, default: false },
     verifiedAt: Date
   }],
+  documents: [{
+    id: String, // Stable document identifier
+    category: { type: String, enum: ['GOVERNMENT_ID', 'PROFESSIONAL_CERTIFICATE', 'BACKGROUND_CHECK', 'OTHER'] },
+    cloudinaryPublicId: String,
+    resourceType: String,
+    deliveryType: String, // authenticated for new private uploads
+    version: Number,
+    format: String,
+    originalFilename: String,
+    bytes: Number,
+    uploadedAt: Date,
+    verificationStatus: { type: String, enum: ['PENDING', 'VERIFIED', 'REJECTED', 'EXPIRED'], default: 'PENDING' },
+    reviewedAt: Date,
+    reviewedBy: { type: ObjectId, ref: 'users' },
+    rejectionReason: String,
+    documentUrl: String // Legacy migrated documents only
+  }],
   backgroundCheck: {
     status: { type: String, enum: ['PENDING', 'PASSED', 'FAILED'], default: 'PENDING' },
-    consentedAt: Date,
+    consentedAt: Date, // Historical compatibility; no longer required or written
     completedAt: Date
   },
   location: {
@@ -97,6 +114,33 @@ Stores specific information about healthcare professionals.
   updatedAt: Date
 }
 ```
+
+### 2.3.1 Worker Onboarding Drafts Collection
+
+Stores resumable, unsubmitted worker onboarding state separately from the canonical worker profile.
+
+```javascript
+// Collection: worker_onboarding_drafts
+{
+  _id: ObjectId,
+  userId: { type: ObjectId, ref: 'users', required: true, unique: true },
+  profileId: { type: ObjectId, ref: 'worker_profiles' },
+  currentStep: { type: Number, min: 0, max: 4, default: 0 },
+  schemaVersion: { type: Number, default: 1 },
+  data: {
+    firstName: String,
+    lastName: String,
+    title: String,
+    location: { type: String, coordinates: [Number] },
+    preferences: { maxDistanceKm: Number, availableDays: [String], preferredShiftTypes: [String] },
+    documents: [WorkerDocumentMetadata]
+  },
+  createdAt: Date,
+  updatedAt: Date
+}
+```
+
+Draft documents must belong to the authenticated worker's private Cloudinary folder. `profileId` is resolved from `userId` by the API and is never trusted from a client payload. Drafts never alter onboarding verification status and are deleted only after a successful idempotent profile save or an explicit worker clear action. The unique `worker_profiles.userId` index, together with duplicate-key retry handling, guarantees one profile during simultaneous first submissions.
 
 ### 2.4 Facility Profiles Collection
 Stores information about healthcare facilities posting shifts.
@@ -237,15 +281,47 @@ Stores persisted in-app dashboard notifications for authenticated workers and fa
 }
 ```
 
+### 2.9 Sessions Collection
+Revocable session records contain `userId`, `familyId`, `clientType`, a hashed rotating refresh token, refresh expiry, revocation/replacement fields, device metadata, and `lastUsedAt`. Indexes support active sessions by user and token-family reuse revocation.
+
+### 2.10 Marketplace Collections
+- `shift_applications`: one record per shift/worker with review and selection state.
+- `shift_invitations`: one record per shift/worker with inviter and response state.
+- `shift_assignments`: canonical staffing record per shift/worker, including confirmation/completion/cancellation timestamps.
+- `attendance_events`: immutable idempotent clock/break events with optional GPS verification metadata.
+- `timesheets`: one record per shift/worker with scheduled/actual times, break/worked minutes, review state, and notes.
+- `disputes`: owned marketplace subject, opener, participant users, status, resolution, and timestamps.
+- `audit_events`: actor, action, entity reference, and metadata for marketplace mutations.
+
+`shifts.activeAssignmentCount` is the atomically reserved capacity count. `shifts.matchedWorkerId` remains only for legacy compatibility; new worker history and reviews resolve through assignments. `reviews.assignmentId` scopes one review per reviewer and caregiver assignment.
+
+Open-shift text and multi-select filters are computed from existing shift and joined facility fields. Day, Evening, Night, and Weekend periods are derived from `startTime` in `America/Edmonton`; no additional persisted search or period fields are required.
+
+The full relationship diagram and lifecycle traceability are maintained in `docs/launch_mvp_review.md`.
+
+### 2.11 Notification Preferences And Two-Factor Security
+- `notification_preferences`: unique `userId` plus per-category `{ inApp, email }` settings. Missing records default optional categories on; account/security remains always on.
+- `two_factor_credentials`: unique `userId`, active `TOTP` or `EMAIL` method, encrypted TOTP material, hashed single-use recovery codes, and enrollment timestamps.
+- `two_factor_challenges`: expiring login/setup challenge with method, purpose, attempt count, client type, optional hashed email code or encrypted pending TOTP secret, and consumption state. A TTL index removes expired challenges.
+- `trusted_devices`: user-owned hashed token, client/device metadata, last usage, 30-day expiry, and revocation state. Raw trusted tokens are returned only once and never persisted.
+
 ## 3. Database Indexes
 To ensure performance and scalability, the following indexes are critical:
 - **Geospatial**: `shifts.location` (2dsphere) - For finding shifts near a worker.
 - **Geospatial**: `worker_profiles.location` (2dsphere) - For finding workers near a facility.
 - **Compound**: `shifts.status` + `shifts.startTime` - For fast querying of open/upcoming shifts.
 - **Unique**: `users.email` - For authentication.
+- **Unique**: `worker_onboarding_drafts.userId` - One resumable worker draft per authenticated user.
 - **Sparse**: `users.emailVerificationTokenHash` - For verifying and rotating pending email verification links without scanning users.
 - **Sparse**: `users.passwordResetTokenHash` - For validating and rotating forgot-password OTP codes without scanning users.
 - **Compound**: `users.emailVerified` + `users.status` - For admin filtering and account activation queues.
 - **Unique**: `registration_attempts.email` - For rotating a single active registration OTP attempt per email.
 - **Sparse**: `registration_attempts.completionTokenHash` - For validating completed OTP registration sessions.
 - **Unique Compound**: `waitlist_signups.email` + `waitlist_signups.role` - For idempotent public waitlist signups.
+- **Compound**: `sessions.userId` + `sessions.revokedAt` + `sessions.refreshExpiresAt` - For active-session enforcement.
+- **Unique Compound**: marketplace application, invitation, assignment, and timesheet `shiftId` + `workerId` pairs.
+- **Compound**: `attendance_events.workerId` + `shiftId` + `occurredAt` - For ordered attendance validation.
+- **Partial Unique Compound**: `reviews.assignmentId` + `reviewerId` - For multi-caregiver review uniqueness.
+- **Migration**: The launch migration removes the obsolete global unique `reviews.shiftId + reviewerId` index. New reviews are assignment-scoped and protected by `assignmentId + reviewerId`, allowing a facility to review each caregiver assignment independently.
+- **Unique**: `notification_preferences.userId` and `two_factor_credentials.userId` ensure one account configuration each.
+- **TTL/Compound**: `two_factor_challenges.expiresAt`, `trusted_devices.expiresAt`, and `trusted_devices.userId + revokedAt + expiresAt` support challenge cleanup and active-device lists.

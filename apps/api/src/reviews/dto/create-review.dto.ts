@@ -1,6 +1,10 @@
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsInt, IsMongoId, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 export class CreateReviewDto {
+  @IsOptional()
+  @IsMongoId()
+  assignmentId?: string;
+
   @IsInt()
   @Min(1)
   @Max(5)

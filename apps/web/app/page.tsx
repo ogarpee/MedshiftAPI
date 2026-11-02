@@ -7,6 +7,7 @@ import type { Variants } from "framer-motion";
 import { FacilityType, UserRole, WaitlistAvailability, WaitlistProfessionalRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { Calendar, Check, Clock, MapPin, ShieldCheck, Users } from "lucide-react";
+import { apiFetch as fetch } from "./session-fetch";
 
 type SignupType = "worker" | "facility";
 
@@ -254,28 +255,18 @@ export default function HomePage() {
   const waitlistOption = waitlistOptions[signupType];
 
   useEffect(() => {
-    const accessToken = window.localStorage.getItem("medshift.accessToken");
-    const storedUser = window.localStorage.getItem("medshift.authUser");
-
-    if (!accessToken) {
-      setHasCheckedAuth(true);
-      return;
-    }
-
-    if (!storedUser) {
-      const tokenUser = readUserFromToken(accessToken);
-      setAuthUser(tokenUser);
-      setHasCheckedAuth(true);
-      return;
-    }
-
-    try {
-      setAuthUser(JSON.parse(storedUser) as StoredAuthUser);
-    } catch {
-      window.localStorage.removeItem("medshift.authUser");
-    } finally {
-      setHasCheckedAuth(true);
-    }
+    void fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/auth/me`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error("No active browser session");
+        const user = (await response.json()) as StoredAuthUser;
+        setAuthUser(user);
+        window.localStorage.setItem("medshift.authUser", JSON.stringify(user));
+      })
+      .catch(() => {
+        setAuthUser(null);
+        window.localStorage.removeItem("medshift.authUser");
+      })
+      .finally(() => setHasCheckedAuth(true));
   }, []);
 
   async function handleSignup(event: FormEvent<HTMLFormElement>) {
@@ -374,8 +365,8 @@ export default function HomePage() {
     }
   }
 
-  function handleLogout() {
-    window.localStorage.removeItem("medshift.accessToken");
+  async function handleLogout() {
+    await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/auth/logout`, { method: "POST" }).catch(() => undefined);
     window.localStorage.removeItem("medshift.authUser");
     setAuthUser(null);
     setIsProfileMenuOpen(false);
@@ -1122,7 +1113,7 @@ function getDashboardHref(role?: UserRole) {
   }
 
   if (role === UserRole.Admin) {
-    return process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001";
+    return process.env.NEXT_PUBLIC_ADMIN_URL || "/admin";
   }
 
   return "/worker";
@@ -1144,30 +1135,4 @@ function getUserInitials(email?: string) {
 
 function formatRole(role: UserRole) {
   return role.charAt(0) + role.slice(1).toLowerCase();
-}
-
-function readUserFromToken(accessToken: string): StoredAuthUser | null {
-  try {
-    const payload = JSON.parse(decodeBase64Url(accessToken.split(".")[1] ?? "")) as Partial<StoredAuthUser>;
-
-    if (!payload.email || !isKnownRole(payload.role)) {
-      return null;
-    }
-
-    return {
-      email: payload.email,
-      role: payload.role
-    };
-  } catch {
-    return null;
-  }
-}
-
-function isKnownRole(role: unknown): role is UserRole {
-  return role === UserRole.Worker || role === UserRole.Facility || role === UserRole.Admin;
-}
-
-function decodeBase64Url(value: string) {
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
-  return window.atob(base64);
 }

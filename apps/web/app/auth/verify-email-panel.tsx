@@ -22,15 +22,12 @@ export function VerifyEmailPanel() {
   const initialEmail = searchParams.get("email") ?? "";
   const token = searchParams.get("token") ?? "";
   const [email, setEmail] = useState(initialEmail);
-  const [message, setMessage] = useState("Verifying your MedShift account...");
-  const [resendMessage, setResendMessage] = useState("");
   const [state, setState] = useState<VerificationState>("checking");
   const [isResending, setIsResending] = useState(false);
 
   useEffect(() => {
     if (!initialEmail || !token) {
       setState("error");
-      setMessage("This verification link is missing required information.");
       notify("This verification link is missing required information.", "error");
       return;
     }
@@ -45,7 +42,6 @@ export function VerifyEmailPanel() {
         const result = await readVerificationResponse(response);
 
         setState(response.ok ? "success" : "error");
-        setMessage(formatVerificationMessage(result, response.ok ? "Email verified. You can now sign in." : "Unable to verify email."));
         notify(
           formatVerificationMessage(result, response.ok ? "Email verified. You can now sign in." : "Unable to verify email."),
           response.ok ? "success" : "error"
@@ -56,7 +52,6 @@ export function VerifyEmailPanel() {
         }
       } catch {
         setState("error");
-        setMessage("Unable to reach the MedShift API. Try again after checking the API server.");
         notify("Unable to reach the MedShift API. Try again after checking the API server.", "error");
       }
     }
@@ -69,13 +64,11 @@ export function VerifyEmailPanel() {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-      setResendMessage("Enter a valid email address first.");
       notify("Enter a valid email address first.", "error");
       return;
     }
 
     setIsResending(true);
-    setResendMessage("");
 
     try {
       const response = await fetch(`${apiUrl}/auth/resend-verification`, {
@@ -85,13 +78,11 @@ export function VerifyEmailPanel() {
       });
       const result = await readVerificationResponse(response);
 
-      setResendMessage(formatVerificationMessage(result, "If that email belongs to an unverified account, a new verification link has been sent."));
       notify(
         formatVerificationMessage(result, "If that email belongs to an unverified account, a new verification link has been sent."),
         response.ok ? "success" : "error"
       );
     } catch {
-      setResendMessage("Unable to reach the MedShift API. Try again after checking the API server.");
       notify("Unable to reach the MedShift API. Try again after checking the API server.", "error");
     } finally {
       setIsResending(false);
@@ -109,8 +100,7 @@ export function VerifyEmailPanel() {
         </div>
 
         <div className={styles.heading}>
-          <h1>{state === "success" ? "Email verified" : "Verify your email"}</h1>
-          <p>{message}</p>
+          <h1>{state === "checking" ? "Verifying your email" : state === "success" ? "Email verified" : "Verify your email"}</h1>
         </div>
 
         {state === "success" ? (
@@ -119,7 +109,7 @@ export function VerifyEmailPanel() {
               Sign in
             </Link>
           </div>
-        ) : (
+        ) : state === "error" ? (
           <form className={styles.form} onSubmit={handleResend}>
             <label>
               Email
@@ -137,9 +127,8 @@ export function VerifyEmailPanel() {
             <button className={styles.submit} type="submit" disabled={isResending}>
               {isResending ? "Sending..." : "Resend verification email"}
             </button>
-            {resendMessage ? <p className={styles.message}>{resendMessage}</p> : null}
           </form>
-        )}
+        ) : null}
       </section>
 
       <aside className={styles.sidePanel}>

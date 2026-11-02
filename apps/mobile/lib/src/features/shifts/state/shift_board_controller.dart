@@ -23,6 +23,8 @@ class ShiftBoardState {
     ),
     this.filters = const ShiftSearchFilters(),
     this.message,
+    this.isSearching = false,
+    this.searchError,
   });
 
   final List<ShiftSummary> openShifts;
@@ -36,8 +38,33 @@ class ShiftBoardState {
   final OnboardingState onboarding;
   final ShiftSearchFilters filters;
   final String? message;
+  final bool isSearching;
+  final String? searchError;
 
   List<ShiftSummary> get all => [...openShifts, ...myShifts];
+
+  ShiftBoardState copyWith({
+    List<ShiftSummary>? openShifts,
+    ShiftSearchFilters? filters,
+    String? message,
+    bool? isSearching,
+    String? searchError,
+    bool clearSearchError = false,
+  }) => ShiftBoardState(
+    openShifts: openShifts ?? this.openShifts,
+    myShifts: myShifts,
+    applications: applications,
+    invitations: invitations,
+    assignments: assignments,
+    attendanceEvents: attendanceEvents,
+    timesheets: timesheets,
+    profile: profile,
+    onboarding: onboarding,
+    filters: filters ?? this.filters,
+    message: message ?? this.message,
+    isSearching: isSearching ?? this.isSearching,
+    searchError: clearSearchError ? null : searchError ?? this.searchError,
+  );
 }
 
 class ShiftBoardController extends AsyncNotifier<ShiftBoardState> {
@@ -100,8 +127,32 @@ class ShiftBoardController extends AsyncNotifier<ShiftBoardState> {
   }
 
   Future<void> applyFilters(ShiftSearchFilters filters) async {
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(() => _load(filters));
+    final current = state.value;
+    if (current == null) {
+      state = await AsyncValue.guard(() => _load(filters));
+      return;
+    }
+    state = AsyncData(
+      current.copyWith(
+        filters: filters,
+        isSearching: true,
+        clearSearchError: true,
+      ),
+    );
+    try {
+      state = AsyncData((await _load(filters)).copyWith(isSearching: false));
+    } catch (error) {
+      state = AsyncData(
+        current.copyWith(
+          filters: filters,
+          isSearching: false,
+          searchError: apiErrorMessage(
+            error,
+            'Shift search could not be refreshed.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> applyToShift(String shiftId) async {

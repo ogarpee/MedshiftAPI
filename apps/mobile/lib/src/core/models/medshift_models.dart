@@ -74,12 +74,41 @@ enum TimesheetStatus {
 
 enum ShiftSearchSort { distance, startTime, hourlyRate }
 
+enum ShiftSearchPeriod { day, evening, night, weekend }
+
 enum NotificationType {
   shiftCreated,
   shiftAccepted,
   onboardingApproved,
   onboardingRejected,
   reviewAvailable,
+}
+
+enum TwoFactorMethod { totp, email }
+
+TwoFactorMethod twoFactorMethodFromApi(String? value) =>
+    value == 'EMAIL' ? TwoFactorMethod.email : TwoFactorMethod.totp;
+
+class TwoFactorChallenge {
+  const TwoFactorChallenge({
+    required this.id,
+    required this.method,
+    required this.expiresAt,
+    this.maskedEmail,
+  });
+  final String id;
+  final TwoFactorMethod method;
+  final DateTime expiresAt;
+  final String? maskedEmail;
+  factory TwoFactorChallenge.fromJson(Map<String, dynamic> json) =>
+      TwoFactorChallenge(
+        id: (json['challengeId'] ?? '').toString(),
+        method: twoFactorMethodFromApi(json['method']?.toString()),
+        expiresAt:
+            DateTime.tryParse(json['expiresAt']?.toString() ?? '') ??
+            DateTime.now().add(const Duration(minutes: 10)),
+        maskedEmail: json['maskedEmail']?.toString(),
+      );
 }
 
 String roleToApi(UserRole role) => switch (role) {
@@ -109,6 +138,13 @@ String shiftSearchSortToApi(ShiftSearchSort sort) => switch (sort) {
   ShiftSearchSort.distance => 'DISTANCE',
   ShiftSearchSort.startTime => 'START_TIME',
   ShiftSearchSort.hourlyRate => 'HOURLY_RATE',
+};
+
+String shiftSearchPeriodToApi(ShiftSearchPeriod period) => switch (period) {
+  ShiftSearchPeriod.day => 'DAY',
+  ShiftSearchPeriod.evening => 'EVENING',
+  ShiftSearchPeriod.night => 'NIGHT',
+  ShiftSearchPeriod.weekend => 'WEEKEND',
 };
 
 String onboardingStatusToApi(OnboardingStatus status) => switch (status) {
@@ -149,47 +185,63 @@ FacilityType facilityTypeFromApi(String? value) => switch (value) {
 
 class ShiftSearchFilters {
   const ShiftSearchFilters({
-    this.roleRequired,
-    this.facilityType,
+    this.search = '',
+    this.roles = const [],
+    this.facilityTypes = const [],
+    this.shiftTypes = const [],
     this.radiusKm,
     this.maxShiftHours,
     this.minHourlyRate,
     this.sort = ShiftSearchSort.distance,
   });
 
-  final ClinicalRole? roleRequired;
-  final FacilityType? facilityType;
+  final String search;
+  final List<ClinicalRole> roles;
+  final List<FacilityType> facilityTypes;
+  final List<ShiftSearchPeriod> shiftTypes;
   final double? radiusKm;
   final double? maxShiftHours;
   final double? minHourlyRate;
   final ShiftSearchSort sort;
 
   bool get hasActiveFilters =>
-      roleRequired != null ||
-      facilityType != null ||
+      search.trim().isNotEmpty ||
+      roles.isNotEmpty ||
+      facilityTypes.isNotEmpty ||
+      shiftTypes.isNotEmpty ||
       radiusKm != null ||
       maxShiftHours != null ||
       minHourlyRate != null ||
       sort != ShiftSearchSort.distance;
 
+  int get activeFilterCount =>
+      roles.length +
+      facilityTypes.length +
+      shiftTypes.length +
+      (radiusKm == null ? 0 : 1) +
+      (maxShiftHours == null ? 0 : 1) +
+      (minHourlyRate == null ? 0 : 1) +
+      (sort == ShiftSearchSort.distance ? 0 : 1);
+
   ShiftSearchFilters copyWith({
-    ClinicalRole? roleRequired,
-    FacilityType? facilityType,
+    String? search,
+    List<ClinicalRole>? roles,
+    List<FacilityType>? facilityTypes,
+    List<ShiftSearchPeriod>? shiftTypes,
     double? radiusKm,
     double? maxShiftHours,
     double? minHourlyRate,
     ShiftSearchSort? sort,
-    bool clearRole = false,
-    bool clearFacilityType = false,
+    bool clearSearch = false,
     bool clearRadius = false,
     bool clearMaxHours = false,
     bool clearMinRate = false,
   }) {
     return ShiftSearchFilters(
-      roleRequired: clearRole ? null : roleRequired ?? this.roleRequired,
-      facilityType: clearFacilityType
-          ? null
-          : facilityType ?? this.facilityType,
+      search: clearSearch ? '' : search ?? this.search,
+      roles: roles ?? this.roles,
+      facilityTypes: facilityTypes ?? this.facilityTypes,
+      shiftTypes: shiftTypes ?? this.shiftTypes,
       radiusKm: clearRadius ? null : radiusKm ?? this.radiusKm,
       maxShiftHours: clearMaxHours ? null : maxShiftHours ?? this.maxShiftHours,
       minHourlyRate: clearMinRate ? null : minHourlyRate ?? this.minHourlyRate,
@@ -340,14 +392,20 @@ class AuthUser {
 }
 
 class AuthSession {
-  const AuthSession({required this.accessToken, required this.user});
+  const AuthSession({
+    required this.accessToken,
+    required this.user,
+    this.refreshToken,
+  });
 
   final String accessToken;
+  final String? refreshToken;
   final AuthUser user;
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     return AuthSession(
       accessToken: (json['accessToken'] ?? '').toString(),
+      refreshToken: json['refreshToken']?.toString(),
       user: AuthUser.fromJson(Map<String, dynamic>.from(json['user'] as Map)),
     );
   }
@@ -406,6 +464,94 @@ class OnboardingState {
   }
 }
 
+enum WorkerDocumentCategory {
+  governmentId,
+  professionalCertificate,
+  backgroundCheck,
+  other,
+}
+
+String workerDocumentCategoryToApi(WorkerDocumentCategory value) =>
+    switch (value) {
+      WorkerDocumentCategory.governmentId => 'GOVERNMENT_ID',
+      WorkerDocumentCategory.professionalCertificate =>
+        'PROFESSIONAL_CERTIFICATE',
+      WorkerDocumentCategory.backgroundCheck => 'BACKGROUND_CHECK',
+      WorkerDocumentCategory.other => 'OTHER',
+    };
+
+WorkerDocumentCategory workerDocumentCategoryFromApi(String? value) =>
+    switch (value) {
+      'GOVERNMENT_ID' => WorkerDocumentCategory.governmentId,
+      'BACKGROUND_CHECK' => WorkerDocumentCategory.backgroundCheck,
+      'OTHER' => WorkerDocumentCategory.other,
+      _ => WorkerDocumentCategory.professionalCertificate,
+    };
+
+class WorkerDocument {
+  const WorkerDocument({
+    required this.id,
+    required this.category,
+    this.cloudinaryPublicId,
+    this.documentUrl,
+    this.resourceType,
+    this.deliveryType,
+    this.version,
+    this.format,
+    this.originalFilename,
+    this.bytes,
+    this.uploadedAt,
+    this.verificationStatus,
+    this.rejectionReason,
+  });
+
+  final String id;
+  final WorkerDocumentCategory category;
+  final String? cloudinaryPublicId;
+  final String? documentUrl;
+  final String? resourceType;
+  final String? deliveryType;
+  final int? version;
+  final String? format;
+  final String? originalFilename;
+  final int? bytes;
+  final String? uploadedAt;
+  final String? verificationStatus;
+  final String? rejectionReason;
+
+  factory WorkerDocument.fromJson(Map<String, dynamic> json) => WorkerDocument(
+    id: (json['id'] ?? '').toString(),
+    category: workerDocumentCategoryFromApi(json['category']?.toString()),
+    cloudinaryPublicId: json['cloudinaryPublicId']?.toString(),
+    documentUrl: json['documentUrl']?.toString(),
+    resourceType: json['resourceType']?.toString(),
+    deliveryType: json['deliveryType']?.toString(),
+    version: _nullableInt(json['version']),
+    format: json['format']?.toString(),
+    originalFilename: json['originalFilename']?.toString(),
+    bytes: _nullableInt(json['bytes']),
+    uploadedAt: json['uploadedAt']?.toString(),
+    verificationStatus: json['verificationStatus']?.toString(),
+    rejectionReason: json['rejectionReason']?.toString(),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'category': workerDocumentCategoryToApi(category),
+    if (cloudinaryPublicId != null) 'cloudinaryPublicId': cloudinaryPublicId,
+    if (documentUrl != null) 'documentUrl': documentUrl,
+    if (resourceType != null) 'resourceType': resourceType,
+    if (deliveryType != null) 'deliveryType': deliveryType,
+    if (version != null) 'version': version,
+    if (format != null) 'format': format,
+    if (originalFilename != null) 'originalFilename': originalFilename,
+    if (bytes != null) 'bytes': bytes,
+    if (uploadedAt != null) 'uploadedAt': uploadedAt,
+    if (verificationStatus != null) 'verificationStatus': verificationStatus,
+    if (rejectionReason != null) 'rejectionReason': rejectionReason,
+  };
+}
+
 class WorkerProfile {
   const WorkerProfile({
     required this.id,
@@ -416,9 +562,7 @@ class WorkerProfile {
     required this.maxDistanceKm,
     required this.availableDays,
     required this.preferredShiftTypes,
-    required this.credentialType,
-    required this.credentialUrl,
-    required this.backgroundConsent,
+    required this.documents,
     required this.onboardingStatus,
     this.averageRating = 0,
     this.totalShiftsCompleted = 0,
@@ -432,9 +576,7 @@ class WorkerProfile {
   final double maxDistanceKm;
   final List<String> availableDays;
   final List<String> preferredShiftTypes;
-  final String credentialType;
-  final String credentialUrl;
-  final bool backgroundConsent;
+  final List<WorkerDocument> documents;
   final OnboardingStatus onboardingStatus;
   final double averageRating;
   final int totalShiftsCompleted;
@@ -442,22 +584,18 @@ class WorkerProfile {
   String get displayName => '$firstName $lastName'.trim();
 
   factory WorkerProfile.fromJson(Map<String, dynamic> json) {
-    final preferences = Map<String, dynamic>.from(
-      (json['preferences'] ?? {}) as Map,
-    );
-    final background = Map<String, dynamic>.from(
-      (json['backgroundCheck'] ?? {}) as Map,
-    );
-    final onboarding = Map<String, dynamic>.from(
-      (json['onboarding'] ?? {}) as Map,
-    );
-    final stats = Map<String, dynamic>.from((json['stats'] ?? {}) as Map);
-    final credentials = json['credentials'] is List
-        ? json['credentials'] as List
-        : const [];
-    final firstCredential = credentials.isNotEmpty && credentials.first is Map
-        ? Map<String, dynamic>.from(credentials.first as Map)
-        : <String, dynamic>{};
+    final preferences = _stringMap(json['preferences']);
+    final onboarding = _stringMap(json['onboarding']);
+    final stats = _stringMap(json['stats']);
+    final documents = json['documents'] is List
+        ? (json['documents'] as List)
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    WorkerDocument.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList()
+        : const <WorkerDocument>[];
 
     return WorkerProfile(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
@@ -469,24 +607,46 @@ class WorkerProfile {
             ? Map<String, dynamic>.from(json['location'] as Map)
             : null,
       ),
-      maxDistanceKm: ((preferences['maxDistanceKm'] ?? 25) as num).toDouble(),
-      availableDays: List<String>.from(
-        preferences['availableDays'] ?? const [],
-      ),
-      preferredShiftTypes: List<String>.from(
-        preferences['preferredShiftTypes'] ?? const [],
-      ),
-      credentialType: (firstCredential['type'] ?? 'HCA certificate').toString(),
-      credentialUrl: (firstCredential['documentUrl'] ?? '').toString(),
-      backgroundConsent: background['consentedAt'] != null,
+      maxDistanceKm: _doubleValue(preferences['maxDistanceKm'], 25),
+      availableDays: _stringList(preferences['availableDays']),
+      preferredShiftTypes: _stringList(preferences['preferredShiftTypes']),
+      documents: documents,
       onboardingStatus: onboardingStatusFromApi(
         onboarding['verificationStatus']?.toString(),
       ),
-      averageRating: ((stats['averageRating'] ?? 0) as num).toDouble(),
-      totalShiftsCompleted: ((stats['totalShiftsCompleted'] ?? 0) as num)
-          .toInt(),
+      averageRating: _doubleValue(stats['averageRating'], 0),
+      totalShiftsCompleted: _intValue(stats['totalShiftsCompleted'], 0),
     );
   }
+}
+
+Map<String, dynamic> _stringMap(dynamic value) {
+  if (value is! Map) return const {};
+  return Map<String, dynamic>.from(value);
+}
+
+List<String> _stringList(dynamic value) {
+  if (value is! List) return const [];
+  return value
+      .where((item) => item != null)
+      .map((item) => item.toString())
+      .toList();
+}
+
+double _doubleValue(dynamic value, double fallback) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+int _intValue(dynamic value, int fallback) {
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+int? _nullableInt(dynamic value) {
+  if (value == null) return null;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
 }
 
 class ShiftSummary {

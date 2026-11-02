@@ -37,7 +37,7 @@ echo "Starting MedShift API server at http://localhost:4000"
 pnpm api:dev &
 pids+=("$!")
 
-echo "Starting MedShift web server at http://localhost:3000"
+echo "Starting MedShift web server at http://localhost:3001"
 pnpm web:dev &
 pids+=("$!")
 

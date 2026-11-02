@@ -1,8 +1,33 @@
 "use client";
 
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { AccountStatus, ClinicalRole, FacilityType, OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
-import { DashboardShell, StatusBadge } from "@medshift/ui-components";
+import { AccountStatus, ClinicalRole, FacilityType, OnboardingStatus, ShiftStatus, UserRole, WorkerDocumentCategory } from "@medshift/shared-types";
+import { apiFetch as fetch } from "./session-fetch";
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  DashboardShell,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SimpleBarChart,
+  StatusBadge,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea
+} from "@medshift/ui-components";
 
 type AdminSection = "overview" | "verification" | "users" | "facilities" | "shifts" | "marketplace";
 
@@ -21,7 +46,7 @@ type AdminWorker = {
   lastName: string;
   title: ClinicalRole;
   backgroundCheck?: { status?: string };
-  credentials: Array<{ type?: string; documentUrl?: string; isVerified: boolean; verifiedAt?: string }>;
+  documents: Array<{ id: string; category: WorkerDocumentCategory; originalFilename?: string; verificationStatus?: string; rejectionReason?: string }>;
   onboarding?: { verificationStatus?: OnboardingStatus; rejectedReason?: string };
   createdAt?: string;
 };
@@ -146,43 +171,19 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const loadOverview = useCallback(async () => {
-    const tokenFromHash = getAccessTokenFromHash(window.location.hash);
-
-    if (tokenFromHash) {
-      window.localStorage.setItem("medshift.accessToken", tokenFromHash);
-      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-    }
-
-    const token = tokenFromHash ?? window.localStorage.getItem("medshift.accessToken");
-
-    if (!token) {
-      setOverview(emptyOverview);
-      setAuditEvents([]);
-      setApplications([]);
-      setInvitations([]);
-      setAssignments([]);
-      setAttendanceEvents([]);
-      setDisputes([]);
-      setTimesheets([]);
-      setMarketplaceOverview(emptyMarketplaceOverview);
-      setMessage("Sign in as an admin to manage live operations.");
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const headers = { Authorization: `Bearer ${token}` };
       const [response, auditResponse, timesheetsResponse, disputesResponse, overviewResponse, applicationsResponse, invitationsResponse, assignmentsResponse, attendanceResponse] = await Promise.all([
-        fetch(`${apiUrl}/admin/overview`, { headers }),
-        fetch(`${apiUrl}/audit-events`, { headers }),
-        fetch(`${apiUrl}/timesheets`, { headers }),
-        fetch(`${apiUrl}/disputes`, { headers }),
-        fetch(`${apiUrl}/marketplace/overview`, { headers }),
-        fetch(`${apiUrl}/applications/me`, { headers }),
-        fetch(`${apiUrl}/invitations/me`, { headers }),
-        fetch(`${apiUrl}/assignments/me`, { headers }),
-        fetch(`${apiUrl}/attendance`, { headers })
+        fetch(`${apiUrl}/admin/overview`),
+        fetch(`${apiUrl}/audit-events`),
+        fetch(`${apiUrl}/timesheets`),
+        fetch(`${apiUrl}/disputes`),
+        fetch(`${apiUrl}/marketplace/overview`),
+        fetch(`${apiUrl}/applications/me`),
+        fetch(`${apiUrl}/invitations/me`),
+        fetch(`${apiUrl}/assignments/me`),
+        fetch(`${apiUrl}/attendance`)
       ]);
 
       if (!response.ok) {
@@ -273,19 +274,21 @@ export default function AdminPage() {
     setMessage(`Shift moved to ${updated.status.toLowerCase().replaceAll("_", " ")}.`);
   }
 
-  async function reviewCredential(worker: AdminWorker, credentialIndex: number, approved: boolean) {
-    const updated = await adminPatch<AdminWorker>(apiUrl, `admin/worker-profiles/${worker.id}/credentials/${credentialIndex}`, { approved });
+  async function reviewDocument(worker: AdminWorker, documentId: string, approved: boolean) {
+    const updated = await adminPatch<AdminWorker>(apiUrl, `admin/worker-profiles/${worker.id}/documents/${documentId}`, {
+      approved,
+      ...(!approved ? { rejectionReason: rejectionReasons[`worker-${worker.id}`]?.trim() || "Document was not approved" } : {})
+    });
+    if (!updated) { setMessage("Document review failed."); return; }
+    setOverview((current) => ({ ...current, workers: current.workers.map((item) => (item.id === updated.id ? updated : item)) }));
+    setMessage(approved ? "Document approved." : "Document rejected.");
+  }
 
-    if (!updated) {
-      setMessage("Credential review failed.");
-      return;
-    }
-
-    setOverview((current) => ({
-      ...current,
-      workers: current.workers.map((item) => (item.id === updated.id ? updated : item))
-    }));
-    setMessage(approved ? "Credential approved." : "Credential rejected.");
+  async function viewDocument(worker: AdminWorker, documentId: string) {
+    const response = await fetch(`${apiUrl}/uploads/worker-documents/${worker.id}/${documentId}/access-url`);
+    const result = response.ok ? await response.json() as { url?: string } : {};
+    if (!result.url) { setMessage("Document could not be opened."); return; }
+    window.open(result.url, "_blank", "noopener,noreferrer");
   }
 
   async function reviewWorkerOnboarding(worker: AdminWorker, approved: boolean) {
@@ -334,15 +337,6 @@ export default function AdminPage() {
     setMessage(approved ? "Facility registration approved and email sent." : "Facility registration rejected and email sent.");
   }
 
-  function signOut() {
-    window.localStorage.removeItem("medshift.accessToken");
-    setOverview(emptyOverview);
-    setAuditEvents([]);
-    setDisputes([]);
-    setTimesheets([]);
-    setMessage("Signed out. Sign in as an admin to manage live operations.");
-  }
-
   return (
     <DashboardShell
       className="admin-shell"
@@ -361,10 +355,6 @@ export default function AdminPage() {
       <section className="workspace">
         <div className="admin-command-bar">
           <span className="admin-message">{message}</span>
-          <div>
-            <button type="button" onClick={() => void loadOverview()} disabled={isLoading}>{isLoading ? "Refreshing" : "Refresh"}</button>
-            <button className="secondary-action" type="button" onClick={signOut}>Sign out</button>
-          </div>
         </div>
 
         <section className="metrics" aria-label="Platform metrics">
@@ -388,7 +378,8 @@ export default function AdminPage() {
             visibleFacilityQueue={visibleFacilityQueue}
             visibleWorkerQueue={visibleWorkerQueue}
             workerQueue={workerQueue}
-            onCredentialReview={reviewCredential}
+            onDocumentReview={reviewDocument}
+            onDocumentView={viewDocument}
             onFacilityReview={reviewFacilityOnboarding}
             onWorkerReview={reviewWorkerOnboarding}
           />
@@ -425,14 +416,23 @@ function OverviewSection({ overview, workerQueue, facilityQueue }: { overview: A
     overview.shifts.filter((shift) => shift.status === ShiftStatus.Open || shift.status === ShiftStatus.Matched),
     (shift) => shift.roleRequired
   );
+  const healthData = [
+    { label: "Open load", value: Math.round(ratio(overview.metrics.openShifts, overview.metrics.activeShifts)) },
+    { label: "Verified", value: Math.round(overview.metrics.verifiedWorkerRate) },
+    { label: "Sockets", value: Math.round(Math.min(100, overview.metrics.activeSocketConnections * 10)) }
+  ];
 
   return (
     <>
-      <section className="health-panel">
-        <HealthBar label="Open shift load" value={ratio(overview.metrics.openShifts, overview.metrics.activeShifts)} />
-        <HealthBar label="Worker verification" value={overview.metrics.verifiedWorkerRate} />
-        <HealthBar label="Socket activity" value={Math.min(100, overview.metrics.activeSocketConnections * 10)} />
-      </section>
+      <Card className="health-panel">
+        <CardHeader>
+          <CardTitle>Platform health</CardTitle>
+          <CardDescription>Live operational indicators across shifts, verification, and realtime load.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SimpleBarChart data={healthData} dataKey="value" nameKey="label" valueLabel="Health score" />
+        </CardContent>
+      </Card>
       <section className="operations-grid" aria-label="Operational signals">
         <OperationsCard title="Unmatched open shifts" value={openUnmatchedShifts.length} detail="Need worker supply" items={openUnmatchedShifts.slice(0, 3).map((shift) => `${shift.roleRequired} · ${formatDate(shift.startTime)}`)} />
         <OperationsCard title="Pending reviews" value={pendingReviews} detail="Worker and facility approvals" items={[`${workerQueue.length} worker checks`, `${facilityQueue.length} facility checks`]} />
@@ -514,11 +514,11 @@ function MarketplaceSection({
   return (
     <section className="admin-grid">
       <Panel title="Marketplace performance" badge={`${overview.activeAssignments} active`}>
-        <div className="operations-strip">
-          <OperationsCard title="Applications" value={overview.applications} detail={`${overview.pendingApplications} pending`} items={applications.slice(0, 2).map((item) => item.status ?? item.id)} />
-          <OperationsCard title="Invitations" value={overview.invitations} detail={`${overview.pendingInvitations} pending`} items={invitations.slice(0, 2).map((item) => item.status ?? item.id)} />
-          <OperationsCard title="Assignments" value={overview.assignments} detail={`${overview.activeAssignments} active`} items={assignments.slice(0, 2).map((item) => item.status ?? item.shiftId ?? item.id)} />
-          <OperationsCard title="Attendance" value={overview.attendanceEvents} detail="GPS events" items={attendanceEvents.slice(0, 2).map((item) => item.status ?? item.shiftId ?? item.id)} />
+        <div className="marketplace-performance-grid">
+          <MarketplaceMetric title="Applications" value={overview.applications} detail={`${overview.pendingApplications} pending`} items={applications.slice(0, 2).map((item) => item.status ?? item.id)} />
+          <MarketplaceMetric title="Invitations" value={overview.invitations} detail={`${overview.pendingInvitations} pending`} items={invitations.slice(0, 2).map((item) => item.status ?? item.id)} />
+          <MarketplaceMetric title="Assignments" value={overview.assignments} detail={`${overview.activeAssignments} active`} items={assignments.slice(0, 2).map((item) => item.status ?? item.shiftId ?? item.id)} />
+          <MarketplaceMetric title="Attendance" value={overview.attendanceEvents} detail="GPS events" items={attendanceEvents.slice(0, 2).map((item) => item.status ?? item.shiftId ?? item.id)} />
         </div>
       </Panel>
       <Panel title="Marketplace audit events" badge={`${marketplaceEvents.length} events`}>
@@ -558,6 +558,21 @@ function MarketplaceSection({
   );
 }
 
+function MarketplaceMetric({ detail, items, title, value }: { detail: string; items: string[]; title: string; value: number | string }) {
+  return (
+    <article className="marketplace-metric-card">
+      <div>
+        <span>{title}</span>
+        <strong>{value}</strong>
+      </div>
+      <small>{detail}</small>
+      <div className="marketplace-metric-items">
+        {items.length ? items.map((item) => <em key={item}>{item}</em>) : <em>No active signals</em>}
+      </div>
+    </article>
+  );
+}
+
 function OperationsCard({ detail, items, title, value }: { detail: string; items: string[]; title: string; value: number | string }) {
   return (
     <article>
@@ -580,7 +595,8 @@ function VerificationSection(props: {
   visibleFacilityQueue: AdminFacility[];
   visibleWorkerQueue: AdminWorker[];
   workerQueue: AdminWorker[];
-  onCredentialReview: (worker: AdminWorker, credentialIndex: number, approved: boolean) => void;
+  onDocumentReview: (worker: AdminWorker, documentId: string, approved: boolean) => void;
+  onDocumentView: (worker: AdminWorker, documentId: string) => void;
   onFacilityReview: (facility: AdminFacility, approved: boolean) => void;
   onWorkerReview: (worker: AdminWorker, approved: boolean) => void;
 }) {
@@ -608,8 +624,8 @@ function VerificationSection(props: {
         {props.visibleWorkerQueue.map((worker) => (
           <article key={worker.id}>
             <div><strong>{worker.firstName} {worker.lastName}</strong><span>{worker.title} · Background {worker.backgroundCheck?.status ?? "Pending"}</span></div>
-            {worker.credentials.map((credential, index) => (
-              <ActionRow key={`${worker.id}-${index}`} label={`${credential.type ?? "Credential"} · ${credential.isVerified ? "Verified" : "Pending"}`} documentUrl={credential.documentUrl} onApprove={() => props.onCredentialReview(worker, index, true)} onReject={() => props.onCredentialReview(worker, index, false)} />
+            {worker.documents.map((document) => (
+              <ActionRow key={document.id} label={`${formatDocumentCategory(document.category)} · ${document.verificationStatus ?? "Pending"}`} onView={() => props.onDocumentView(worker, document.id)} onApprove={() => props.onDocumentReview(worker, document.id, true)} onReject={() => props.onDocumentReview(worker, document.id, false)} />
             ))}
             <ActionRow label={`Onboarding · ${worker.onboarding?.verificationStatus ?? "Pending"}`} onApprove={() => props.onWorkerReview(worker, true)} onReject={() => props.onWorkerReview(worker, false)} approveLabel="Approve onboarding" rejectLabel="Reject onboarding" />
             <ReasonInput id={`worker-${worker.id}`} rejectionReasons={props.rejectionReasons} setRejectionReasons={props.setRejectionReasons} />
@@ -639,25 +655,30 @@ function UsersSection(props: {
         options={(["all", UserRole.Worker, UserRole.Facility, UserRole.Admin] as const).map((role) => ({ label: role === "all" ? "All roles" : labelize(role), value: role }))}
       />
       <div className="table-scroll">
-        <table>
-          <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Email</th><th>Created</th><th>Manage</th></tr></thead>
-          <tbody>
+        <Table>
+          <TableHeader><TableRow><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Email</TableHead><TableHead>Created</TableHead><TableHead>Manage</TableHead></TableRow></TableHeader>
+          <TableBody>
             {props.users.map((user) => (
-              <tr key={user.id}>
-                <td>{user.email}</td>
-                <td>{user.role}</td>
-                <td><StatusBadge tone={user.status === AccountStatus.Active ? "green" : user.status === AccountStatus.Suspended ? "red" : "gold"}>{user.status}</StatusBadge></td>
-                <td>{user.emailVerified ? "Verified" : "Unverified"}</td>
-                <td>{user.createdAt ? formatDate(user.createdAt) : "Pending"}</td>
-                <td>
-                  <select value={user.status} onChange={(event) => props.onStatusChange(user, event.target.value as AccountStatus)}>
-                    {Object.values(AccountStatus).map((status) => <option key={status} value={status}>{labelize(status)}</option>)}
-                  </select>
-                </td>
-              </tr>
+              <TableRow key={user.id}>
+                <TableCell>{user.email}</TableCell>
+                <TableCell>{user.role}</TableCell>
+                <TableCell><StatusBadge tone={user.status === AccountStatus.Active ? "green" : user.status === AccountStatus.Suspended ? "red" : "gold"}>{user.status}</StatusBadge></TableCell>
+                <TableCell>{user.emailVerified ? "Verified" : "Unverified"}</TableCell>
+                <TableCell>{user.createdAt ? formatDate(user.createdAt) : "Pending"}</TableCell>
+                <TableCell>
+                  <Select value={user.status} onValueChange={(value) => props.onStatusChange(user, value as AccountStatus)}>
+                    <SelectTrigger aria-label={`Manage ${user.email} status`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(AccountStatus).map((status) => <SelectItem key={status} value={status}>{labelize(status)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </Panel>
   );
@@ -703,99 +724,109 @@ function ShiftsSection(props: {
         options={(["all", ...Object.values(ShiftStatus)] as Array<"all" | ShiftStatus>).map((status) => ({ label: status === "all" ? "All statuses" : labelize(status), value: status }))}
       />
       <div className="table-scroll">
-        <table>
-          <thead><tr><th>Role</th><th>Status</th><th>Rate</th><th>Window</th><th>Matched</th><th>Manage</th></tr></thead>
-          <tbody>
+        <Table>
+          <TableHeader><TableRow><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Rate</TableHead><TableHead>Window</TableHead><TableHead>Matched</TableHead><TableHead>Manage</TableHead></TableRow></TableHeader>
+          <TableBody>
             {props.shifts.map((shift) => (
-              <tr className="admin-shift-row" key={shift.id}>
-                <td>
+              <TableRow className="admin-shift-row" key={shift.id}>
+                <TableCell>
                   <div className="admin-shift-role-cell">
                     <strong>{shift.roleRequired}</strong>
                     <span>{shift.description || "Shift coverage"}</span>
                   </div>
-                </td>
-                <td><StatusBadge tone={statusTone(shift.status)}>{labelize(shift.status)}</StatusBadge></td>
-                <td>
+                </TableCell>
+                <TableCell><StatusBadge tone={statusTone(shift.status)}>{labelize(shift.status)}</StatusBadge></TableCell>
+                <TableCell>
                   <div className="admin-shift-rate-cell">
                     <strong>${shift.hourlyRate}/hr</strong>
                     <span>{shift.endTime ? `${calculateAdminShiftHours(shift)} hr shift` : "Duration pending"}</span>
                   </div>
-                </td>
-                <td>{formatDate(shift.startTime)}{shift.endTime ? ` - ${formatDate(shift.endTime)}` : ""}</td>
-                <td><span className={shift.matchedWorkerId ? "admin-match-pill matched" : "admin-match-pill"}>{shift.matchedWorkerId ? "Matched" : "Unfilled"}</span></td>
-                <td>
-                  <select className="admin-shift-status-select" value={shift.status} onChange={(event) => props.onStatusChange(shift, event.target.value as ShiftStatus)}>
-                    {Object.values(ShiftStatus).map((status) => <option key={status} value={status}>{labelize(status)}</option>)}
-                  </select>
-                </td>
-              </tr>
+                </TableCell>
+                <TableCell>{formatDate(shift.startTime)}{shift.endTime ? ` - ${formatDate(shift.endTime)}` : ""}</TableCell>
+                <TableCell><span className={shift.matchedWorkerId ? "admin-match-pill matched" : "admin-match-pill"}>{shift.matchedWorkerId ? "Matched" : "Unfilled"}</span></TableCell>
+                <TableCell>
+                  <Select value={shift.status} onValueChange={(value) => props.onStatusChange(shift, value as ShiftStatus)}>
+                    <SelectTrigger className="admin-shift-status-select" aria-label={`Manage ${shift.roleRequired} shift status`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(ShiftStatus).map((status) => <SelectItem key={status} value={status}>{labelize(status)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </Panel>
   );
 }
 
 function Metric({ label, value, detail }: { label: string; value: number; detail: string }) {
-  return <article><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>;
+  return (
+    <Card className="metric-card">
+      <CardContent>
+        <span>{label}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+      </CardContent>
+    </Card>
+  );
 }
 
 function Panel({ badge, children, title }: { badge: string; children: ReactNode; title: string }) {
   return (
-    <section className="table-panel">
-      <div className="panel-title"><h2>{title}</h2><StatusBadge tone="gold">{badge}</StatusBadge></div>
+    <Card className="table-panel">
+      <CardHeader className="panel-title">
+        <CardTitle>{title}</CardTitle>
+        <StatusBadge tone="gold">{badge}</StatusBadge>
+      </CardHeader>
       {children}
-    </section>
+    </Card>
   );
 }
 
 function TableToolbar({ placeholder, search, setSearch }: { placeholder: string; search: string; setSearch: (value: string) => void }) {
-  return <div className="table-toolbar"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={placeholder} /></div>;
+  return <div className="table-toolbar"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={placeholder} /></div>;
 }
 
 function FilterSelect({ id, label, onChange, options, value }: { id: string; label: string; onChange: (value: string) => void; options: Array<{ label: string; value: string }>; value: string }) {
   return (
     <div className="admin-filter-row">
-      <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+      <Label htmlFor={id}>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
         {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
+          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
         ))}
-      </select>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
 
-function HealthBar({ label, value }: { label: string; value: number }) {
-  return <div><span>{label}</span><div className="health-bar"><i style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div></div>;
-}
-
-function ActionRow({ approveLabel = "Approve", documentUrl, label, onApprove, onReject, rejectLabel = "Reject" }: { approveLabel?: string; documentUrl?: string; label: string; onApprove: () => void; onReject: () => void; rejectLabel?: string }) {
+function ActionRow({ approveLabel = "Approve", label, onApprove, onReject, onView, rejectLabel = "Reject" }: { approveLabel?: string; label: string; onApprove: () => void; onReject: () => void; onView?: () => void; rejectLabel?: string }) {
   return (
     <div className="credential-actions">
-      <span>{label}{documentUrl ? <a href={documentUrl} target="_blank" rel="noreferrer">Open document</a> : null}</span>
-      <button type="button" onClick={onApprove}>{approveLabel}</button>
-      <button type="button" className="secondary-action" onClick={onReject}>{rejectLabel}</button>
+      <span>{label}{onView ? <button className="document-link-button" type="button" onClick={onView}>Open document</button> : null}</span>
+      <Button type="button" size="sm" onClick={onApprove}>{approveLabel}</Button>
+      <Button type="button" size="sm" variant="secondary" onClick={onReject}>{rejectLabel}</Button>
     </div>
   );
 }
 
 function ReasonInput({ id, rejectionReasons, setRejectionReasons }: { id: string; rejectionReasons: Record<string, string>; setRejectionReasons: (updater: (current: Record<string, string>) => Record<string, string>) => void }) {
-  return <input className="rejection-input" maxLength={280} onChange={(event) => setRejectionReasons((current) => ({ ...current, [id]: event.target.value }))} placeholder="Reason required when rejecting" value={rejectionReasons[id] ?? ""} />;
+  return <Textarea className="rejection-input" maxLength={280} onChange={(event) => setRejectionReasons((current) => ({ ...current, [id]: event.target.value }))} placeholder="Reason required when rejecting" value={rejectionReasons[id] ?? ""} />;
 }
 
 async function adminPatch<T>(apiUrl: string, path: string, body: unknown): Promise<T | null> {
-  const token = window.localStorage.getItem("medshift.accessToken");
-
-  if (!token) {
-    return null;
-  }
-
   const response = await fetch(`${apiUrl}/${path}`, {
     method: "PATCH",
     headers: {
-      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
@@ -804,16 +835,12 @@ async function adminPatch<T>(apiUrl: string, path: string, body: unknown): Promi
   return response.ok ? response.json() : null;
 }
 
-function getAccessTokenFromHash(hash: string) {
-  if (!hash.startsWith("#")) {
-    return null;
-  }
-
-  return new URLSearchParams(hash.slice(1)).get("access_token");
+function isWorkerPendingReview(worker: AdminWorker) {
+  return worker.onboarding?.verificationStatus === OnboardingStatus.PendingReview || worker.backgroundCheck?.status !== "PASSED" || worker.documents.some((document) => document.verificationStatus !== "VERIFIED");
 }
 
-function isWorkerPendingReview(worker: AdminWorker) {
-  return worker.onboarding?.verificationStatus === OnboardingStatus.PendingReview || worker.backgroundCheck?.status !== "PASSED" || worker.credentials.some((credential) => !credential.isVerified);
+function formatDocumentCategory(category: WorkerDocumentCategory) {
+  return category.split("_").map((part) => part.charAt(0) + part.slice(1).toLowerCase()).join(" ");
 }
 
 function isFacilityPendingReview(facility: AdminFacility) {

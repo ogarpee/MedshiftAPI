@@ -11,11 +11,13 @@ import {
   WebSocketGateway,
   WebSocketServer
 } from "@nestjs/websockets";
-import { AuthTokenPayload, OnboardingStatus, UserRole } from "@medshift/shared-types";
+import { AccountStatus, AuthTokenPayload, OnboardingStatus, UserRole } from "@medshift/shared-types";
 import { Model, Types } from "mongoose";
 import { Server, Socket } from "socket.io";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
+import { Session, SessionDocument } from "../database/schemas/session.schema";
+import { User, UserDocument } from "../database/schemas/user.schema";
 
 @WebSocketGateway({
   namespace: "/shifts",
@@ -33,6 +35,8 @@ export class ShiftsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly config: ConfigService,
     private readonly jwtService: JwtService,
+    @InjectModel(Session.name) private readonly sessions: Model<SessionDocument>,
+    @InjectModel(User.name) private readonly users: Model<UserDocument>,
     @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>
   ) {}
@@ -109,7 +113,14 @@ export class ShiftsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
-      return await this.jwtService.verifyAsync<AuthTokenPayload>(token);
+      const payload = await this.jwtService.verifyAsync<AuthTokenPayload>(token);
+      const [session, user] = await Promise.all([
+        this.sessions.findById(payload.sid).lean().exec(),
+        this.users.findById(payload.sub).lean().exec()
+      ]);
+      if (!session || session.revokedAt || session.refreshExpiresAt.getTime() <= Date.now()) return null;
+      if (!user || !user.emailVerified || user.status === AccountStatus.Suspended) return null;
+      return payload;
     } catch {
       return null;
     }
@@ -118,9 +129,12 @@ export class ShiftsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private extractToken(client: Socket) {
     const authToken = client.handshake.auth?.token;
 
-    if (typeof authToken === "string" && authToken) {
+    if (typeof authToken === "string" && authToken && authToken !== "cookie-session") {
       return authToken;
     }
+
+    const accessCookie = client.handshake.headers.cookie?.split(";").map((entry) => entry.trim()).find((entry) => entry.startsWith("medshift_access="));
+    if (accessCookie) return decodeURIComponent(accessCookie.slice("medshift_access=".length));
 
     const authorization = client.handshake.headers.authorization;
 

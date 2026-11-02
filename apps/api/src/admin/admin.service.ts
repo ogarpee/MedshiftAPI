@@ -1,19 +1,33 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-import { AccountStatus, BackgroundCheckStatus, OnboardingStatus, ShiftStatus } from "@medshift/shared-types";
+import {
+  AccountStatus,
+  BackgroundCheckStatus,
+  OnboardingStatus,
+  RequiredWorkerDocumentCategories,
+  ShiftStatus,
+  VerificationDocumentStatus,
+  WorkerDocumentCategory
+} from "@medshift/shared-types";
+import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
+import { Session, SessionDocument } from "../database/schemas/session.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
+import { TrustedDevice, TrustedDeviceDocument } from "../database/schemas/two-factor.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 import { NotificationService } from "../notifications/notification.service";
 import { ShiftsGateway } from "../realtime/shifts.gateway";
 import { ReviewOnboardingDto } from "./dto/review-onboarding.dto";
+import { ReviewWorkerDocumentDto } from "./dto/review-worker-document.dto";
 
 @Injectable()
 export class AdminService {
   constructor(
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
+    @InjectModel(Session.name) private readonly sessions: Model<SessionDocument>,
+    @InjectModel(TrustedDevice.name) private readonly trustedDevices: Model<TrustedDeviceDocument>,
     @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>,
     @InjectModel(Shift.name) private readonly shifts: Model<ShiftDocument>,
@@ -83,9 +97,20 @@ export class AdminService {
       throw new NotFoundException("User not found");
     }
 
+    const previousStatus = user.status;
     user.status = status;
-
-    return this.serializeLean((await user.save()).toObject({ versionKey: false }));
+    const saved = await user.save();
+    if (status === AccountStatus.Suspended && previousStatus !== AccountStatus.Suspended) {
+      await this.sessions.updateMany(
+        { userId: user._id, revokedAt: { $exists: false } },
+        { $set: { revokedAt: new Date(), revocationReason: "account_suspended" } }
+      ).exec();
+      await this.trustedDevices.updateMany(
+        { userId: user._id, revokedAt: { $exists: false } },
+        { $set: { revokedAt: new Date() } }
+      ).exec();
+    }
+    return this.serializeLean(saved.toObject({ versionKey: false }));
   }
 
   async updateShiftStatus(shiftId: string, status: ShiftStatus) {
@@ -138,6 +163,23 @@ export class AdminService {
     return this.serializeDocument(await worker.save());
   }
 
+  async reviewWorkerDocument(currentAdmin: AuthUser, workerId: string, documentId: string, dto: ReviewWorkerDocumentDto) {
+    if (!Types.ObjectId.isValid(workerId)) throw new NotFoundException("Worker profile not found");
+    const worker = await this.workerProfiles.findById(workerId).exec();
+    const document = worker?.documents.find((item) => item.id === documentId);
+    if (!worker || !document) throw new NotFoundException("Worker document not found");
+    const now = new Date();
+    document.verificationStatus = dto.approved ? VerificationDocumentStatus.Verified : VerificationDocumentStatus.Rejected;
+    document.reviewedAt = now;
+    document.reviewedBy = new Types.ObjectId(currentAdmin.sub);
+    document.rejectionReason = dto.approved ? undefined : dto.rejectionReason ?? "Document was not approved";
+    if (document.category === WorkerDocumentCategory.BackgroundCheck && dto.approved) {
+      worker.backgroundCheck.status = BackgroundCheckStatus.Passed;
+      worker.backgroundCheck.completedAt = worker.backgroundCheck.completedAt ?? now;
+    }
+    return this.serializeDocument(await worker.save());
+  }
+
   async reviewWorkerOnboarding(workerId: string, dto: ReviewOnboardingDto) {
     if (!Types.ObjectId.isValid(workerId)) {
       throw new NotFoundException("Worker profile not found");
@@ -156,14 +198,20 @@ export class AdminService {
     }
 
     const now = new Date();
+    if (dto.approved) {
+      const approvedCategories = new Set(
+        worker.documents
+          .filter((document) => document.verificationStatus === VerificationDocumentStatus.Verified)
+          .map((document) => document.category)
+      );
+      if (!RequiredWorkerDocumentCategories.every((category) => approvedCategories.has(category))) {
+        throw new BadRequestException("Approve all required worker documents before approving onboarding");
+      }
+    }
     worker.onboarding.verificationStatus = dto.approved ? OnboardingStatus.Approved : OnboardingStatus.Rejected;
     worker.onboarding.rejectedReason = dto.approved ? undefined : dto.rejectedReason;
 
     if (dto.approved) {
-      worker.credentials.forEach((credential) => {
-        credential.isVerified = true;
-        credential.verifiedAt = credential.verifiedAt ?? now;
-      });
       worker.backgroundCheck.status = BackgroundCheckStatus.Passed;
       worker.backgroundCheck.completedAt = worker.backgroundCheck.completedAt ?? now;
       user.status = AccountStatus.Active;

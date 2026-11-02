@@ -28,7 +28,7 @@ class IntroScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Onboard, manage credentials, discover nearby shifts, and accept approved work from your phone.',
+                'Onboard, manage verification documents, discover nearby shifts, and accept approved work from your phone.',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Colors.white.withValues(alpha: 0.78),
                 ),

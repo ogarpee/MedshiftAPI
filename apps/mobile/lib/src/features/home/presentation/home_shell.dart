@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/models/medshift_models.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../auth/state/auth_controller.dart';
@@ -9,6 +10,7 @@ import '../../notifications/presentation/notifications_screen.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../../shifts/presentation/my_work_screen.dart';
 import '../../shifts/presentation/shift_board_screen.dart';
+import '../../shifts/state/shift_board_controller.dart';
 import 'home_overview_screen.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -26,6 +28,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authControllerProvider).value?.user;
+    final board = widget.testScreens == null
+        ? ref.watch(shiftBoardControllerProvider)
+        : const AsyncData(
+            ShiftBoardState(
+              onboarding: OnboardingState(
+                verificationStatus: OnboardingStatus.approved,
+              ),
+            ),
+          );
     final screens =
         widget.testScreens ??
         const [
@@ -143,7 +154,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ListTile(
                 leading: const Icon(Icons.help_outline),
                 title: const Text('Support'),
-                subtitle: const Text('Help center coming soon'),
+                subtitle: const Text(
+                  'Email support@medshift.ca for launch support',
+                ),
                 onTap: () => Navigator.of(context).pop(),
               ),
               const Spacer(),
@@ -161,7 +174,22 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
         ),
       ),
-      body: screens[_index],
+      body: Column(
+        children: [
+          if (shouldShowWorkerOnboardingBanner(
+            selectedIndex: _index,
+            status:
+                board.value?.onboarding.verificationStatus ??
+                OnboardingStatus.incomplete,
+          ))
+            WorkerOnboardingBanner(
+              onboarding: board.value?.onboarding,
+              isLoading: board.isLoading,
+              onPressed: () => context.go('/onboarding'),
+            ),
+          Expanded(child: screens[_index]),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: (index) => setState(() => _index = index),
@@ -191,5 +219,87 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void _selectDrawerTab(int index) {
     Navigator.of(context).pop();
     setState(() => _index = index);
+  }
+}
+
+bool shouldShowWorkerOnboardingBanner({
+  required int selectedIndex,
+  required OnboardingStatus status,
+}) => selectedIndex != 4 && status != OnboardingStatus.approved;
+
+class WorkerOnboardingBanner extends StatelessWidget {
+  const WorkerOnboardingBanner({
+    super.key,
+    required this.onboarding,
+    required this.onPressed,
+    this.isLoading = false,
+  });
+
+  final OnboardingState? onboarding;
+  final VoidCallback onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading && onboarding == null) {
+      return const LinearProgressIndicator(minHeight: 2);
+    }
+    final status =
+        onboarding?.verificationStatus ?? OnboardingStatus.incomplete;
+    final rejected = status == OnboardingStatus.rejected;
+    final pending = status == OnboardingStatus.pendingReview;
+    final title = rejected
+        ? 'Your profile needs updates'
+        : pending
+        ? 'Your profile is under review'
+        : 'Complete onboarding to unlock shifts';
+    final detail = rejected
+        ? (onboarding?.rejectedReason?.isNotEmpty == true
+              ? onboarding!.rejectedReason!
+              : 'Review the requested changes and resubmit your profile.')
+        : pending
+        ? 'You can review your submitted information while MedShift verifies it.'
+        : 'Finish your profile, availability, service area, and required documents.';
+    final action = rejected
+        ? 'Update onboarding'
+        : pending
+        ? 'Review onboarding'
+        : 'Continue onboarding';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.gold.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.verified_user_outlined, color: AppColors.navy),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(onPressed: onPressed, child: Text(action)),
+        ],
+      ),
+    );
   }
 }

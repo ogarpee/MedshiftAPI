@@ -3,9 +3,10 @@ import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectModel } from "@nestjs/mongoose";
 import { createHash, randomBytes, randomInt } from "node:crypto";
-import { Model } from "mongoose";
-import { AccountStatus, AuthResponse, AuthTokenPayload, UserRole } from "@medshift/shared-types";
+import { Model, Types } from "mongoose";
+import { AccountStatus, AuthResponse, AuthTokenPayload, SessionClientType, TwoFactorChallengeResponse, UserRole } from "@medshift/shared-types";
 import { RegistrationAttempt, RegistrationAttemptDocument } from "../database/schemas/registration-attempt.schema";
+import { Session, SessionDocument } from "../database/schemas/session.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
 import { NotificationService } from "../notifications/notification.service";
 import { AuthUser } from "./auth-user";
@@ -21,9 +22,12 @@ import { VerifyEmailDto } from "./dto/verify-email.dto";
 import { VerifyPasswordResetOtpDto } from "./dto/verify-password-reset-otp.dto";
 import { VerifyRegistrationOtpDto } from "./dto/verify-registration-otp.dto";
 import { PasswordService } from "./password.service";
+import { TwoFactorService } from "./two-factor.service";
 
 const verificationTokenExpiresInHours = 24;
 const verificationTokenExpiresInMs = verificationTokenExpiresInHours * 60 * 60 * 1000;
+const verificationResendCooldownInSeconds = 60;
+const verificationResendCooldownInMs = verificationResendCooldownInSeconds * 1000;
 const passwordResetOtpExpiresInMinutes = 10;
 const passwordResetOtpExpiresInMs = passwordResetOtpExpiresInMinutes * 60 * 1000;
 const registrationOtpExpiresInMinutes = 10;
@@ -31,6 +35,8 @@ const registrationOtpExpiresInMs = registrationOtpExpiresInMinutes * 60 * 1000;
 const registrationCompletionTokenExpiresInMinutes = 20;
 const registrationCompletionTokenExpiresInMs = registrationCompletionTokenExpiresInMinutes * 60 * 1000;
 const maxRegistrationOtpAttempts = 5;
+const refreshTokenExpiresInDays = 30;
+const refreshTokenExpiresInMs = refreshTokenExpiresInDays * 24 * 60 * 60 * 1000;
 const personalEmailDomains = new Set([
   "aol.com",
   "gmail.com",
@@ -67,6 +73,11 @@ interface ResendVerificationResponse {
   message: string;
 }
 
+interface VerificationResendResult {
+  retryAfterSeconds?: number;
+  verificationEmailSent: boolean;
+}
+
 interface PasswordResetRequestResponse {
   message: string;
 }
@@ -97,15 +108,22 @@ interface RegistrationOtpVerificationResponse {
   registrationToken: string;
 }
 
+export interface SessionMetadata {
+  ipAddress?: string;
+  userAgent?: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
     @InjectModel(RegistrationAttempt.name) private readonly registrationAttempts: Model<RegistrationAttemptDocument>,
+    @InjectModel(Session.name) private readonly sessions: Model<SessionDocument>,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     private readonly passwordService: PasswordService,
-    private readonly notificationService: NotificationService
+    private readonly notificationService: NotificationService,
+    private readonly twoFactorService: TwoFactorService
   ) {}
 
   async startRegistration(dto: StartRegistrationDto): Promise<RegistrationOtpResponse> {
@@ -184,7 +202,7 @@ export class AuthService {
     };
   }
 
-  async completeRegistration(dto: CompleteRegistrationDto): Promise<AuthResponse> {
+  async completeRegistration(dto: CompleteRegistrationDto, metadata: SessionMetadata = {}): Promise<AuthResponse> {
     const email = dto.email.toLowerCase().trim();
     const existingUser = await this.users.exists({ email });
 
@@ -232,11 +250,13 @@ export class AuthService {
       this.notificationService.syncRegisteredContact(user.email, user.role)
     ]);
 
-    return this.toAuthResponse(user);
+    return this.toAuthResponse(user, dto.clientType ?? SessionClientType.Web, metadata);
   }
 
   async register(dto: RegisterDto): Promise<VerificationRequiredResponse> {
     const email = dto.email.toLowerCase().trim();
+    this.validateRegistrationRole(dto.role);
+    this.validateFacilityWorkEmail(dto.role, email);
     const existingUser = await this.users.exists({ email });
 
     if (existingUser) {
@@ -260,7 +280,7 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto): Promise<AuthResponse> {
+  async login(dto: LoginDto, metadata: SessionMetadata = {}, trustedDeviceCookie?: string): Promise<AuthResponse | TwoFactorChallengeResponse> {
     const user = await this.users.findOne({ email: dto.email.toLowerCase().trim() }).exec();
 
     if (!user || !(await this.passwordService.verify(dto.password, user.passwordHash))) {
@@ -268,14 +288,35 @@ export class AuthService {
     }
 
     if (!user.emailVerified) {
+      const resend = await this.resendVerificationIfAllowed(user);
       throw new UnauthorizedException({
         code: "EMAIL_VERIFICATION_REQUIRED",
         email: user.email,
-        message: "Verify your email before signing in."
+        message: resend.verificationEmailSent
+          ? "A new verification email has been sent. Check your inbox."
+          : "A verification email was sent recently. Check your inbox.",
+        ...resend
       });
     }
 
-    return this.toAuthResponse(user);
+    if (user.status === AccountStatus.Suspended) {
+      throw new UnauthorizedException({
+        code: "ACCOUNT_SUSPENDED",
+        message: "This account is suspended. Contact MedShift support."
+      });
+    }
+
+    const clientType = dto.clientType ?? SessionClientType.Web;
+    const factor = await this.twoFactorService.prepareLogin(user, clientType, dto.trustedDeviceToken ?? trustedDeviceCookie, metadata);
+    if (factor.required) return factor.response;
+    return this.toAuthResponse(user, clientType, metadata);
+  }
+
+  async verifyTwoFactorLogin(challengeId: string, code: string, trustDevice: boolean, metadata: SessionMetadata = {}) {
+    const verified = await this.twoFactorService.consumeLoginChallenge(challengeId, code, trustDevice, metadata);
+    const user = await this.users.findById(verified.userId).exec();
+    if (!user || !user.emailVerified || user.status === AccountStatus.Suspended) throw new UnauthorizedException("Account is unavailable");
+    return { ...(await this.toAuthResponse(user, verified.clientType, metadata)), clientType: verified.clientType, trustedDeviceToken: verified.trustedDeviceToken };
   }
 
   async verifyEmail(dto: VerifyEmailDto): Promise<VerificationResponse> {
@@ -323,12 +364,12 @@ export class AuthService {
     const user = await this.users.findOne({ email }).exec();
 
     if (user && !user.emailVerified) {
-      await this.rotateVerificationTokenAndSend(user);
+      await this.resendVerificationIfAllowed(user);
     }
 
     return {
       emailVerificationRequired: true,
-      message: "If that email belongs to an unverified account, a new verification link has been sent."
+      message: "If that email belongs to an unverified account, a verification link was sent recently or a new link has been sent."
     };
   }
 
@@ -355,6 +396,8 @@ export class AuthService {
     user.passwordResetSentAt = undefined;
     user.passwordChangedAt = new Date();
     await user.save();
+    await this.revokeUserSessions(user._id, "password_reset");
+    await this.twoFactorService.revokeAllTrusted(user._id);
 
     return {
       message: "Password reset. You can now sign in with your new password."
@@ -378,6 +421,8 @@ export class AuthService {
     user.passwordResetSentAt = undefined;
     user.passwordChangedAt = new Date();
     await user.save();
+    await this.revokeUserSessions(user._id, "password_changed");
+    await this.twoFactorService.revokeAllTrusted(user._id);
 
     return {
       message: "Password updated."
@@ -395,15 +440,83 @@ export class AuthService {
     };
   }
 
-  private async toAuthResponse(user: UserDocument): Promise<AuthResponse> {
+  async refreshSession(refreshToken: string, metadata: SessionMetadata = {}): Promise<AuthResponse> {
+    const [sessionId, rawToken] = refreshToken.split(".");
+    if (!Types.ObjectId.isValid(sessionId) || !rawToken) {
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+
+    const session = await this.sessions.findById(sessionId).exec();
+    if (!session || session.refreshTokenHash !== this.hashToken(rawToken)) {
+      if (session) await this.revokeSessionFamily(session.familyId, "refresh_token_reuse");
+      throw new UnauthorizedException("Invalid refresh token");
+    }
+    if (session.revokedAt) {
+      await this.revokeSessionFamily(session.familyId, "refresh_token_reuse");
+      throw new UnauthorizedException("Refresh token has been revoked");
+    }
+    if (session.refreshExpiresAt.getTime() <= Date.now()) {
+      await this.revokeSession(session, "refresh_token_expired");
+      throw new UnauthorizedException("Refresh token has expired");
+    }
+
+    const user = await this.users.findById(session.userId).exec();
+    if (!user || !user.emailVerified || user.status === AccountStatus.Suspended) {
+      await this.revokeSessionFamily(session.familyId, "account_unavailable");
+      throw new UnauthorizedException("Account is unavailable");
+    }
+
+    const replacement = await this.createSession(user, session.clientType, metadata, session.familyId);
+    session.revokedAt = new Date();
+    session.revocationReason = "rotated";
+    session.replacedBySessionId = new Types.ObjectId(replacement.sessionId);
+    session.lastUsedAt = new Date();
+    await session.save();
+    return replacement.response;
+  }
+
+  async logout(sessionId: string) {
+    if (Types.ObjectId.isValid(sessionId)) {
+      const session = await this.sessions.findById(sessionId).exec();
+      if (session) await this.revokeSession(session, "logout");
+    }
+    return { message: "Signed out." };
+  }
+
+  async logoutAll(currentUser: AuthUser) {
+    await this.revokeUserSessions(new Types.ObjectId(currentUser.sub), "logout_all");
+    await this.twoFactorService.revokeAllTrusted(currentUser.sub);
+    return { message: "Signed out on all devices." };
+  }
+
+  private async toAuthResponse(user: UserDocument, clientType: SessionClientType, metadata: SessionMetadata): Promise<AuthResponse> {
+    return (await this.createSession(user, clientType, metadata)).response;
+  }
+
+  private async createSession(user: UserDocument, clientType: SessionClientType, metadata: SessionMetadata, familyId = randomBytes(24).toString("base64url")) {
+    const rawRefreshToken = randomBytes(48).toString("base64url");
+    const csrfToken = randomBytes(32).toString("base64url");
+    const session = await this.sessions.create({
+      userId: user._id,
+      familyId,
+      clientType,
+      refreshTokenHash: this.hashToken(rawRefreshToken),
+      refreshExpiresAt: new Date(Date.now() + refreshTokenExpiresInMs),
+      ipAddress: metadata.ipAddress,
+      userAgent: metadata.userAgent,
+      lastUsedAt: new Date()
+    });
     const payload: AuthTokenPayload = {
       sub: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      sid: session.id
     };
 
-    return {
+    const response: AuthResponse = {
       accessToken: await this.jwtService.signAsync(payload),
+      refreshToken: `${session.id}.${rawRefreshToken}`,
+      csrfToken,
       user: {
         id: user.id,
         email: user.email,
@@ -412,6 +525,23 @@ export class AuthService {
         emailVerified: user.emailVerified
       }
     };
+    return { response, sessionId: session.id };
+  }
+
+  private async revokeSession(session: SessionDocument, reason: string) {
+    if (!session.revokedAt) {
+      session.revokedAt = new Date();
+      session.revocationReason = reason;
+      await session.save();
+    }
+  }
+
+  private async revokeSessionFamily(familyId: string, reason: string) {
+    await this.sessions.updateMany({ familyId, revokedAt: { $exists: false } }, { $set: { revokedAt: new Date(), revocationReason: reason } }).exec();
+  }
+
+  private async revokeUserSessions(userId: Types.ObjectId, reason: string) {
+    await this.sessions.updateMany({ userId, revokedAt: { $exists: false } }, { $set: { revokedAt: new Date(), revocationReason: reason } }).exec();
   }
 
   private async rotateVerificationTokenAndSend(user: UserDocument) {
@@ -428,6 +558,36 @@ export class AuthService {
       verificationUrl: this.buildVerificationUrl(user.email, token),
       expiresInHours: verificationTokenExpiresInHours
     });
+  }
+
+  private async resendVerificationIfAllowed(user: UserDocument): Promise<VerificationResendResult> {
+    const now = new Date();
+    const cooldownStartedBefore = new Date(now.getTime() - verificationResendCooldownInMs);
+    const reservedUser = await this.users.findOneAndUpdate(
+      {
+        _id: user._id,
+        emailVerified: false,
+        $or: [
+          { emailVerificationSentAt: { $exists: false } },
+          { emailVerificationSentAt: null },
+          { emailVerificationSentAt: { $lte: cooldownStartedBefore } }
+        ]
+      },
+      { $set: { emailVerificationSentAt: now } },
+      { new: true }
+    ).exec();
+
+    if (reservedUser) {
+      await this.rotateVerificationTokenAndSend(reservedUser);
+      return { verificationEmailSent: true };
+    }
+
+    const currentUser = await this.users.findById(user._id).select("emailVerificationSentAt").lean().exec();
+    const elapsedMs = currentUser?.emailVerificationSentAt ? now.getTime() - currentUser.emailVerificationSentAt.getTime() : 0;
+    return {
+      verificationEmailSent: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((verificationResendCooldownInMs - elapsedMs) / 1000))
+    };
   }
 
   private async rotatePasswordResetTokenAndSend(user: UserDocument) {

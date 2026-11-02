@@ -7,7 +7,7 @@ This runbook deploys MedShift to a Hostinger VPS with Docker Compose, Nginx, Mon
 - `https://medshift.example.com` -> `apps/web`
 - `https://admin.medshift.example.com` -> `apps/admin`
 - `https://api.medshift.example.com` -> `apps/api`
-- MongoDB runs inside the compose network with data persisted in the `medshift_mongo_data` Docker volume.
+- MongoDB runs as a single-node replica set so assignment transactions are supported, with data persisted in the `medshift_mongo_data` Docker volume.
 
 Replace the example domains with the real production domains before launch.
 
@@ -84,7 +84,8 @@ Set these values at minimum:
 - `NEXT_PUBLIC_ADMIN_URL=https://<admin-domain>`
 - `JWT_SECRET=<long random value>`
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and segment IDs when email delivery is ready
-- `NEXT_PUBLIC_MAPBOX_TOKEN`, `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY`, and Cloudinary values when those integrations are ready
+- `NEXT_PUBLIC_MAPBOX_TOKEN` and `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` when map/search integrations are ready
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` for signed private worker-document uploads; never expose the API secret to web or mobile builds
 
 Generate a strong JWT secret:
 
@@ -122,7 +123,7 @@ certbot --nginx \
   -d api.medshift.example.com
 ```
 
-Choose the redirect-to-HTTPS option. Certbot will update the active Nginx config on the host; keep a copy of any production TLS changes if you later replace `deploy/nginx/default.conf`.
+The reverse proxy runs in Docker, so do not rely on Certbot editing a host Nginx installation. Obtain certificates with Certbot webroot/standalone, mount `/etc/letsencrypt` read-only as Compose already does, then add explicit `listen 443 ssl` blocks and certificate paths to `deploy/nginx/default.conf`. Keep port 80 only for ACME challenges and an HTTPS redirect. Validate with `nginx -t` inside the container before reloading.
 
 Test renewal:
 
@@ -184,4 +185,6 @@ docker compose -f docker-compose.prod.yml exec mongo mongodump --archive=/tmp/me
 docker cp "$(docker compose -f docker-compose.prod.yml ps -q mongo)":/tmp/medshift.archive /opt/medshift-backups/medshift-$(date +%Y%m%d%H%M).archive
 ```
 
-Copy backups off the VPS regularly before launch.
+Use `scripts/backup-mongo.sh` from cron for timestamped compressed backups and copy them off the VPS. Before launch and quarterly thereafter, restore the newest archive into a separate MongoDB instance and record the successful restore time; an untested archive is not accepted as a backup.
+
+Before deploying schema changes, run both `pnpm --filter @medshift/api migrate:launch:dry` and `pnpm --filter @medshift/api migrate:worker-documents:dry`, take a verified backup, deploy the compatible API, then run the corresponding non-dry migrations. The worker-document migration is idempotent and reports profiles still missing required document categories without discarding legacy credentials or consent history.

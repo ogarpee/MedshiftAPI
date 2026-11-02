@@ -1,9 +1,11 @@
 "use client";
 
+import { apiFetch as fetch } from "../../session-fetch";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { NotificationSummary, ShiftApplicationStatus, ShiftStatus, TimesheetStatus } from "@medshift/shared-types";
-import { DashboardShell, StatusBadge } from "@medshift/ui-components";
+import { Button, Card, DashboardShell, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, StatusBadge } from "@medshift/ui-components";
 import { Check, Clock, FileText, Send, Users, X } from "lucide-react";
 import { useDashboardNotifications } from "../../use-dashboard-notifications";
 
@@ -88,7 +90,7 @@ export default function FacilityMarketplacePage() {
   const selectedShift = useMemo(() => shifts.find((shift) => shift.id === selectedShiftId) ?? shifts[0], [selectedShiftId, shifts]);
 
   const loadMarketplace = useCallback(async () => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a facility to manage marketplace activity.");
@@ -143,7 +145,7 @@ export default function FacilityMarketplacePage() {
   }, [apiUrl]);
 
   const loadShiftActivity = useCallback(async (shiftId: string) => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token || !shiftId) {
       setMatches([]);
@@ -173,7 +175,7 @@ export default function FacilityMarketplacePage() {
   }, [loadShiftActivity, selectedShift?.id]);
 
   async function postAction(path: string, body: Record<string, unknown>, success: string) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a facility to continue.");
@@ -192,7 +194,7 @@ export default function FacilityMarketplacePage() {
   }
 
   async function patchAction(path: string, body: Record<string, unknown>, success: string) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a facility to continue.");
@@ -212,7 +214,6 @@ export default function FacilityMarketplacePage() {
 
   return (
     <DashboardShell
-      actions={<button className="button-primary" type="button" onClick={() => void loadMarketplace()}>Retry</button>}
       className="facility-page worker-page"
       eyebrow={<StatusBadge tone="navy">Marketplace</StatusBadge>}
       navItems={[
@@ -250,16 +251,19 @@ export default function FacilityMarketplacePage() {
               </div>
               <StatusBadge tone="green">{shifts.length} shifts</StatusBadge>
             </div>
-            <label className="marketplace-select-field" htmlFor="facility-marketplace-shift">
+            <Label className="marketplace-select-field">
               Shift
-              <select id="facility-marketplace-shift" value={selectedShift?.id ?? ""} onChange={(event) => setSelectedShiftId(event.target.value)} disabled={!shifts.length}>
-                {shifts.length ? shifts.map((shift) => (
-                  <option key={shift.id} value={shift.id}>
-                    {shift.title || shift.roleRequired} · {formatDate(shift.startTime)}
-                  </option>
-                )) : <option value="">No live shifts</option>}
-              </select>
-            </label>
+              <Select value={selectedShift?.id ?? "none"} onValueChange={setSelectedShiftId} disabled={!shifts.length}>
+                <SelectTrigger id="facility-marketplace-shift"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {shifts.length ? shifts.map((shift) => (
+                    <SelectItem key={shift.id} value={shift.id}>
+                      {shift.title || shift.roleRequired} · {formatDate(shift.startTime)}
+                    </SelectItem>
+                  )) : <SelectItem value="none">No live shifts</SelectItem>}
+                </SelectContent>
+              </Select>
+            </Label>
           </section>
 
           <MarketplacePanel icon={<Users aria-hidden="true" />} title="Matches" badge={`${matches.length} workers`}>
@@ -267,9 +271,9 @@ export default function FacilityMarketplacePage() {
               <div className="worker-shift-card" key={match.workerId}>
                 <strong>{formatWorkerName(match)}</strong>
                 <span>{match.title || "Worker"} · {match.matchScore}% match · {match.reliabilityScore ?? 0}% reliability</span>
-                <button type="button" onClick={() => void postAction(`/shifts/${selectedShift?.id}/invitations`, { workerId: match.workerId }, "Invitation sent.")}>
+                <Button type="button" size="sm" onClick={() => void postAction(`/shifts/${selectedShift?.id}/invitations`, { workerId: match.workerId }, "Invitation sent.")}>
                   <Send aria-hidden="true" /> Invite
-                </button>
+                </Button>
               </div>
             ))}
             {!matches.length ? <EmptyLine text="No eligible live matches for this shift yet." /> : null}
@@ -281,12 +285,12 @@ export default function FacilityMarketplacePage() {
                 <strong>{application.workerId}</strong>
                 <span>{application.status || "APPLIED"} · {application.message || "No message"}</span>
                 <div className="facility-table-actions">
-                  <button type="button" onClick={() => void patchAction(`/applications/${application.id}/status`, { status: ShiftApplicationStatus.Selected }, "Application selected.")}>
+                  <Button type="button" size="sm" onClick={() => void patchAction(`/applications/${application.id}/status`, { status: ShiftApplicationStatus.Selected }, "Application selected.")}>
                     <Check aria-hidden="true" /> Select
-                  </button>
-                  <button type="button" onClick={() => void patchAction(`/applications/${application.id}/status`, { status: ShiftApplicationStatus.Declined }, "Application declined.")}>
+                  </Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void patchAction(`/applications/${application.id}/status`, { status: ShiftApplicationStatus.Declined }, "Application declined.")}>
                     <X aria-hidden="true" /> Decline
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -329,9 +333,9 @@ export default function FacilityMarketplacePage() {
                 <strong>{timesheet.shiftId}</strong>
                 <span>{timesheet.status || "SUBMITTED"} · {timesheet.workedMinutes ?? 0} minutes</span>
                 <div className="facility-table-actions">
-                  <button type="button" onClick={() => void patchAction(`/timesheets/${timesheet.id}`, { status: TimesheetStatus.Approved }, "Timesheet approved.")}>Approve</button>
-                  <button type="button" onClick={() => void patchAction(`/timesheets/${timesheet.id}`, { status: TimesheetStatus.Rejected }, "Timesheet rejected.")}>Reject</button>
-                  <button type="button" onClick={() => void patchAction(`/timesheets/${timesheet.id}`, { status: TimesheetStatus.CorrectionRequested }, "Correction requested.")}>Correction</button>
+                  <Button type="button" size="sm" onClick={() => void patchAction(`/timesheets/${timesheet.id}`, { status: TimesheetStatus.Approved }, "Timesheet approved.")}>Approve</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void patchAction(`/timesheets/${timesheet.id}`, { status: TimesheetStatus.Rejected }, "Timesheet rejected.")}>Reject</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void patchAction(`/timesheets/${timesheet.id}`, { status: TimesheetStatus.CorrectionRequested }, "Correction requested.")}>Correction</Button>
                 </div>
               </div>
             ))}
@@ -355,7 +359,7 @@ export default function FacilityMarketplacePage() {
 
 function MarketplacePanel({ badge, children, icon, title }: { badge: string; children: ReactNode; icon: ReactNode; title: string }) {
   return (
-    <section className="facility-board">
+    <Card className="facility-board">
       <div className="facility-board-heading">
         <div>
           <h2>{icon} {title}</h2>
@@ -363,7 +367,7 @@ function MarketplacePanel({ badge, children, icon, title }: { badge: string; chi
         <StatusBadge tone="gold">{badge}</StatusBadge>
       </div>
       <div className="worker-shift-list">{children}</div>
-    </section>
+    </Card>
   );
 }
 

@@ -3,4 +3,5 @@ import type { AuthUser } from "./auth-user";
 
 export type AuthRequest = Request & {
   user: AuthUser;
+  authSource?: "BEARER" | "COOKIE";
 };

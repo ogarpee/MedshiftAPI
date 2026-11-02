@@ -35,7 +35,29 @@ final dioProvider = Provider<Dio>((ref) {
         }
         handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
+        final request = error.requestOptions;
+        if (error.response?.statusCode == 401 && request.path != '/auth/refresh' && request.extra['sessionRetried'] != true) {
+          final refreshToken = await tokenStore.readRefreshToken();
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            try {
+              final refreshClient = Dio(BaseOptions(baseUrl: config.apiBaseUrl, headers: {'Accept': 'application/json'}));
+              final refreshResponse = await refreshClient.post<Map<String, dynamic>>('/auth/refresh', data: {'refreshToken': refreshToken});
+              final data = refreshResponse.data ?? const <String, dynamic>{};
+              final accessToken = data['accessToken']?.toString() ?? '';
+              final replacementRefreshToken = data['refreshToken']?.toString();
+              if (accessToken.isNotEmpty) {
+                await tokenStore.writeTokens(accessToken: accessToken, refreshToken: replacementRefreshToken);
+                request.headers['Authorization'] = 'Bearer $accessToken';
+                request.extra['sessionRetried'] = true;
+                handler.resolve(await dio.fetch(request));
+                return;
+              }
+            } catch (_) {
+              await tokenStore.clear();
+            }
+          }
+        }
         handler.next(error);
       },
     ),

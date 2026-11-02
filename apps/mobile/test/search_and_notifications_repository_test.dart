@@ -17,8 +17,10 @@ void main() {
       location: const GeoPoint(longitude: -114.07, latitude: 51.04),
       radiusKm: 25,
       filters: const ShiftSearchFilters(
-        roleRequired: ClinicalRole.rn,
-        facilityType: FacilityType.hospital,
+        search: 'registered nurse',
+        roles: [ClinicalRole.rn, ClinicalRole.lpn],
+        facilityTypes: [FacilityType.hospital, FacilityType.clinic],
+        shiftTypes: [ShiftSearchPeriod.day, ShiftSearchPeriod.weekend],
         radiusKm: 40,
         maxShiftHours: 8,
         minHourlyRate: 45,
@@ -30,8 +32,13 @@ void main() {
     expect(adapter.lastOptions?.queryParameters['longitude'], -114.07);
     expect(adapter.lastOptions?.queryParameters['latitude'], 51.04);
     expect(adapter.lastOptions?.queryParameters['radiusKm'], 40);
-    expect(adapter.lastOptions?.queryParameters['roleRequired'], 'RN');
-    expect(adapter.lastOptions?.queryParameters['facilityType'], 'HOSPITAL');
+    expect(adapter.lastOptions?.queryParameters['search'], 'registered nurse');
+    expect(adapter.lastOptions?.queryParameters['roles'], 'RN,LPN');
+    expect(
+      adapter.lastOptions?.queryParameters['facilityTypes'],
+      'HOSPITAL,CLINIC',
+    );
+    expect(adapter.lastOptions?.queryParameters['shiftTypes'], 'DAY,WEEKEND');
     expect(adapter.lastOptions?.queryParameters['maxShiftHours'], 8);
     expect(adapter.lastOptions?.queryParameters['minHourlyRate'], 45);
     expect(adapter.lastOptions?.queryParameters['sort'], 'HOURLY_RATE');

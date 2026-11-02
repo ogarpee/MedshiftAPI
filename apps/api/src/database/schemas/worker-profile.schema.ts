@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { HydratedDocument, Schema as MongooseSchema, Types } from "mongoose";
-import { BackgroundCheckStatus, ClinicalRole, OnboardingStatus, VerificationDocumentStatus } from "@medshift/shared-types";
+import { BackgroundCheckStatus, ClinicalRole, OnboardingStatus, VerificationDocumentStatus, WorkerDocumentCategory } from "@medshift/shared-types";
 
 export type WorkerProfileDocument = HydratedDocument<WorkerProfile>;
 
@@ -36,17 +36,50 @@ class Credential {
 
 @Schema({ _id: false })
 class WorkerDocument {
-  @Prop()
-  type?: string;
+  @Prop({ required: true })
+  id!: string;
+
+  @Prop({ enum: WorkerDocumentCategory, required: true })
+  category!: WorkerDocumentCategory;
 
   @Prop()
   documentUrl?: string;
+
+  @Prop()
+  cloudinaryPublicId?: string;
+
+  @Prop()
+  resourceType?: string;
+
+  @Prop()
+  deliveryType?: string;
+
+  @Prop()
+  version?: number;
+
+  @Prop()
+  format?: string;
+
+  @Prop()
+  originalFilename?: string;
+
+  @Prop()
+  bytes?: number;
+
+  @Prop()
+  uploadedAt?: Date;
 
   @Prop({ enum: VerificationDocumentStatus, default: VerificationDocumentStatus.Pending })
   verificationStatus!: VerificationDocumentStatus;
 
   @Prop()
   reviewedAt?: Date;
+
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: "User" })
+  reviewedBy?: Types.ObjectId;
+
+  @Prop()
+  rejectionReason?: string;
 }
 
 @Schema({ _id: false })

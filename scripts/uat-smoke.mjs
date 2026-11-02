@@ -48,9 +48,9 @@ const checks = [
     includes: ["mapbox-gl-js", "mapbox://styles/mapbox/streets-v12", "Click or drag the pin", "The map could not load"]
   },
   {
-    name: "worker credential upload uses Cloudinary",
-    file: "apps/web/app/cloudinary-upload-field.tsx",
-    includes: ["NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", "NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET", "api.cloudinary.com", "secure_url", "upload_preset"]
+    name: "worker documents use signed private Cloudinary uploads",
+    file: "apps/web/app/worker-documents-field.tsx",
+    includes: ["worker-documents/sign", "worker-documents/complete", "GovernmentId", "BackgroundCheck", "ProfessionalCertificate", "deliveryType"]
   },
   {
     name: "web next config exposes monorepo public env values",
@@ -58,9 +58,9 @@ const checks = [
     includes: ["loadPublicEnvFiles", "repoRoot", "NEXT_PUBLIC_MAPBOX_TOKEN", "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME", "env: getPublicEnv()"]
   },
   {
-    name: "admin portal includes live overview and credential review",
+    name: "admin portal includes live overview and document review",
     file: "apps/admin/app/page.tsx",
-    includes: ["DashboardShell", "/admin/overview", "/credentials/", "facilityQueue", "queueFilter", "verification-filter", "user-role-filter", "shift-status-filter", "reviewWorkerOnboarding", "reviewFacilityOnboarding", "health-bar", "Marketplace oversight", "/audit-events", "/timesheets", "/disputes"]
+    includes: ["DashboardShell", "/admin/overview", "/documents/", "facilityQueue", "queueFilter", "verification-filter", "user-role-filter", "shift-status-filter", "reviewWorkerOnboarding", "reviewFacilityOnboarding", "health-panel", "Marketplace oversight", "/audit-events", "/timesheets", "/disputes"]
   },
   {
     name: "api supports admin worker and facility onboarding reviews",
@@ -159,10 +159,15 @@ const checks = [
     includes: ["DashboardShell", "worker-profiles/me", "worker-profiles/${profile.id}", "auth/password", "Overview", "Find Shifts", "My Work", "Reviews", "Security"]
   },
   {
-    name: "worker onboarding captures profile credentials and consent",
+    name: "worker onboarding captures upload-only categorized documents",
     file: "apps/web/app/worker/onboarding/page.tsx",
-    includes: ["onboarding-standalone-page", "MedShiftLogo", "onboarding-status-chip", "getStepButtonClass", "draftKey", "NEXT_PUBLIC_MAPBOX_TOKEN", "NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN", "OnboardingMap", "CloudinaryUploadField", "Save and continue", "availableDays", "preferredShiftTypes", "credentialUrl", "backgroundConsent", "worker-profiles"],
-    excludes: ["DashboardShell", "onboarding-standalone-topbar", ">Shift board<"]
+    includes: ["onboarding-standalone-page", "MedShiftLogo", "onboarding-status-chip", "getStepButtonClass", "draftKey", "NEXT_PUBLIC_MAPBOX_TOKEN", "NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN", "OnboardingMap", "WorkerDocumentsField", "Save and continue", "availableDays", "preferredShiftTypes", "documents", "worker-profiles/me", "onboarding-draft", "Retry sync", "ReviewSection title=\"Identity\"", "ReviewSection title=\"Service area\"", "ReviewSection title=\"Availability\"", "ReviewSection title=\"Documents\"", "formatDocumentMeta", "Saved on this device"],
+    excludes: ["DashboardShell", "onboarding-standalone-topbar", ">Shift board<", "credentialUrl", "backgroundConsent", "Document link or reference"]
+  },
+  {
+    name: "api stores user-scoped resumable worker onboarding drafts",
+    file: "apps/api/src/profiles/worker-profiles.controller.ts",
+    includes: ["Put(\"me\")", "Get(\"onboarding-draft\")", "Put(\"onboarding-draft\")", "Delete(\"onboarding-draft\")", "UserRole.Worker"]
   },
   {
     name: "registration sends workers to onboarding profile completion",
@@ -172,7 +177,7 @@ const checks = [
   {
     name: "admin responsive polish and reduced motion support exists",
     file: "apps/admin/app/styles.css",
-    includes: ["@media (max-width: 480px)", "prefers-reduced-motion", "backdrop-filter", "health-bar"]
+    includes: ["@media (max-width: 480px)", "prefers-reduced-motion", "backdrop-filter", "health-panel"]
   },
   {
     name: "manual UAT checklist is documented",

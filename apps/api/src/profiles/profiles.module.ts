@@ -5,10 +5,11 @@ import { FacilityProfilesController } from "./facility-profiles.controller";
 import { FacilityProfilesService } from "./facility-profiles.service";
 import { WorkerProfilesController } from "./worker-profiles.controller";
 import { WorkerProfilesService } from "./worker-profiles.service";
+import { WorkerOnboardingDraftsService } from "./worker-onboarding-drafts.service";
 
 @Module({
   imports: [AuthModule, DatabaseSchemasModule],
   controllers: [WorkerProfilesController, FacilityProfilesController],
-  providers: [WorkerProfilesService, FacilityProfilesService]
+  providers: [WorkerProfilesService, WorkerOnboardingDraftsService, FacilityProfilesService]
 })
 export class ProfilesModule {}

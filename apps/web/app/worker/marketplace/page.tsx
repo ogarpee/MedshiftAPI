@@ -1,9 +1,11 @@
 "use client";
 
+import { apiFetch as fetch } from "../../session-fetch";
+
 import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { AttendanceEventType, MatchedShiftSummary, NotificationSummary, ShiftInvitationStatus } from "@medshift/shared-types";
-import { DashboardShell, StatusBadge } from "@medshift/ui-components";
+import { Button, Card, DashboardShell, StatusBadge } from "@medshift/ui-components";
 import { Check, Clock, FileText, Send, ShieldAlert } from "lucide-react";
 import { useDashboardNotifications } from "../../use-dashboard-notifications";
 
@@ -34,7 +36,7 @@ export default function WorkerMarketplacePage() {
   const [timesheets, setTimesheets] = useState<MarketplaceRecord[]>([]);
 
   const loadMarketplace = useCallback(async () => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a worker to use the marketplace.");
@@ -85,7 +87,7 @@ export default function WorkerMarketplacePage() {
   }, [loadMarketplace]);
 
   async function postAction(path: string, body: Record<string, unknown>, success: string) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a worker to continue.");
@@ -103,7 +105,7 @@ export default function WorkerMarketplacePage() {
   }
 
   async function patchAction(path: string, body: Record<string, unknown>, success: string) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a worker to continue.");
@@ -122,7 +124,6 @@ export default function WorkerMarketplacePage() {
 
   return (
     <DashboardShell
-      actions={<button className="button-primary" type="button" onClick={() => void loadMarketplace()}>Retry</button>}
       className="worker-page"
       eyebrow={<StatusBadge tone="green">Marketplace</StatusBadge>}
       navItems={[
@@ -150,7 +151,7 @@ export default function WorkerMarketplacePage() {
               <div className="worker-shift-card" key={shift.id}>
                 <strong>{shift.title || shift.roleRequired}</strong>
                 <span>{formatDate(shift.startTime)} · ${shift.hourlyRate}/hr · {shift.facility?.name || "Facility"}</span>
-                <button type="button" onClick={() => void postAction(`/shifts/${shift.id}/applications`, {}, "Application submitted.")}>Apply</button>
+                <Button type="button" size="sm" onClick={() => void postAction(`/shifts/${shift.id}/applications`, {}, "Application submitted.")}>Apply</Button>
               </div>
             ))}
             {!openShifts.length ? <EmptyLine text="No live matching shifts are currently available." /> : null}
@@ -173,8 +174,8 @@ export default function WorkerMarketplacePage() {
                 <span>{invitation.shiftId} · {invitation.message || "No message"}</span>
                 {invitation.status === ShiftInvitationStatus.Pending ? (
                   <div className="facility-table-actions">
-                    <button type="button" onClick={() => void patchAction(`/invitations/${invitation.id}/status`, { status: ShiftInvitationStatus.Accepted }, "Invitation accepted.")}>Accept</button>
-                    <button type="button" onClick={() => void patchAction(`/invitations/${invitation.id}/status`, { status: ShiftInvitationStatus.Declined }, "Invitation declined.")}>Decline</button>
+                    <Button type="button" size="sm" onClick={() => void patchAction(`/invitations/${invitation.id}/status`, { status: ShiftInvitationStatus.Accepted }, "Invitation accepted.")}>Accept</Button>
+                    <Button type="button" size="sm" variant="secondary" onClick={() => void patchAction(`/invitations/${invitation.id}/status`, { status: ShiftInvitationStatus.Declined }, "Invitation declined.")}>Decline</Button>
                   </div>
                 ) : null}
               </div>
@@ -188,14 +189,14 @@ export default function WorkerMarketplacePage() {
                 <strong>{shift.title || shift.roleRequired}</strong>
                 <span>{formatDate(shift.startTime)} · {shift.status}</span>
                 <div className="facility-table-actions">
-                  <button type="button" onClick={() => void postAction("/attendance/clock-in", buildAttendancePayload(shift.id, AttendanceEventType.ClockIn), "Clock-in recorded.")}>Clock in</button>
-                  <button type="button" onClick={() => void postAction("/attendance/break/start", buildAttendancePayload(shift.id, AttendanceEventType.BreakStart), "Break start recorded.")}>Break</button>
-                  <button type="button" onClick={() => void postAction("/attendance/break/end", buildAttendancePayload(shift.id, AttendanceEventType.BreakEnd), "Break end recorded.")}>Resume</button>
-                  <button type="button" onClick={() => void postAction("/attendance/clock-out", buildAttendancePayload(shift.id, AttendanceEventType.ClockOut), "Clock-out recorded.")}>Clock out</button>
+                  <Button type="button" size="sm" onClick={() => void postAction("/attendance/clock-in", buildAttendancePayload(shift.id, AttendanceEventType.ClockIn), "Clock-in recorded.")}>Clock in</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void postAction("/attendance/break/start", buildAttendancePayload(shift.id, AttendanceEventType.BreakStart), "Break start recorded.")}>Break</Button>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void postAction("/attendance/break/end", buildAttendancePayload(shift.id, AttendanceEventType.BreakEnd), "Break end recorded.")}>Resume</Button>
+                  <Button type="button" size="sm" onClick={() => void postAction("/attendance/clock-out", buildAttendancePayload(shift.id, AttendanceEventType.ClockOut), "Clock-out recorded.")}>Clock out</Button>
                 </div>
-                <button type="button" onClick={() => void postAction("/timesheets", buildTimesheetPayload(shift), "Timesheet submitted.")}>
+                <Button type="button" onClick={() => void postAction("/timesheets", buildTimesheetPayload(shift), "Timesheet submitted.")}>
                   <FileText aria-hidden="true" /> Submit timesheet
-                </button>
+                </Button>
               </div>
             ))}
             {!confirmedShifts.length ? <EmptyLine text="No confirmed live work yet." /> : null}
@@ -213,9 +214,9 @@ export default function WorkerMarketplacePage() {
 
           <MarketplacePanel badge={`${disputes.length} cases`} icon={<ShieldAlert aria-hidden="true" />} title="Disputes">
             {confirmedShifts[0] ? (
-              <button type="button" onClick={() => void postAction("/disputes", { shiftId: confirmedShifts[0].id, reason: "Worker opened a marketplace dispute from the dashboard." }, "Dispute opened.")}>
+              <Button type="button" onClick={() => void postAction("/disputes", { shiftId: confirmedShifts[0].id, reason: "Worker opened a marketplace dispute from the dashboard." }, "Dispute opened.")}>
                 Open dispute for next shift
-              </button>
+              </Button>
             ) : null}
             {disputes.map((dispute) => (
               <div className="worker-shift-card" key={dispute.id}>
@@ -233,7 +234,7 @@ export default function WorkerMarketplacePage() {
 
 function MarketplacePanel({ badge, children, icon, title }: { badge: string; children: ReactNode; icon: ReactNode; title: string }) {
   return (
-    <section className="facility-board">
+    <Card className="facility-board">
       <div className="facility-board-heading">
         <div>
           <h2>{icon} {title}</h2>
@@ -241,7 +242,7 @@ function MarketplacePanel({ badge, children, icon, title }: { badge: string; chi
         <StatusBadge tone="gold">{badge}</StatusBadge>
       </div>
       <div className="worker-shift-list">{children}</div>
-    </section>
+    </Card>
   );
 }
 

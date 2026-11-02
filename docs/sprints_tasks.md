@@ -310,3 +310,59 @@
 
 ### Story 19.1: Marketplace API, Web, And Mobile Gap Closure
 - [x] Harden marketplace APIs, expand web/admin operations, and connect Flutter mobile to applications, invitations, assignments, attendance, timesheets, and estimated earnings.
+
+## Sprint 20: Shadcn Dashboard Refresh
+**Goal**: Refresh web and admin dashboard surfaces with shared shadcn-style primitives while preserving live workflows.
+
+### Story 20.1: Shared Shadcn Dashboard Components
+- [x] Set up shared shadcn dashboard primitives and migrate admin, worker, facility, marketplace, and settings dashboard surfaces.
+- [x] Fix local dashboard navigation so admin dashboard links do not fall through to an unavailable `localhost:3001` route.
+- [x] Load admin dashboard styles for the local web `/admin` dashboard route.
+- [x] Apply a dark MedShift dashboard theme across web and admin dashboard surfaces.
+- [x] Clean up admin marketplace layout and remove refresh/logout controls from dashboard pages.
+- [x] Polish facility dashboard pages for professional, user-friendly operations layouts.
+
+## Sprint 21: Launch MVP Gap Closure
+**Goal**: Unify staffing lifecycle, secure sessions, complete multi-caregiver operations, and establish evidence-based launch readiness.
+
+### Story 21.1: Audit, Traceability, And Documentation
+- [x] Publish the launch-readiness gap register, feature traceability matrix, current architecture, use-case, flow, state, and ER diagrams.
+
+### Story 21.2: Secure Sessions And Authorization
+- [/] Add revocable rotating sessions, web cookie/CSRF authentication, mobile refresh tokens, throttling, and active-account enforcement.
+
+### Story 21.3: Canonical Multi-Caregiver Staffing
+- [/] Make assignments canonical for quick accept, applications, invitations, worker history, capacity, realtime updates, and migration of legacy matches.
+
+### Story 21.4: Marketplace Lifecycle Completion
+- [/] Enforce attendance, timesheet, review, dispute, ownership, and state-transition invariants across API, web, admin, and mobile.
+
+### Story 21.5: Verification And Production Readiness
+- [/] Add integration and journey coverage, update CI, harden health/deployment/backups, complete UAT evidence, and pass all quality gates.
+
+### Story 21.6: Verification Email And Auth Feedback Refinement
+- [x] Automatically resend verification email after valid unverified login, enforce resend cooldowns, and move transient web auth feedback to toasts.
+
+### Story 21.7: Upload-Only Worker Documents
+- [x] Replace worker credential links and background-consent inputs with categorized private Cloudinary document uploads across API, web, admin, and mobile.
+
+### Story 21.8: Resumable Worker Onboarding And Complete Review
+- [x] Add server-backed worker onboarding drafts, cross-client resume/edit behavior, and complete review sections across web and Flutter.
+
+### Story 21.9: Idempotent Worker Profile Save And Draft Recovery
+- [x] Make worker profile submission retry-safe, remove draft profile-ID coupling, and add actionable web/mobile synchronization recovery.
+
+### Story 21.10: Full-Width Dashboard Workspaces
+- [x] Refine worker and facility dashboard routes so shift discovery, review queues, work history, and other primary operational screens use the full available content width responsively.
+
+### Story 21.11: Worker Dashboard, Search, And Profile Refinement
+- [x] Standardize Flutter worker card layouts, add shared onboarding guidance and resilient profile states, and replace web/mobile shift filters with search plus checkable multi-select filters.
+
+### Story 21.12: Mobile Onboarding Load Recovery
+- [x] Diagnose and fix Flutter worker onboarding initialization so authenticated workers can load or resume their profile reliably.
+
+### Story 21.13: Deterministic Worker Onboarding Saves
+- [/] Make worker Save and continue deterministic across web and Flutter, harden nullable profile/draft loading, and remove technical launch copy from user-facing onboarding surfaces. Implementation and automated gates pass; authenticated browser/simulator resume UAT remains.
+
+### Story 21.14: Worker Profile, Notifications, And Two-Factor Security
+- [/] Refine worker profile/settings across web and Flutter, add in-app/email notification preferences, and implement optional authenticator/email two-factor authentication with recovery codes and trusted devices. Mobile security actions now use consistent bottom drawers and Profile has one status-aware onboarding entry; authenticated password/2FA and onboarding simulator UAT remains.

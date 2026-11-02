@@ -1,17 +1,17 @@
 :root {
   --navy: #0b1f3a;
   --gold: #d4af37;
-  --dark: #1c1c1c;
+  --dark: #f8fafc;
   --white: #ffffff;
-  --off-white: #f8f6f1;
-  --muted: #6b7280;
-  --admin-page: #f3f6f8;
-  --admin-line: rgba(11, 31, 58, 0.08);
-  --admin-panel: #ffffff;
-  --admin-soft: #f7f9fb;
-  --glass-bg: #ffffff;
-  --glass-border: rgba(11, 31, 58, 0.08);
-  --soft-shadow: 0 18px 44px rgba(11, 31, 58, 0.07);
+  --off-white: #071421;
+  --muted: rgba(226, 232, 240, 0.68);
+  --admin-page: #071421;
+  --admin-line: rgba(245, 217, 140, 0.16);
+  --admin-panel: rgba(12, 28, 48, 0.96);
+  --admin-soft: rgba(16, 37, 62, 0.98);
+  --glass-bg: rgba(12, 28, 48, 0.96);
+  --glass-border: rgba(245, 217, 140, 0.16);
+  --soft-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
 }
 
 * {
@@ -28,6 +28,338 @@ body {
 :focus-visible {
   outline: 3px solid rgba(212, 175, 55, 0.72);
   outline-offset: 3px;
+}
+
+.ms-button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  font-family: Poppins, Arial, sans-serif;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s, transform 0.18s;
+  white-space: nowrap;
+}
+
+.ms-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ms-button-md {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.ms-button-sm {
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.ms-button-icon {
+  height: 38px;
+  padding: 0;
+  width: 38px;
+}
+
+.ms-button-default {
+  background: var(--gold);
+  color: #ffffff;
+}
+
+.ms-button-default:hover:not(:disabled) {
+  background: #f5d98c;
+  box-shadow: 0 12px 28px rgba(212, 175, 55, 0.22);
+  transform: translateY(-1px);
+}
+
+.ms-button-secondary,
+.ms-button-outline,
+.ms-button-ghost {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--admin-line);
+  color: var(--dark);
+}
+
+.ms-button-ghost {
+  background: transparent;
+}
+
+.ms-button-destructive {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+}
+
+.ms-card,
+.ms-dialog-content,
+.ms-popover-content {
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  box-shadow: var(--soft-shadow);
+  color: var(--dark);
+}
+
+.ms-card-header,
+.ms-card-content,
+.ms-card-footer {
+  padding: 18px;
+}
+
+.ms-card-header {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+}
+
+.ms-card-title {
+  color: var(--dark);
+  font-family: Poppins, Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.ms-card-description {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.ms-badge {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0;
+  min-height: 24px;
+  padding: 4px 9px;
+  text-transform: uppercase;
+}
+
+.ms-badge-gold,
+.ms-badge-default {
+  background: rgba(212, 175, 55, 0.16);
+  color: #8a6a05;
+}
+
+.ms-badge-green {
+  background: rgba(34, 197, 94, 0.14);
+  color: #166534;
+}
+
+.ms-badge-navy,
+.ms-badge-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--dark);
+}
+
+.ms-badge-red {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+}
+
+.ms-input,
+.ms-select-trigger {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--admin-line);
+  border-radius: 8px;
+  color: var(--dark);
+  font: inherit;
+  min-height: 40px;
+  padding: 9px 11px;
+  width: 100%;
+}
+
+.ms-select-trigger {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: space-between;
+}
+
+.ms-select-trigger svg {
+  height: 16px;
+  width: 16px;
+}
+
+.ms-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.ms-label {
+  color: rgba(226, 232, 240, 0.84);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 7px;
+}
+
+.ms-select-content,
+.ms-popover-content {
+  min-width: 190px;
+  padding: 6px;
+  z-index: 80;
+}
+
+.ms-select-item {
+  align-items: center;
+  border-radius: 6px;
+  color: var(--dark);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.86rem;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.ms-select-item[data-highlighted] {
+  background: rgba(212, 175, 55, 0.14);
+  outline: none;
+}
+
+.ms-select-item-indicator svg {
+  height: 14px;
+  width: 14px;
+}
+
+.ms-table-wrap {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.ms-table {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+.ms-table-head {
+  border-bottom: 1px solid var(--admin-line);
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 12px 14px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.ms-table-cell {
+  border-bottom: 1px solid rgba(245, 217, 140, 0.1);
+  color: var(--dark);
+  font-size: 0.88rem;
+  padding: 14px;
+  vertical-align: top;
+}
+
+.ms-table-row:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.ms-dialog-overlay {
+  background: rgba(11, 31, 58, 0.5);
+  inset: 0;
+  position: fixed;
+  z-index: 70;
+}
+
+.ms-dialog-content {
+  left: 50%;
+  max-height: min(84vh, 720px);
+  max-width: min(620px, calc(100vw - 32px));
+  overflow-y: auto;
+  padding: 22px;
+  position: fixed;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  z-index: 80;
+}
+
+.ms-dialog-close {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+}
+
+.ms-dialog-header {
+  display: grid;
+  gap: 6px;
+  padding-right: 40px;
+}
+
+.ms-dialog-title {
+  color: var(--dark);
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.ms-dialog-description {
+  color: var(--muted);
+  margin: 0;
+}
+
+.ms-avatar {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  overflow: hidden;
+  width: 38px;
+}
+
+.ms-avatar-fallback {
+  align-items: center;
+  background: linear-gradient(135deg, var(--navy), #17345e);
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}
+
+.ms-separator {
+  background: rgba(11, 31, 58, 0.09);
+  height: 1px;
+  width: 100%;
+}
+
+.ms-skeleton {
+  animation: ms-pulse 1.4s ease-in-out infinite;
+  background: rgba(11, 31, 58, 0.08);
+  border-radius: 8px;
+}
+
+.ms-chart-container {
+  min-height: 240px;
+  width: 100%;
+}
+
+.ms-chart-tooltip {
+  background: #ffffff;
+  border: 1px solid rgba(11, 31, 58, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(11, 31, 58, 0.14);
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+@keyframes ms-pulse {
+  50% {
+    opacity: 0.58;
+  }
 }
 
 .admin-shell {
@@ -457,6 +789,64 @@ button:hover {
   padding: 5px 8px;
 }
 
+.marketplace-performance-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0 18px 18px;
+}
+
+.marketplace-metric-card {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(245, 217, 140, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.marketplace-metric-card > div:first-child {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.marketplace-metric-card span {
+  color: var(--dashboard-muted, var(--muted));
+  font-size: 0.82rem;
+}
+
+.marketplace-metric-card strong {
+  color: var(--dashboard-text, var(--navy));
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.marketplace-metric-card small {
+  color: var(--dashboard-muted, var(--muted));
+  font-size: 0.78rem;
+}
+
+.marketplace-metric-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.marketplace-metric-items em {
+  background: rgba(212, 175, 55, 0.13);
+  border: 1px solid rgba(212, 175, 55, 0.18);
+  border-radius: 999px;
+  color: #f5d98c;
+  font-size: 0.72rem;
+  font-style: normal;
+  line-height: 1.2;
+  padding: 6px 8px;
+}
+
 .table-panel {
   margin-bottom: 16px;
   overflow: hidden;
@@ -871,4 +1261,161 @@ th {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+.admin-shell {
+  --dashboard-bg: #071421;
+  --dashboard-panel: rgba(12, 28, 48, 0.96);
+  --dashboard-panel-strong: rgba(16, 37, 62, 0.98);
+  --dashboard-line: rgba(245, 217, 140, 0.16);
+  --dashboard-line-strong: rgba(245, 217, 140, 0.28);
+  --dashboard-text: #f8fafc;
+  --dashboard-muted: rgba(226, 232, 240, 0.68);
+  background:
+    radial-gradient(circle at top left, rgba(212, 175, 55, 0.16), transparent 30rem),
+    radial-gradient(circle at 78% 12%, rgba(74, 222, 128, 0.06), transparent 24rem),
+    var(--dashboard-bg);
+  color: var(--dashboard-text);
+}
+
+.admin-shell .dashboard-sidebar {
+  background:
+    linear-gradient(180deg, rgba(245, 217, 140, 0.08), transparent 16rem),
+    #081726;
+  border-right-color: var(--dashboard-line);
+  box-shadow: 18px 0 48px rgba(0, 0, 0, 0.26);
+  color: var(--dashboard-text);
+}
+
+.admin-shell .dashboard-topbar {
+  background: rgba(7, 20, 33, 0.88);
+  border-bottom-color: var(--dashboard-line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+.admin-shell .medshift-logo,
+.admin-shell .dashboard-topbar h1,
+.admin-shell h2,
+.admin-shell .metrics strong,
+.admin-shell .operations-grid strong,
+.admin-shell .admin-shift-role-cell strong,
+.admin-shell .admin-shift-rate-cell strong,
+.admin-shell .compact-list strong,
+.admin-shell .facility-grid strong,
+.admin-shell .verification-list strong,
+.admin-shell .ms-card-title,
+.admin-shell .notification-popover header strong,
+.admin-shell .notification-item strong {
+  color: var(--dashboard-text);
+}
+
+.admin-shell nav a,
+.admin-shell nav button,
+.admin-shell .dashboard-sidebar-footer span,
+.admin-shell .dashboard-sidebar-footer a,
+.admin-shell .metrics span,
+.admin-shell .metrics small,
+.admin-shell .operations-grid span,
+.admin-shell .operations-grid small,
+.admin-shell .operations-grid em,
+.admin-shell .admin-message,
+.admin-shell .dashboard-status,
+.admin-shell .admin-shift-role-cell span,
+.admin-shell .admin-shift-rate-cell span,
+.admin-shell .compact-list span,
+.admin-shell .facility-grid span,
+.admin-shell .verification-list span,
+.admin-shell .notification-item p,
+.admin-shell .notification-item time,
+.admin-shell .notification-empty {
+  color: var(--dashboard-muted);
+}
+
+.admin-shell nav a.active,
+.admin-shell nav button.active,
+.admin-shell nav a:hover,
+.admin-shell nav button:hover,
+.admin-shell .dashboard-sidebar-footer a:hover {
+  background: rgba(212, 175, 55, 0.16);
+  color: var(--dashboard-text);
+}
+
+.admin-shell .metrics article,
+.admin-shell .table-panel,
+.admin-shell .health-panel,
+.admin-shell .operations-grid article,
+.admin-shell .admin-message,
+.admin-shell .dashboard-status,
+.admin-shell .notification-popover,
+.admin-shell .ms-card,
+.admin-shell .ms-dialog-content,
+.admin-shell .ms-popover-content {
+  background: var(--dashboard-panel);
+  border-color: var(--dashboard-line);
+  box-shadow: var(--soft-shadow);
+  color: var(--dashboard-text);
+}
+
+.admin-shell .table-toolbar {
+  background: var(--dashboard-panel-strong);
+  border-top-color: var(--dashboard-line);
+}
+
+.admin-shell .table-toolbar input,
+.admin-shell select,
+.admin-shell .ms-input,
+.admin-shell .ms-select-trigger {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--dashboard-line);
+  color: var(--dashboard-text);
+}
+
+.admin-shell .ms-select-content {
+  background: #0c1c30;
+  border-color: var(--dashboard-line-strong);
+}
+
+.admin-shell .ms-select-item {
+  color: var(--dashboard-text);
+}
+
+.admin-shell .ms-select-item[data-highlighted] {
+  background: rgba(212, 175, 55, 0.18);
+}
+
+.admin-shell th,
+.admin-shell td,
+.admin-shell .notification-popover header,
+.admin-shell .notification-item {
+  border-color: rgba(245, 217, 140, 0.12);
+}
+
+.admin-shell tbody tr:hover,
+.admin-shell .ms-table-row:hover,
+.admin-shell .notification-item:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.admin-shell .operations-grid em,
+.admin-shell .admin-match-pill,
+.admin-shell .dashboard-icon-button,
+.admin-shell .dashboard-avatar {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--dashboard-line);
+  color: var(--dashboard-text);
+}
+
+.admin-shell .admin-match-pill.matched {
+  background: rgba(74, 222, 128, 0.14);
+  color: #86efac;
+}
+.document-link-button {
+  background: transparent;
+  border: 0;
+  color: var(--gold, #d4af37);
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  padding: 0.25rem 0 0;
+  text-decoration: underline;
 }

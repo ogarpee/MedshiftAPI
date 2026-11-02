@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch as fetch } from "../../session-fetch";
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { FacilityType, GeoPoint, NotificationSummary, OnboardingStatus } from "@medshift/shared-types";
@@ -130,7 +132,7 @@ export default function FacilitySettingsPage() {
   }, []);
 
   useEffect(() => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setNeedsAuth(true);
@@ -201,7 +203,7 @@ export default function FacilitySettingsPage() {
       return;
     }
 
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setNeedsAuth(true);
@@ -252,7 +254,7 @@ export default function FacilitySettingsPage() {
       return;
     }
 
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setNeedsAuth(true);

@@ -8,6 +8,9 @@ export class Review {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "Shift", required: true })
   shiftId!: Types.ObjectId;
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: "ShiftAssignment", index: true })
+  assignmentId?: Types.ObjectId;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "User", required: true })
   reviewerId!: Types.ObjectId;
 
@@ -23,4 +26,7 @@ export class Review {
 
 export const ReviewSchema = SchemaFactory.createForClass(Review);
 
-ReviewSchema.index({ shiftId: 1, reviewerId: 1 }, { unique: true });
+ReviewSchema.index(
+  { assignmentId: 1, reviewerId: 1 },
+  { unique: true, partialFilterExpression: { assignmentId: { $type: "objectId" } } }
+);

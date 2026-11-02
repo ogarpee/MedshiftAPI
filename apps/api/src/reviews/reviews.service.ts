@@ -5,6 +5,7 @@ import { ShiftStatus, UserRole } from "@medshift/shared-types";
 import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { Review, ReviewDocument } from "../database/schemas/review.schema";
+import { ShiftAssignment, ShiftAssignmentDocument } from "../database/schemas/marketplace.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 import { CreateReviewDto } from "./dto/create-review.dto";
@@ -13,6 +14,7 @@ import { CreateReviewDto } from "./dto/create-review.dto";
 export class ReviewsService {
   constructor(
     @InjectModel(Review.name) private readonly reviews: Model<ReviewDocument>,
+    @InjectModel(ShiftAssignment.name) private readonly assignments: Model<ShiftAssignmentDocument>,
     @InjectModel(Shift.name) private readonly shifts: Model<ShiftDocument>,
     @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>
@@ -20,8 +22,8 @@ export class ReviewsService {
 
   async create(currentUser: AuthUser, shiftId: string, dto: CreateReviewDto) {
     const shift = await this.findCompletedShift(shiftId);
-    const { revieweeId, target } = await this.resolveReviewTarget(currentUser, shift);
-    const duplicate = await this.reviews.exists({ shiftId: shift._id, reviewerId: currentUser.sub });
+    const { assignment, revieweeId, target } = await this.resolveReviewTarget(currentUser, shift, dto.assignmentId);
+    const duplicate = await this.reviews.exists({ assignmentId: assignment._id, reviewerId: currentUser.sub });
 
     if (duplicate) {
       throw new ConflictException("You have already reviewed this shift");
@@ -29,6 +31,7 @@ export class ReviewsService {
 
     const review = await this.reviews.create({
       shiftId: shift._id,
+      assignmentId: assignment._id,
       reviewerId: new Types.ObjectId(currentUser.sub),
       revieweeId,
       rating: dto.rating,
@@ -57,8 +60,8 @@ export class ReviewsService {
   private async findCompletedShift(id: string) {
     const shift = await this.findShift(id);
 
-    if (shift.status !== ShiftStatus.Completed || !shift.matchedWorkerId) {
-      throw new BadRequestException("Only completed matched shifts can be reviewed");
+    if (shift.status !== ShiftStatus.Completed) {
+      throw new BadRequestException("Only completed shifts can be reviewed");
     }
 
     return shift;
@@ -78,20 +81,32 @@ export class ReviewsService {
     return shift;
   }
 
-  private async resolveReviewTarget(currentUser: AuthUser, shift: ShiftDocument) {
+  private async resolveReviewTarget(currentUser: AuthUser, shift: ShiftDocument, assignmentId?: string) {
     const facility = await this.facilityProfiles.findById(shift.facilityId).exec();
-    const worker = shift.matchedWorkerId ? await this.workerProfiles.findById(shift.matchedWorkerId).exec() : null;
+    let assignment: ShiftAssignmentDocument | null = null;
+    if (assignmentId) {
+      if (!Types.ObjectId.isValid(assignmentId)) throw new NotFoundException("Assignment not found");
+      assignment = await this.assignments.findOne({ _id: assignmentId, shiftId: shift._id }).exec();
+    } else if (currentUser.role === UserRole.Worker) {
+      const workerProfile = await this.workerProfiles.findOne({ userId: currentUser.sub }).exec();
+      assignment = workerProfile ? await this.assignments.findOne({ shiftId: shift._id, workerId: workerProfile._id }).exec() : null;
+    } else {
+      const assignments = await this.assignments.find({ shiftId: shift._id }).limit(2).exec();
+      if (assignments.length > 1) throw new BadRequestException("Choose the caregiver assignment to review");
+      assignment = assignments[0] ?? null;
+    }
+    const worker = assignment ? await this.workerProfiles.findById(assignment.workerId).exec() : null;
 
-    if (!facility || !worker) {
+    if (!facility || !worker || !assignment) {
       throw new NotFoundException("Review participants not found");
     }
 
     if (currentUser.role === UserRole.Facility && facility.userId.toString() === currentUser.sub) {
-      return { revieweeId: worker.userId, target: "worker" as const };
+      return { assignment, revieweeId: worker.userId, target: "worker" as const };
     }
 
     if (currentUser.role === UserRole.Worker && worker.userId.toString() === currentUser.sub) {
-      return { revieweeId: facility.userId, target: "facility" as const };
+      return { assignment, revieweeId: facility.userId, target: "facility" as const };
     }
 
     throw new ForbiddenException("You can only review shifts you participated in");
@@ -103,9 +118,10 @@ export class ReviewsService {
     }
 
     const facility = await this.facilityProfiles.findById(shift.facilityId).exec();
-    const worker = shift.matchedWorkerId ? await this.workerProfiles.findById(shift.matchedWorkerId).exec() : null;
+    const workerProfile = currentUser.role === UserRole.Worker ? await this.workerProfiles.findOne({ userId: currentUser.sub }).exec() : null;
+    const workerAssignment = workerProfile ? await this.assignments.exists({ shiftId: shift._id, workerId: workerProfile._id }) : null;
 
-    if (facility?.userId.toString() === currentUser.sub || worker?.userId.toString() === currentUser.sub) {
+    if (facility?.userId.toString() === currentUser.sub || workerAssignment) {
       return;
     }
 
@@ -135,6 +151,7 @@ export class ReviewsService {
       id: review.id,
       _id: undefined,
       shiftId: object.shiftId.toString(),
+      assignmentId: object.assignmentId?.toString(),
       reviewerId: object.reviewerId.toString(),
       revieweeId: object.revieweeId.toString()
     };

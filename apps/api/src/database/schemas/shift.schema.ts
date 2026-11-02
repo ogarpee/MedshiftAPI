@@ -57,6 +57,9 @@ export class Shift {
   @Prop({ default: 1, min: 1 })
   caregiversRequired!: number;
 
+  @Prop({ default: 0, min: 0 })
+  activeAssignmentCount!: number;
+
   @Prop({ min: 0 })
   payAmount?: number;
 
@@ -95,3 +98,4 @@ export const ShiftSchema = SchemaFactory.createForClass(Shift);
 
 ShiftSchema.index({ location: "2dsphere" });
 ShiftSchema.index({ status: 1, startTime: 1 });
+ShiftSchema.index({ facilityId: 1, status: 1, startTime: 1 });

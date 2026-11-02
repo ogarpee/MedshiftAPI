@@ -90,7 +90,9 @@ export class MarketplaceService {
 
   async listApplications(currentUser: AuthUser, shiftId: string) {
     await this.findShiftForParticipant(currentUser, shiftId);
-    const applications = await this.applications.find({ shiftId: this.toObjectId(shiftId, "Shift not found") }).sort({ createdAt: -1 }).exec();
+    const filter: Record<string, unknown> = { shiftId: this.toObjectId(shiftId, "Shift not found") };
+    if (currentUser.role === UserRole.Worker) filter.workerId = (await this.resolveCurrentWorker(currentUser))._id;
+    const applications = await this.applications.find(filter).sort({ createdAt: -1 }).exec();
     return applications.map((application) => this.serialize(application));
   }
 
@@ -131,7 +133,17 @@ export class MarketplaceService {
 
   async updateApplicationStatus(currentUser: AuthUser, id: string, dto: UpdateShiftApplicationStatusDto) {
     const application = await this.findApplication(id);
-    await this.findShiftForFacility(currentUser, application.shiftId.toString());
+    if (currentUser.role === UserRole.Worker) {
+      const worker = await this.resolveCurrentWorker(currentUser);
+      if (!application.workerId.equals(worker._id)) throw new ForbiddenException("You can only withdraw your own applications");
+      if (dto.status !== ShiftApplicationStatus.Withdrawn) throw new ForbiddenException("Workers can only withdraw applications");
+    } else {
+      await this.findShiftForFacility(currentUser, application.shiftId.toString());
+    }
+    this.assertApplicationTransition(application.status, dto.status, currentUser.role);
+    if (dto.status === ShiftApplicationStatus.Selected || dto.status === ShiftApplicationStatus.Confirmed) {
+      await this.createAssignment(currentUser, application.shiftId, application.workerId, { applicationId: application._id });
+    }
     application.status = dto.status;
     application.matchScore = dto.matchScore ?? application.matchScore;
     application.reviewedAt = new Date();
@@ -139,9 +151,6 @@ export class MarketplaceService {
       application.selectedAt = application.selectedAt ?? new Date();
     }
     const saved = await application.save();
-    if (dto.status === ShiftApplicationStatus.Selected || dto.status === ShiftApplicationStatus.Confirmed) {
-      await this.createAssignment(currentUser, application.shiftId, application.workerId, { applicationId: application._id });
-    }
     const worker = await this.workers.findById(application.workerId).exec();
     if (worker?.userId) {
       await this.notify(worker.userId, NotificationType.MarketplaceApplication, "Application updated", `Your shift application is now ${dto.status.replaceAll("_", " ").toLowerCase()}.`, "/worker/marketplace", {
@@ -156,7 +165,9 @@ export class MarketplaceService {
 
   async listInvitations(currentUser: AuthUser, shiftId: string) {
     await this.findShiftForParticipant(currentUser, shiftId);
-    const invitations = await this.invitations.find({ shiftId: this.toObjectId(shiftId, "Shift not found") }).sort({ createdAt: -1 }).exec();
+    const filter: Record<string, unknown> = { shiftId: this.toObjectId(shiftId, "Shift not found") };
+    if (currentUser.role === UserRole.Worker) filter.workerId = (await this.resolveCurrentWorker(currentUser))._id;
+    const invitations = await this.invitations.find(filter).sort({ createdAt: -1 }).exec();
     return invitations.map((invitation) => this.serialize(invitation));
   }
 
@@ -197,15 +208,22 @@ export class MarketplaceService {
     if (currentUser.role === UserRole.Worker) {
       const worker = await this.resolveCurrentWorker(currentUser);
       if (!invitation.workerId.equals(worker._id)) throw new ForbiddenException("You can only respond to your own invitations");
+      if (!new Set<ShiftInvitationStatus>([ShiftInvitationStatus.Accepted, ShiftInvitationStatus.Declined]).has(dto.status)) {
+        throw new ForbiddenException("Workers can only accept or decline invitations");
+      }
     } else {
       await this.findShiftForFacility(currentUser, invitation.shiftId.toString());
+      if (currentUser.role === UserRole.Facility && dto.status !== ShiftInvitationStatus.Cancelled) {
+        throw new ForbiddenException("Facilities can only cancel pending invitations");
+      }
+    }
+    if (invitation.status !== ShiftInvitationStatus.Pending) throw new BadRequestException("Invitation has already been resolved");
+    if (dto.status === ShiftInvitationStatus.Accepted) {
+      await this.createAssignment(currentUser, invitation.shiftId, invitation.workerId, { invitationId: invitation._id });
     }
     invitation.status = dto.status;
     invitation.respondedAt = new Date();
     const saved = await invitation.save();
-    if (dto.status === ShiftInvitationStatus.Accepted) {
-      await this.createAssignment(currentUser, invitation.shiftId, invitation.workerId, { invitationId: invitation._id });
-    }
     const shift = await this.findShift(invitation.shiftId.toString());
     const facility = await this.facilities.findById(shift.facilityId).exec();
     if (facility?.userId) {
@@ -224,11 +242,28 @@ export class MarketplaceService {
     const worker = await this.findWorker(dto.workerId);
     this.assertApprovedWorker(worker);
     await this.assertNoScheduleConflict(worker._id, shift);
+    if (dto.applicationId) {
+      const application = await this.findApplication(dto.applicationId);
+      if (!application.shiftId.equals(shift._id) || !application.workerId.equals(worker._id)) throw new BadRequestException("Application does not belong to this shift and worker");
+    }
+    if (dto.invitationId) {
+      const invitation = await this.findInvitation(dto.invitationId);
+      if (!invitation.shiftId.equals(shift._id) || !invitation.workerId.equals(worker._id)) throw new BadRequestException("Invitation does not belong to this shift and worker");
+    }
     const assignment = await this.createAssignment(currentUser, shift._id, worker._id, {
       applicationId: dto.applicationId ? new Types.ObjectId(dto.applicationId) : undefined,
       invitationId: dto.invitationId ? new Types.ObjectId(dto.invitationId) : undefined
     });
     return this.serialize(assignment);
+  }
+
+  async quickAccept(currentUser: AuthUser, shiftId: string) {
+    const worker = await this.resolveCurrentWorker(currentUser);
+    this.assertApprovedWorker(worker);
+    const shift = await this.findShift(shiftId);
+    this.assertShiftAcceptsApplications(shift);
+    if (!this.workerMeetsShiftRequirements(worker, shift)) throw new BadRequestException("Worker profile does not meet this shift's requirements");
+    return this.createAssignment(currentUser, shift._id, worker._id);
   }
 
   async listAssignments(currentUser: AuthUser) {
@@ -254,25 +289,36 @@ export class MarketplaceService {
     const shift = await this.findShift(dto.shiftId);
     const assignment = await this.findConfirmedAssignment(shift._id, worker._id);
     await this.assertAttendanceSequence(worker._id, shift._id, eventType);
-    const event = await this.attendanceEvents.findOneAndUpdate(
-      { idempotencyKey: dto.idempotencyKey },
-      {
+    if (Math.abs(dto.occurredAt.getTime() - Date.now()) > 15 * 60 * 1000) throw new BadRequestException("Attendance time must be within 15 minutes of the current time");
+    const existingEvent = await this.attendanceEvents.findOne({ idempotencyKey: dto.idempotencyKey }).exec();
+    if (existingEvent) {
+      if (!existingEvent.shiftId.equals(shift._id) || !existingEvent.workerId.equals(worker._id) || existingEvent.eventType !== eventType) {
+        throw new BadRequestException("Attendance idempotency key is already in use");
+      }
+      return this.serialize(existingEvent);
+    }
+    const verification = attendanceVerification(dto.location?.coordinates, shift.location.coordinates);
+    const event = await this.attendanceEvents.create({
+        idempotencyKey: dto.idempotencyKey,
         shiftId: new Types.ObjectId(dto.shiftId),
         workerId: worker._id,
         eventType,
         occurredAt: dto.occurredAt,
         location: dto.location,
+        verification,
         notes: dto.notes
-      },
-      { new: true, upsert: true }
-    ).exec();
+      });
     if (eventType === AttendanceEventType.ClockIn) assignment.status = ShiftAssignmentStatus.InProgress;
-    if (eventType === AttendanceEventType.ClockOut) assignment.status = ShiftAssignmentStatus.Completed;
+    if (eventType === AttendanceEventType.ClockOut) {
+      assignment.status = ShiftAssignmentStatus.Completed;
+      assignment.completedAt = new Date();
+    }
     await assignment.save();
     if (eventType === AttendanceEventType.ClockIn) {
       shift.status = ShiftStatus.InProgress;
       await shift.save();
     }
+    if (eventType === AttendanceEventType.ClockOut) await this.recomputeShiftStatus(shift);
     const facility = await this.facilities.findById(shift.facilityId).exec();
     if (facility?.userId) {
       await this.notify(facility.userId, NotificationType.MarketplaceAttendance, "Attendance updated", `Worker attendance recorded: ${eventType.replaceAll("_", " ").toLowerCase()}.`, "/facility/marketplace", {
@@ -295,12 +341,19 @@ export class MarketplaceService {
     const worker = await this.resolveCurrentWorker(currentUser);
     const shift = await this.findShift(dto.shiftId);
     await this.findConfirmedAssignment(shift._id, worker._id);
+    const existingTimesheet = await this.timesheets.findOne({ shiftId: shift._id, workerId: worker._id }).exec();
+    if (existingTimesheet && new Set<TimesheetStatus>([TimesheetStatus.Approved, TimesheetStatus.Disputed]).has(existingTimesheet.status)) {
+      throw new BadRequestException("Approved or disputed timesheets cannot be resubmitted");
+    }
     const clockOut = await this.attendanceEvents.findOne({ shiftId: shift._id, workerId: worker._id, eventType: AttendanceEventType.ClockOut }).exec();
     if (!clockOut && (!dto.actualStartTime || !dto.actualEndTime)) {
       throw new BadRequestException("Clock out or manual actual times are required before submitting a timesheet");
     }
     const actualStartTime = dto.actualStartTime ?? (await this.findFirstAttendanceTime(worker._id, shift._id, AttendanceEventType.ClockIn)) ?? shift.startTime;
     const actualEndTime = dto.actualEndTime ?? clockOut?.occurredAt ?? shift.endTime;
+    if (actualEndTime.getTime() <= actualStartTime.getTime()) throw new BadRequestException("Timesheet end time must be after start time");
+    const durationMinutes = Math.round((actualEndTime.getTime() - actualStartTime.getTime()) / 60000);
+    if ((dto.breakMinutes ?? 0) >= durationMinutes) throw new BadRequestException("Break time must be shorter than the worked interval");
     const timesheet = await this.timesheets.findOneAndUpdate(
       { shiftId: shift._id, workerId: worker._id },
       {
@@ -324,6 +377,8 @@ export class MarketplaceService {
       });
     }
     await this.audit(currentUser, "timesheet.submitted", "Timesheet", timesheet.id);
+    shift.status = ShiftStatus.TimesheetSubmitted;
+    await this.recomputeShiftStatus(shift);
     return this.serialize(timesheet);
   }
 
@@ -332,6 +387,9 @@ export class MarketplaceService {
     if (currentUser.role !== UserRole.Admin) {
       await this.findShiftForFacility(currentUser, timesheet.shiftId.toString());
     }
+    const allowedStatuses = new Set<TimesheetStatus>([TimesheetStatus.Approved, TimesheetStatus.Rejected, TimesheetStatus.CorrectionRequested, TimesheetStatus.Disputed]);
+    if (dto.status && currentUser.role !== UserRole.Admin && !allowedStatuses.has(dto.status)) throw new BadRequestException("Invalid facility timesheet transition");
+    if (timesheet.status !== TimesheetStatus.Submitted && dto.status !== TimesheetStatus.Disputed) throw new BadRequestException("Only submitted timesheets can be reviewed");
     timesheet.status = dto.status ?? timesheet.status;
     timesheet.facilityNotes = dto.facilityNotes ?? timesheet.facilityNotes;
     timesheet.notes = dto.notes ?? timesheet.notes;
@@ -346,15 +404,21 @@ export class MarketplaceService {
       });
     }
     await this.audit(currentUser, "timesheet.status_updated", "Timesheet", saved.id, { status: saved.status });
+    const shift = await this.findShift(saved.shiftId.toString());
+    await this.recomputeShiftStatus(shift);
     return this.serialize(saved);
   }
 
   async createDispute(currentUser: AuthUser, dto: CreateDisputeDto) {
+    if (!dto.shiftId && !dto.timesheetId && !dto.reviewId && !dto.assignmentId) throw new BadRequestException("A dispute must reference a marketplace record");
+    const context = await this.resolveDisputeContext(currentUser, dto);
     const dispute = await this.disputes.create({
-      shiftId: dto.shiftId ? new Types.ObjectId(dto.shiftId) : undefined,
+      shiftId: context.shift._id,
       timesheetId: dto.timesheetId ? new Types.ObjectId(dto.timesheetId) : undefined,
       reviewId: dto.reviewId ? new Types.ObjectId(dto.reviewId) : undefined,
+      assignmentId: context.assignment?._id,
       openedBy: new Types.ObjectId(currentUser.sub),
+      participantUserIds: context.participantUserIds,
       reason: dto.reason,
       status: DisputeStatus.Open
     });
@@ -368,6 +432,9 @@ export class MarketplaceService {
     if (!dispute) throw new NotFoundException("Dispute not found");
     if (currentUser.role !== UserRole.Admin && !(await this.canAccessDispute(currentUser, dispute))) {
       throw new ForbiddenException("You can only update disputes connected to your marketplace records");
+    }
+    if (currentUser.role !== UserRole.Admin && dto.status && dto.status !== DisputeStatus.Cancelled) {
+      throw new ForbiddenException("Only admins can resolve or reject disputes");
     }
     dispute.status = dto.status ?? dispute.status;
     dispute.resolutionNotes = dto.resolutionNotes ?? dispute.resolutionNotes;
@@ -456,6 +523,20 @@ export class MarketplaceService {
     }
   }
 
+  private assertApplicationTransition(current: ShiftApplicationStatus, next: ShiftApplicationStatus, role: UserRole) {
+    if (current === next) return;
+    if (role === UserRole.Worker) {
+      if (next === ShiftApplicationStatus.Withdrawn && new Set<ShiftApplicationStatus>([ShiftApplicationStatus.Applied, ShiftApplicationStatus.UnderReview]).has(current)) return;
+      throw new BadRequestException("Application can no longer be withdrawn");
+    }
+    const allowed = new Map<ShiftApplicationStatus, Set<ShiftApplicationStatus>>([
+      [ShiftApplicationStatus.Applied, new Set([ShiftApplicationStatus.UnderReview, ShiftApplicationStatus.Selected, ShiftApplicationStatus.Declined])],
+      [ShiftApplicationStatus.UnderReview, new Set([ShiftApplicationStatus.Selected, ShiftApplicationStatus.Declined])],
+      [ShiftApplicationStatus.Selected, new Set([ShiftApplicationStatus.Confirmed])]
+    ]);
+    if (!allowed.get(current)?.has(next)) throw new BadRequestException(`Invalid application transition from ${current} to ${next}`);
+  }
+
   private assertShiftCanReceiveMarketplaceAction(shift: ShiftDocument) {
     const openStatuses = new Set<ShiftStatus>([ShiftStatus.Open, ShiftStatus.Published, ShiftStatus.Matching]);
     if (!openStatuses.has(shift.status)) {
@@ -496,30 +577,52 @@ export class MarketplaceService {
     const worker = await this.findWorker(workerId.toString());
     this.assertApprovedWorker(worker);
     await this.assertNoScheduleConflict(worker._id, shift);
-    const existing = await this.assignments.findOne({ shiftId, workerId }).exec();
-    if (!existing) {
-      const assignmentCount = await this.assignments.countDocuments({ shiftId, status: { $in: [ShiftAssignmentStatus.Confirmed, ShiftAssignmentStatus.InProgress] } });
-      if (assignmentCount >= (shift.caregiversRequired ?? 1)) {
-        throw new BadRequestException("Shift staffing requirement is already filled");
-      }
+    const transaction = await this.shifts.db.startSession();
+    const transactionResult: { assignment?: ShiftAssignmentDocument } = {};
+    try {
+      await transaction.withTransaction(async () => {
+        const existing = await this.assignments.findOne({ shiftId, workerId }).session(transaction).exec();
+        if (existing && new Set<ShiftAssignmentStatus>([ShiftAssignmentStatus.Confirmed, ShiftAssignmentStatus.InProgress, ShiftAssignmentStatus.Completed]).has(existing.status)) {
+          transactionResult.assignment = existing;
+          return;
+        }
+        const reservedShift = await this.shifts.findOneAndUpdate(
+          {
+            _id: shiftId,
+            status: { $in: [ShiftStatus.Open, ShiftStatus.Published, ShiftStatus.Matching] },
+            $expr: { $lt: [{ $ifNull: ["$activeAssignmentCount", 0] }, "$caregiversRequired"] }
+          },
+          { $inc: { activeAssignmentCount: 1 } },
+          { new: true, session: transaction }
+        ).exec();
+        if (!reservedShift) throw new BadRequestException("Shift staffing requirement is already filled");
+        transactionResult.assignment = await this.assignments.findOneAndUpdate(
+          { shiftId, workerId },
+          {
+            applicationId: links.applicationId,
+            invitationId: links.invitationId,
+            status: ShiftAssignmentStatus.Confirmed,
+            confirmedAt: new Date(),
+            completedAt: undefined,
+            cancelledAt: undefined
+          },
+          { new: true, upsert: true, session: transaction }
+        ).exec();
+        reservedShift.matchedWorkerId = reservedShift.matchedWorkerId ?? workerId;
+        if (reservedShift.activeAssignmentCount >= (reservedShift.caregiversRequired ?? 1)) {
+          reservedShift.status = ShiftStatus.Assigned;
+          reservedShift.filledAt = reservedShift.filledAt ?? new Date();
+        }
+        await reservedShift.save({ session: transaction });
+      });
+    } catch (error) {
+      if (!isTransactionUnsupported(error)) throw error;
+      transactionResult.assignment = await this.createAssignmentWithoutTransaction(shift, workerId, links);
+    } finally {
+      await transaction.endSession();
     }
-    const assignment = await this.assignments.findOneAndUpdate(
-      { shiftId, workerId },
-      {
-        applicationId: links.applicationId,
-        invitationId: links.invitationId,
-        status: ShiftAssignmentStatus.Confirmed,
-        confirmedAt: new Date()
-      },
-      { new: true, upsert: true }
-    ).exec();
-    const assignmentCount = await this.assignments.countDocuments({ shiftId, status: { $in: [ShiftAssignmentStatus.Confirmed, ShiftAssignmentStatus.InProgress] } });
-    if (assignmentCount >= (shift.caregiversRequired ?? 1)) {
-      shift.status = ShiftStatus.Assigned;
-      shift.matchedWorkerId = shift.matchedWorkerId ?? workerId;
-      shift.filledAt = shift.filledAt ?? new Date();
-      await shift.save();
-    }
+    const assignment = transactionResult.assignment;
+    if (!assignment) throw new BadRequestException("Assignment could not be created");
     if (worker?.userId) {
       await this.notify(worker.userId, NotificationType.MarketplaceAssignment, "Shift assignment confirmed", `You are confirmed for ${shift.title ?? shift.roleRequired} coverage.`, "/worker/marketplace", {
         assignmentId: assignment.id,
@@ -528,6 +631,69 @@ export class MarketplaceService {
     }
     await this.audit(currentUser, "shift.assignment.created", "ShiftAssignment", assignment.id);
     return assignment;
+  }
+
+  private async createAssignmentWithoutTransaction(shift: ShiftDocument, workerId: Types.ObjectId, links: { applicationId?: Types.ObjectId; invitationId?: Types.ObjectId }) {
+    const existing = await this.assignments.findOne({ shiftId: shift._id, workerId }).exec();
+    if (existing && new Set<ShiftAssignmentStatus>([ShiftAssignmentStatus.Confirmed, ShiftAssignmentStatus.InProgress, ShiftAssignmentStatus.Completed]).has(existing.status)) return existing;
+    const reservedShift = await this.shifts.findOneAndUpdate(
+      {
+        _id: shift._id,
+        status: { $in: [ShiftStatus.Open, ShiftStatus.Published, ShiftStatus.Matching] },
+        $expr: { $lt: [{ $ifNull: ["$activeAssignmentCount", 0] }, "$caregiversRequired"] }
+      },
+      { $inc: { activeAssignmentCount: 1 } },
+      { new: true }
+    ).exec();
+    if (!reservedShift) throw new BadRequestException("Shift staffing requirement is already filled");
+    try {
+      let assignment: ShiftAssignmentDocument | null;
+      if (existing) {
+        const reactivated = await this.assignments.updateOne(
+          { _id: existing._id, status: { $in: [ShiftAssignmentStatus.Cancelled, ShiftAssignmentStatus.NoShow] } },
+          { $set: { applicationId: links.applicationId, invitationId: links.invitationId, status: ShiftAssignmentStatus.Confirmed, confirmedAt: new Date() }, $unset: { completedAt: 1, cancelledAt: 1 } }
+        ).exec();
+        if (!reactivated.modifiedCount) {
+          await this.releaseReservedCapacity(shift._id);
+          assignment = await this.assignments.findOne({ shiftId: shift._id, workerId }).exec();
+          if (!assignment) throw new BadRequestException("Assignment could not be created");
+          return assignment;
+        }
+        assignment = await this.assignments.findById(existing._id).exec();
+      } else {
+        try {
+          assignment = await this.assignments.create({
+            shiftId: shift._id,
+            workerId,
+            applicationId: links.applicationId,
+            invitationId: links.invitationId,
+            status: ShiftAssignmentStatus.Confirmed,
+            confirmedAt: new Date()
+          });
+        } catch (error) {
+          if (!isDuplicateKeyError(error)) throw error;
+          await this.releaseReservedCapacity(shift._id);
+          assignment = await this.assignments.findOne({ shiftId: shift._id, workerId }).exec();
+          if (!assignment) throw error;
+          return assignment;
+        }
+      }
+      if (!assignment) throw new BadRequestException("Assignment could not be created");
+      reservedShift.matchedWorkerId = reservedShift.matchedWorkerId ?? workerId;
+      if (reservedShift.activeAssignmentCount >= (reservedShift.caregiversRequired ?? 1)) {
+        reservedShift.status = ShiftStatus.Assigned;
+        reservedShift.filledAt = reservedShift.filledAt ?? new Date();
+      }
+      await reservedShift.save();
+      return assignment;
+    } catch (error) {
+      await this.releaseReservedCapacity(shift._id);
+      throw error;
+    }
+  }
+
+  private async releaseReservedCapacity(shiftId: Types.ObjectId) {
+    await this.shifts.updateOne({ _id: shiftId, activeAssignmentCount: { $gt: 0 } }, { $inc: { activeAssignmentCount: -1 } }).exec();
   }
 
   private async findConfirmedAssignment(shiftId: Types.ObjectId, workerId: Types.ObjectId) {
@@ -585,6 +751,7 @@ export class MarketplaceService {
 
   private async canAccessDispute(currentUser: AuthUser, dispute: DisputeDocument) {
     if (dispute.openedBy.toString() === currentUser.sub) return true;
+    if (dispute.participantUserIds?.some((userId) => userId.toString() === currentUser.sub)) return true;
     if (!dispute.shiftId) return false;
     const shiftIds = await this.resolveMarketplaceShiftIds(currentUser);
     return Boolean(shiftIds?.some((shiftId) => shiftId.equals(dispute.shiftId)));
@@ -600,6 +767,50 @@ export class MarketplaceService {
         shiftId: shift.id
       });
     }
+  }
+
+  private async resolveDisputeContext(currentUser: AuthUser, dto: CreateDisputeDto) {
+    let shiftId = dto.shiftId;
+    let assignment: ShiftAssignmentDocument | null = null;
+    if (dto.assignmentId) {
+      assignment = await this.assignments.findById(this.toObjectId(dto.assignmentId, "Assignment not found")).exec();
+      if (!assignment) throw new NotFoundException("Assignment not found");
+      shiftId = assignment.shiftId.toString();
+    }
+    if (dto.timesheetId) {
+      const timesheet = await this.findTimesheet(dto.timesheetId);
+      shiftId = timesheet.shiftId.toString();
+      assignment ??= await this.assignments.findOne({ shiftId: timesheet.shiftId, workerId: timesheet.workerId }).exec();
+    }
+    if (!shiftId) throw new BadRequestException("A shift could not be resolved for this dispute");
+    const shift = await this.findShiftForParticipant(currentUser, shiftId);
+    if (currentUser.role === UserRole.Worker) {
+      const worker = await this.resolveCurrentWorker(currentUser);
+      assignment ??= await this.assignments.findOne({ shiftId: shift._id, workerId: worker._id }).exec();
+      if (!assignment) throw new ForbiddenException("Only assigned workers can dispute this shift");
+    }
+    const participantUserIds = [new Types.ObjectId(currentUser.sub)];
+    const facility = await this.facilities.findById(shift.facilityId).exec();
+    if (facility?.userId && !participantUserIds.some((id) => id.equals(facility.userId))) participantUserIds.push(facility.userId);
+    if (assignment) {
+      const worker = await this.workers.findById(assignment.workerId).exec();
+      if (worker?.userId && !participantUserIds.some((id) => id.equals(worker.userId))) participantUserIds.push(worker.userId);
+    }
+    return { assignment, participantUserIds, shift };
+  }
+
+  private async recomputeShiftStatus(shift: ShiftDocument) {
+    const activeAssignments = await this.assignments.find({ shiftId: shift._id, status: { $nin: [ShiftAssignmentStatus.Cancelled, ShiftAssignmentStatus.NoShow] } }).exec();
+    const timesheets = await this.timesheets.find({ shiftId: shift._id }).exec();
+    shift.activeAssignmentCount = activeAssignments.length;
+    if (activeAssignments.some((assignment) => assignment.status === ShiftAssignmentStatus.InProgress)) shift.status = ShiftStatus.InProgress;
+    else if (activeAssignments.length && activeAssignments.every((assignment) => assignment.status === ShiftAssignmentStatus.Completed)) {
+      const relevantTimesheets = timesheets.filter((timesheet) => activeAssignments.some((assignment) => assignment.workerId.equals(timesheet.workerId)));
+      if (relevantTimesheets.length === activeAssignments.length && relevantTimesheets.every((timesheet) => timesheet.status === TimesheetStatus.Approved)) shift.status = ShiftStatus.Completed;
+      else if (relevantTimesheets.length === activeAssignments.length) shift.status = ShiftStatus.TimesheetSubmitted;
+    } else if (activeAssignments.length >= (shift.caregiversRequired ?? 1)) shift.status = ShiftStatus.Assigned;
+    else if (!new Set<ShiftStatus>([ShiftStatus.Cancelled, ShiftStatus.Expired, ShiftStatus.Disputed]).has(shift.status)) shift.status = ShiftStatus.Open;
+    await shift.save();
   }
 
   private async notify(userId: Types.ObjectId | string, type: NotificationType, title: string, body: string, href: string, metadata: Record<string, string>) {
@@ -693,4 +904,32 @@ export class MarketplaceService {
     const object = document.toObject({ versionKey: false });
     return { ...object, id: document.id ?? document._id?.toString(), _id: undefined };
   }
+}
+
+function attendanceVerification(actual?: [number, number], expected?: [number, number]) {
+  if (!actual || !expected) return { status: "MISSING" as const };
+  const distanceMeters = haversineMeters(actual, expected);
+  return {
+    status: distanceMeters <= 500 ? ("VERIFIED" as const) : ("OUTSIDE_GEOFENCE" as const),
+    distanceMeters: Math.round(distanceMeters)
+  };
+}
+
+function haversineMeters([longitudeA, latitudeA]: [number, number], [longitudeB, latitudeB]: [number, number]) {
+  const radius = 6_371_000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const deltaLatitude = toRadians(latitudeB - latitudeA);
+  const deltaLongitude = toRadians(longitudeB - longitudeA);
+  const a = Math.sin(deltaLatitude / 2) ** 2 + Math.cos(toRadians(latitudeA)) * Math.cos(toRadians(latitudeB)) * Math.sin(deltaLongitude / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function isTransactionUnsupported(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: number; message?: string };
+  return candidate.code === 20 || candidate.message?.includes("Transaction numbers are only allowed") === true;
+}
+
+function isDuplicateKeyError(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error && error.code === 11000;
 }

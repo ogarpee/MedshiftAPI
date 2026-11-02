@@ -20,11 +20,81 @@ test("approved onboarding is preserved unless sensitive profile fields change", 
   const facilityProfiles = source("apps/api/src/profiles/facility-profiles.service.ts");
 
   assert.match(workerProfiles, /preserveApproved/);
-  assert.match(workerProfiles, /dto\.credentials !== undefined/);
-  assert.match(workerProfiles, /dto\.backgroundCheck !== undefined/);
+  assert.match(workerProfiles, /existingRequired\.get\(category\) !== submittedRequired\.get\(category\)/);
   assert.match(facilityProfiles, /preserveApproved/);
   assert.match(facilityProfiles, /dto\.readiness !== undefined/);
   assert.match(facilityProfiles, /dto\.billingStatus !== undefined/);
+});
+
+test("worker profile final saves are idempotent and draft ownership is server-derived", () => {
+  const controller = source("apps/api/src/profiles/worker-profiles.controller.ts");
+  const profileService = source("apps/api/src/profiles/worker-profiles.service.ts");
+  const draftDto = source("apps/api/src/profiles/dto/save-worker-onboarding-draft.dto.ts");
+  const draftService = source("apps/api/src/profiles/worker-onboarding-drafts.service.ts");
+  const webOnboarding = source("apps/web/app/worker/onboarding/page.tsx");
+  const mobileRepository = source("apps/mobile/lib/src/features/worker/data/worker_repository.dart");
+  const mobileController = source("apps/mobile/lib/src/features/onboarding/state/worker_onboarding_controller.dart");
+
+  assert.match(controller, /@Put\("me"\)[\s\S]*saveMine/);
+  assert.match(controller, /@Post\(\)[\s\S]*saveMine/);
+  assert.match(profileService, /isDuplicateKeyError[\s\S]*racedProfile/);
+  assert.match(profileService, /onboardingDrafts\.deleteOne/);
+  assert.doesNotMatch(draftDto, /profileId/);
+  assert.match(draftService, /profileId: profile\?\._id/);
+  assert.doesNotMatch(draftService, /dto\.profileId/);
+  assert.match(webOnboarding, /worker-profiles\/me[\s\S]*method: "PUT"/);
+  assert.match(webOnboarding, /Retry sync/);
+  assert.match(mobileRepository, /_dio\.put<Map<String, dynamic>>\([\s\S]*worker-profiles\/me/);
+  assert.doesNotMatch(mobileRepository, /saveProfile\([\s\S]{0,150}profileId/);
+  assert.match(mobileController, /syncError/);
+});
+
+test("worker documents use signed private Cloudinary uploads and upload-only clients", () => {
+  const uploads = source("apps/api/src/uploads/uploads.service.ts");
+  const profileService = source("apps/api/src/profiles/worker-profiles.service.ts");
+  const onboarding = source("apps/web/app/worker/onboarding/page.tsx");
+  const settings = source("apps/web/app/worker/settings/page.tsx");
+  const mobileUpload = source("apps/mobile/lib/src/features/uploads/data/cloudinary_upload_service.dart");
+
+  assert.match(uploads, /api_sign_request/);
+  assert.match(uploads, /deliveryType = "authenticated"/);
+  assert.match(uploads, /private_download_url/);
+  assert.match(uploads, /expires_at:[\s\S]*\+ 300/);
+  assert.match(profileService, /RequiredWorkerDocumentCategories\.every/);
+  assert.match(profileService, /Manual worker document URLs are not allowed/);
+  assert.match(onboarding, /title="Documents"/);
+  assert.match(onboarding, /WorkerDocumentsField/);
+  assert.doesNotMatch(onboarding, /Document link or reference|backgroundConsent|credentialType/);
+  assert.match(settings, /WorkerDocumentsField/);
+  assert.doesNotMatch(settings, /Document link or reference|backgroundConsent|credentialType/);
+  assert.match(mobileUpload, /worker-documents\/sign/);
+  assert.match(mobileUpload, /worker-documents\/complete/);
+});
+
+test("worker onboarding persists server drafts and exposes complete editable review sections", () => {
+  const draftSchema = source("apps/api/src/database/schemas/worker-onboarding-draft.schema.ts");
+  const draftService = source("apps/api/src/profiles/worker-onboarding-drafts.service.ts");
+  const controller = source("apps/api/src/profiles/worker-profiles.controller.ts");
+  const onboarding = source("apps/web/app/worker/onboarding/page.tsx");
+  const mobileController = source("apps/mobile/lib/src/features/onboarding/state/worker_onboarding_controller.dart");
+  const mobileScreen = source("apps/mobile/lib/src/features/onboarding/presentation/worker_onboarding_screen.dart");
+
+  assert.match(draftSchema, /collection: "worker_onboarding_drafts"/);
+  assert.match(draftSchema, /currentStep/);
+  assert.match(draftSchema, /unique: true[\s\S]*userId!/);
+  assert.match(draftService, /findOneAndUpdate/);
+  assert.match(draftService, /medshift\/workers\/\$\{currentUser\.sub\}/);
+  assert.match(controller, /@Get\("onboarding-draft"\)/);
+  assert.match(controller, /@Put\("onboarding-draft"\)/);
+  assert.match(controller, /@Delete\("onboarding-draft"\)/);
+  assert.match(onboarding, /ServerDraft/);
+  assert.match(onboarding, /ReviewSection title="Identity"/);
+  assert.match(onboarding, /ReviewSection title="Documents"/);
+  assert.match(onboarding, /formatDocumentMeta/);
+  assert.match(mobileController, /Duration\(milliseconds: 700\)/);
+  assert.match(mobileController, /syncNow/);
+  assert.match(mobileScreen, /_ReviewSection/);
+  assert.match(mobileScreen, /WidgetsBindingObserver/);
 });
 
 test("realtime shift sockets require authentication and server-derived rooms", () => {
@@ -68,6 +138,47 @@ test("facility dashboard defaults to shifts and exposes settings without overvie
   assert.match(workerSettingsPage, /id:\s*"security"/);
 });
 
+test("primary worker and facility dashboard routes use full-width operational workspaces", () => {
+  const workerPage = source("apps/web/app/worker/page.tsx");
+  const facilityPage = source("apps/web/app/facility/page.tsx");
+  const styles = source("apps/web/app/styles.css");
+
+  assert.match(workerPage, /activeSection === "shifts" \|\| activeSection === "reviews" \? " is-primary-workspace"/);
+  assert.match(facilityPage, /className="facility-insight-grid"/);
+  assert.match(styles, /\.worker-dashboard-grid\.is-primary-workspace[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(styles, /\.worker-shift-list\.compact[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(styles, /\.worker-review-card-grid[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(styles, /\.facility-insight-grid[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+});
+
+test("worker shift discovery uses shared text search and checkable multi-select filters", () => {
+  const dto = source("apps/api/src/matching/dto/browse-open-shifts.dto.ts");
+  const matching = source("apps/api/src/matching/matching.service.ts");
+  const sharedTypes = source("packages/shared-types/src/index.ts");
+  const workerPage = source("apps/web/app/worker/page.tsx");
+  const mobileRepository = source("apps/mobile/lib/src/features/shifts/data/shift_repository.dart");
+  const mobileScreen = source("apps/mobile/lib/src/features/shifts/presentation/shift_board_screen.dart");
+  const mobileProfile = source("apps/mobile/lib/src/features/settings/presentation/settings_screen.dart");
+  const mobileShell = source("apps/mobile/lib/src/features/home/presentation/home_shell.dart");
+
+  assert.match(dto, /search\?: string/);
+  assert.match(dto, /roles\?: ClinicalRole\[\]/);
+  assert.match(dto, /facilityTypes\?: FacilityType\[\]/);
+  assert.match(dto, /shiftTypes\?: Array<"DAY" \| "EVENING" \| "NIGHT" \| "WEEKEND">/);
+  assert.match(matching, /America\/Edmonton/);
+  assert.match(matching, /escapeRegex/);
+  assert.match(matching, /health care aide|registered nurse/);
+  assert.match(sharedTypes, /ShiftSearchPeriod/);
+  assert.match(workerPage, /Search facility, city, role, or description/);
+  assert.match(workerPage, /FilterChecklist/);
+  assert.match(workerPage, /Duration|350/);
+  assert.match(mobileRepository, /filters\.roles\.map\(clinicalRoleToApi\)\.join/);
+  assert.match(mobileScreen, /showModalBottomSheet<ShiftSearchFilters>/);
+  assert.match(mobileScreen, /Duration\(milliseconds: 350\)/);
+  assert.match(mobileProfile, /workerProfileSnapshotProvider/);
+  assert.match(mobileShell, /WorkerOnboardingBanner/);
+});
+
 test("authenticated password changes require JWT and current password verification", () => {
   const authController = source("apps/api/src/auth/auth.controller.ts");
   const authService = source("apps/api/src/auth/auth.service.ts");
@@ -83,6 +194,26 @@ test("authenticated password changes require JWT and current password verificati
   assert.match(changePasswordDto, /@MinLength\(8\)[\s\S]*newPassword/);
   assert.match(workerSettingsPage, /auth\/password/);
   assert.match(facilitySettingsPage, /auth\/password/);
+});
+
+test("unverified login automatically resends verification and auth feedback is toast-only", () => {
+  const authService = source("apps/api/src/auth/auth.service.ts");
+  const authForm = source("apps/web/app/auth/auth-form.tsx");
+  const passwordRecovery = source("apps/web/app/auth/password-recovery-panel.tsx");
+  const verifyEmail = source("apps/web/app/auth/verify-email-panel.tsx");
+
+  assert.match(authService, /verificationResendCooldownInSeconds\s*=\s*60/);
+  assert.match(authService, /passwordService\.verify[\s\S]*resendVerificationIfAllowed/);
+  assert.match(authService, /verificationEmailSent/);
+  assert.match(authService, /retryAfterSeconds/);
+  assert.match(authService, /findOneAndUpdate[\s\S]*emailVerificationSentAt/);
+  assert.doesNotMatch(authForm, /verificationNotice|Resend verification email/);
+  assert.doesNotMatch(authForm, /styles\.message/);
+  assert.match(authForm, /notify\(formatAuthError\(result\), result\.verificationEmailSent \? "success" : "info"\)/);
+  assert.match(authForm, /"Resend code"/);
+  assert.doesNotMatch(passwordRecovery, /styles\.message/);
+  assert.doesNotMatch(verifyEmail, /styles\.message/);
+  assert.match(verifyEmail, /Resend verification email/);
 });
 
 test("web and admin API base URLs come from environment configuration", () => {

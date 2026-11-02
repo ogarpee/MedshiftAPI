@@ -32,7 +32,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
-  const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [recoveryStep, setRecoveryStep] = useState<PasswordRecoveryStep>(mode === "reset" || Boolean(initialEmail) ? "otp" : "email");
@@ -43,12 +42,10 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
       const emailMessage = "Enter a valid email address.";
-      setMessage(emailMessage);
       notify(emailMessage, "error");
       return;
     }
@@ -61,7 +58,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
     if (isOtpStep) {
       if (!/^\d{6}$/.test(otp)) {
         const otpMessage = getResetOtpPrompt();
-        setMessage(otpMessage);
         notify(otpMessage, "error");
         return;
       }
@@ -72,7 +68,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
 
     if (!isPasswordStep || !/^\d{6}$/.test(otp)) {
       const otpMessage = getResetOtpPrompt();
-      setMessage(otpMessage);
       notify(otpMessage, "error");
       setRecoveryStep("otp");
       return;
@@ -80,14 +75,12 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
 
     if (password !== confirmPassword) {
       const mismatchMessage = "Passwords must match.";
-      setMessage(mismatchMessage);
       notify(mismatchMessage, "error");
       return;
     }
 
     if (password.length < 8) {
       const passwordMessage = "Password must be at least 8 characters.";
-      setMessage(passwordMessage);
       notify(passwordMessage, "error");
       return;
     }
@@ -103,7 +96,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       const result = await readPasswordRecoveryResponse(response);
       const resultMessage = formatPasswordRecoveryMessage(result);
 
-      setMessage(resultMessage);
       notify(resultMessage, response.ok ? "success" : "error");
       setIsComplete(response.ok);
 
@@ -115,7 +107,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       }
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Try again after checking the API server.";
-      setMessage(errorMessage);
       notify(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
@@ -134,7 +125,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       const result = await readPasswordRecoveryResponse(response);
       const resultMessage = formatPasswordRecoveryMessage(result);
 
-      setMessage(resultMessage);
       notify(resultMessage, response.ok ? "success" : "error");
 
       if (response.ok) {
@@ -146,7 +136,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       }
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Try again after checking the API server.";
-      setMessage(errorMessage);
       notify(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
@@ -165,7 +154,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       const result = await readPasswordRecoveryResponse(response);
       const resultMessage = formatPasswordRecoveryMessage(result);
 
-      setMessage(resultMessage);
       notify(resultMessage, response.ok ? "success" : "error");
 
       if (response.ok) {
@@ -174,7 +162,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
       }
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Try again after checking the API server.";
-      setMessage(errorMessage);
       notify(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
@@ -338,7 +325,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
 
                   if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
                     const emailMessage = "Enter a valid email address before requesting a new code.";
-                    setMessage(emailMessage);
                     notify(emailMessage, "error");
                     return;
                   }
@@ -359,7 +345,7 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
                       setRecoveryStep("otp");
                       setPassword("");
                       setConfirmPassword("");
-                      setMessage("Enter the 6-digit code again.");
+                      notify("Enter the 6-digit code again.", "info");
                     }}
                     type="button"
                   >
@@ -371,7 +357,6 @@ export function PasswordRecoveryPanel({ mode }: PasswordRecoveryPanelProps) {
           ) : null}
         </div>
 
-        {message ? <p className={styles.message}>{message}</p> : null}
       </section>
 
       <aside className={styles.sidePanel}>

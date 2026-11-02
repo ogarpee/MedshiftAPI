@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch as fetch } from "../../session-fetch";
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { FacilityType, OnboardingStatus } from "@medshift/shared-types";
 import { MedShiftLogo, StatusBadge } from "@medshift/ui-components";
@@ -99,7 +101,7 @@ export default function FacilityOnboardingPage() {
       setMessage("Draft restored. Continue from the last completed step.");
     }
 
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setIsLoading(false);
@@ -189,7 +191,7 @@ export default function FacilityOnboardingPage() {
       return;
     }
 
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       const signInMessage = "Sign in before submitting facility onboarding.";

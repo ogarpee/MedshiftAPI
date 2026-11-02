@@ -8,6 +8,10 @@
     "lint": "eslint src/**/*.ts",
     "seed:admin": "nest build && node dist/database/seeds/seed-admin.js",
     "seed:facility": "nest build && node dist/database/seeds/seed-facility.js",
+    "migrate:launch": "nest build && node dist/database/migrations/launch-mvp.js",
+    "migrate:launch:dry": "nest build && node dist/database/migrations/launch-mvp.js --dry-run",
+    "migrate:worker-documents": "nest build && node dist/database/migrations/worker-documents.js",
+    "migrate:worker-documents:dry": "nest build && node dist/database/migrations/worker-documents.js --dry-run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,6 +27,7 @@
     "@nestjs/websockets": "^11.0.7",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "cloudinary": "^2.11.0",
     "mongoose": "^8.9.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

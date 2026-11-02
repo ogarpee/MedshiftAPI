@@ -45,8 +45,9 @@ export class MatchingService {
       startTime: { $gte: new Date() }
     };
 
-    if (dto.roleRequired) {
-      match.roleRequired = dto.roleRequired;
+    const selectedRoles = dto.roles?.length ? dto.roles : dto.roleRequired ? [dto.roleRequired] : [];
+    if (selectedRoles.length) {
+      match.roleRequired = { $in: selectedRoles };
     }
 
     if (worker.yearsExperience !== undefined) {
@@ -96,8 +97,29 @@ export class MatchingService {
       { $unwind: { path: "$facility", preserveNullAndEmptyArrays: true } }
     ];
 
-    if (dto.facilityType) {
-      pipeline.push({ $match: { "facility.facilityType": dto.facilityType } });
+    const selectedFacilityTypes = dto.facilityTypes?.length ? dto.facilityTypes : dto.facilityType ? [dto.facilityType] : [];
+    if (selectedFacilityTypes.length) {
+      pipeline.push({ $match: { "facility.facilityType": { $in: selectedFacilityTypes } } });
+    }
+
+    if (dto.shiftTypes?.length) {
+      pipeline.push({ $match: { $expr: { $or: dto.shiftTypes.map((type) => this.buildShiftPeriodExpression(type)) } } });
+    }
+
+    if (dto.search) {
+      const search = new RegExp(this.escapeRegex(dto.search), "i");
+      const roleMatches = this.searchRoleMatches(dto.search);
+      pipeline.push({
+        $match: {
+          $or: [
+            { title: search },
+            { description: search },
+            { "facility.name": search },
+            { "facility.address.city": search },
+            ...(roleMatches.length ? [{ roleRequired: { $in: roleMatches } }] : [])
+          ]
+        }
+      });
     }
 
     pipeline.push({
@@ -305,6 +327,31 @@ export class MatchingService {
     return { distanceMeters: 1, startTime: 1 };
   }
 
+  private buildShiftPeriodExpression(type: "DAY" | "EVENING" | "NIGHT" | "WEEKEND") {
+    const hour = { $hour: { date: "$startTime", timezone: "America/Edmonton" } };
+    if (type === "WEEKEND") {
+      return { $in: [{ $dayOfWeek: { date: "$startTime", timezone: "America/Edmonton" } }, [1, 7]] };
+    }
+    if (type === "DAY") return { $and: [{ $gte: [hour, 6] }, { $lt: [hour, 14] }] };
+    if (type === "EVENING") return { $and: [{ $gte: [hour, 14] }, { $lt: [hour, 22] }] };
+    return { $or: [{ $gte: [hour, 22] }, { $lt: [hour, 6] }] };
+  }
+
+  private searchRoleMatches(search: string) {
+    const normalized = search.trim().toLowerCase();
+    const aliases: Array<[string[], string]> = [
+      [["hca", "health care aide", "healthcare aide"], "HCA"],
+      [["rn", "registered nurse"], "RN"],
+      [["lpn", "licensed practical nurse"], "LPN"],
+      [["psw", "personal support worker"], "PSW"]
+    ];
+    return aliases.filter(([values]) => values.some((value) => value.includes(normalized) || normalized.includes(value))).map(([, role]) => role);
+  }
+
+  private escapeRegex(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   private serializeShift(object: MatchedShiftDocument) {
     return {
       ...object,
@@ -326,7 +373,7 @@ export class MatchingService {
   }
 
   private serializeWorkerResult(worker: MatchedWorkerDocument) {
-    const verifiedCredentials = worker.credentials?.filter((credential) => credential.isVerified).length ?? 0;
+    const verifiedDocuments = worker.documents?.filter((document) => document.verificationStatus === "VERIFIED").length ?? 0;
 
     return {
       id: worker._id?.toString(),
@@ -340,9 +387,9 @@ export class MatchingService {
         preferredShiftTypes: worker.preferences?.preferredShiftTypes ?? [],
         maxDistanceKm: worker.preferences?.maxDistanceKm ?? 25
       },
-      credentials: {
-        total: worker.credentials?.length ?? 0,
-        verified: verifiedCredentials
+      documents: {
+        total: worker.documents?.length ?? 0,
+        verified: verifiedDocuments
       },
       backgroundCheckStatus: worker.backgroundCheck?.status,
       onboardingStatus: worker.onboarding?.verificationStatus ?? OnboardingStatus.Incomplete,

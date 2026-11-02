@@ -8,6 +8,7 @@ import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard";
 import { RolesGuard } from "./guards/roles.guard";
 import { PasswordService } from "./password.service";
+import { TwoFactorService } from "./two-factor.service";
 
 @Module({
   imports: [
@@ -18,13 +19,13 @@ import { PasswordService } from "./password.service";
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>("JWT_SECRET"),
         signOptions: {
-          expiresIn: "12h"
+          expiresIn: "15m"
         }
       })
     })
   ],
   controllers: [AuthController],
-  providers: [AuthService, PasswordService, JwtAuthGuard, RolesGuard],
+  providers: [AuthService, PasswordService, TwoFactorService, JwtAuthGuard, RolesGuard],
   exports: [JwtModule, JwtAuthGuard, RolesGuard]
 })
 export class AuthModule {}

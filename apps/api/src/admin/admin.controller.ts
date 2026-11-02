@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Req, UseGuards } from "@nestjs/common";
 import { UserRole } from "@medshift/shared-types";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
+import { AuthRequest } from "../auth/auth-request";
 import { AdminService } from "./admin.service";
 import { ReviewCredentialDto } from "./dto/review-credential.dto";
 import { ReviewOnboardingDto } from "./dto/review-onboarding.dto";
+import { ReviewWorkerDocumentDto } from "./dto/review-worker-document.dto";
 import { UpdateShiftStatusDto } from "./dto/update-shift-status.dto";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto";
 
@@ -57,6 +59,16 @@ export class AdminController {
     @Body() dto: ReviewCredentialDto
   ) {
     return this.adminService.reviewCredential(workerId, credentialIndex, dto.approved);
+  }
+
+  @Patch("worker-profiles/:workerId/documents/:documentId")
+  reviewWorkerDocument(
+    @Req() request: AuthRequest,
+    @Param("workerId") workerId: string,
+    @Param("documentId") documentId: string,
+    @Body() dto: ReviewWorkerDocumentDto
+  ) {
+    return this.adminService.reviewWorkerDocument(request.user, workerId, documentId, dto);
   }
 
   @Patch("worker-profiles/:workerId/onboarding")

@@ -180,6 +180,13 @@
   color: #6b7280;
 }
 
+.trustDevice { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 10px !important; padding: 12px; border: 1px solid rgba(148,163,184,.28); border-radius: 12px; }
+.trustDevice input { width: 18px !important; min-height: 18px !important; margin-top: 2px; }
+.trustDevice span { display: grid; gap: 2px; }
+.trustDevice small { color: var(--muted); font-size: 12px; }
+.challengeActions { display: flex; flex-wrap: wrap; gap: 10px; }
+.challengeActions button { border: 0; background: transparent; color: var(--gold); padding: 0; font-weight: 700; cursor: pointer; }
+
 .otpGroup {
   display: grid;
   gap: 10px;
@@ -326,63 +333,6 @@
 .alternateSeparator {
   color: rgba(107, 114, 128, 0.65);
   margin: 0 8px;
-}
-
-.message {
-  color: #0b1f3a;
-  font-weight: 500;
-  margin: 18px 0 0;
-}
-
-.verificationNotice {
-  background: #ffffff;
-  border: 1px solid rgba(212, 175, 55, 0.28);
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  margin-top: 16px;
-  padding: 14px;
-}
-
-.verificationNotice strong {
-  color: #0b1f3a;
-  font-size: 0.94rem;
-  font-weight: 500;
-}
-
-.verificationNotice span {
-  color: #6b7280;
-  font-size: 0.86rem;
-  line-height: 1.5;
-}
-
-.secondaryButton {
-  align-items: center;
-  background: transparent;
-  border: 1px solid rgba(11, 31, 58, 0.18);
-  border-radius: 8px;
-  color: #0b1f3a;
-  cursor: pointer;
-  display: inline-flex;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 500;
-  justify-content: center;
-  min-height: 44px;
-  padding: 9px 12px;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-}
-
-.secondaryButton:hover {
-  border-color: #d4af37;
-  box-shadow: 0 8px 22px rgba(11, 31, 58, 0.08);
-  transform: translateY(-1px);
-}
-
-.secondaryButton:disabled {
-  cursor: wait;
-  opacity: 0.7;
-  transform: none;
 }
 
 .verificationActions {

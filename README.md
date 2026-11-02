@@ -2,6 +2,8 @@
 
 MedShift is a healthcare shift marketplace monorepo with a NestJS API, Next.js public/worker/facility portal, Next.js admin dashboard, and shared TypeScript packages.
 
+The launch-MVP gap register, use cases, lifecycle flows, architecture, ER diagram, and feature traceability matrix are maintained in [docs/launch_mvp_review.md](docs/launch_mvp_review.md).
+
 ## Getting Started
 
 ```bash
@@ -19,6 +21,8 @@ Useful scripts:
 - `pnpm deploy:build`, `pnpm deploy:up`, and `pnpm deploy:logs` operate the production Docker Compose stack after `.env.production` is configured.
 
 Resend campaign contact sync is configured with segment IDs in `.env`: `RESEND_WAITLIST_SEGMENT_ID`, `RESEND_GENERAL_SEGMENT_ID`, `RESEND_WORKER_SEGMENT_ID`, and `RESEND_FACILITY_SEGMENT_ID`. If your account still uses deprecated Resend audiences, use the matching `RESEND_*_AUDIENCE_ID` variables instead. Set `RESEND_SYNC_CONTACT_PROPERTIES=true` only after creating the MedShift custom properties in Resend.
+
+Private worker-document uploads require `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` on the API. The API secret must never be exposed through a `NEXT_PUBLIC_*` value or Flutter build argument.
 
 ## Deployment
 

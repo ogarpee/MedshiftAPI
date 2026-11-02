@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch as fetch } from "./session-fetch";
+
 import { useCallback, useEffect, useState } from "react";
 import type { NotificationSummary } from "@medshift/shared-types";
 
@@ -14,7 +16,7 @@ export function useDashboardNotifications(apiUrl: string) {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
 
   const loadNotifications = useCallback(async () => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setNotifications([]);
@@ -54,7 +56,7 @@ export function useDashboardNotifications(apiUrl: string) {
         return;
       }
 
-      const token = window.localStorage.getItem("medshift.accessToken");
+      const token = "cookie-session";
 
       if (!token) {
         return;
@@ -76,7 +78,7 @@ export function useDashboardNotifications(apiUrl: string) {
   );
 
   const markAllNotificationsRead = useCallback(async () => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       return;

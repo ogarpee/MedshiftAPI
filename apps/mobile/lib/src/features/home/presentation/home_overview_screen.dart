@@ -57,27 +57,43 @@ class HomeOverviewScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _MetricTile(
-                    label: 'Applications',
-                    value: '${state.applications.length}',
-                  ),
-                  _MetricTile(
-                    label: 'Invites',
-                    value: '${state.invitations.length}',
-                  ),
-                  _MetricTile(
-                    label: 'Hours',
-                    value: weeklyHours.toStringAsFixed(1),
-                  ),
-                  _MetricTile(
-                    label: 'Est. earnings',
-                    value: '\$${estimatedEarnings.toStringAsFixed(0)}',
-                  ),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final textScale = MediaQuery.textScalerOf(context).scale(1);
+                  final columns = constraints.maxWidth >= 700
+                      ? 4
+                      : constraints.maxWidth < 330 || textScale > 1.35
+                      ? 1
+                      : 2;
+                  return GridView.count(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: columns == 1
+                        ? 3.4
+                        : (textScale > 1.2 ? 1.6 : 1.9),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      _MetricTile(
+                        label: 'Applications',
+                        value: '${state.applications.length}',
+                      ),
+                      _MetricTile(
+                        label: 'Invites',
+                        value: '${state.invitations.length}',
+                      ),
+                      _MetricTile(
+                        label: 'Hours',
+                        value: weeklyHours.toStringAsFixed(1),
+                      ),
+                      _MetricTile(
+                        label: 'Est. earnings',
+                        value: '\$${estimatedEarnings.toStringAsFixed(0)}',
+                      ),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 16),
               Card(
@@ -149,6 +165,10 @@ class EarningsScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             const StatusPill(label: 'ESTIMATED ONLY'),
+            const SizedBox(height: 10),
+            const Text(
+              'Figures are estimates derived from approved timesheets; payments are not transferred through the app.',
+            ),
             const SizedBox(height: 14),
             _MetricTile(
               label: 'Estimated earnings',
@@ -158,11 +178,14 @@ class EarningsScreen extends ConsumerWidget {
             _MetricTile(label: 'Approved minutes', value: '$approved'),
             const SizedBox(height: 16),
             ...state.timesheets.map(
-              (timesheet) => Card(
-                child: ListTile(
-                  leading: const Icon(Icons.receipt_long_outlined),
-                  title: Text(readableEnum(timesheet.status.name)),
-                  subtitle: Text('${timesheet.workedMinutes} minutes'),
+              (timesheet) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.receipt_long_outlined),
+                    title: Text(readableEnum(timesheet.status.name)),
+                    subtitle: Text('${timesheet.workedMinutes} minutes'),
+                  ),
                 ),
               ),
             ),
@@ -191,7 +214,7 @@ class _MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 156,
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,

@@ -1,5 +1,5 @@
-import { IsEmail, IsEnum, IsString, MinLength } from "class-validator";
-import { UserRole } from "@medshift/shared-types";
+import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from "class-validator";
+import { SessionClientType, UserRole } from "@medshift/shared-types";
 
 export class CompleteRegistrationDto {
   @IsEmail()
@@ -14,4 +14,8 @@ export class CompleteRegistrationDto {
 
   @IsEnum(UserRole)
   role!: UserRole;
+
+  @IsOptional()
+  @IsEnum(SessionClientType)
+  clientType?: SessionClientType;
 }

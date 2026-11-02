@@ -1,11 +1,30 @@
 "use client";
 
+import { apiFetch as fetch } from "../session-fetch";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { ClinicalRole, FacilityType, GeoPoint, MatchedShiftSummary, NotificationSummary, OnboardingStatus, ReviewSummary, ShiftStatus } from "@medshift/shared-types";
-import { DashboardShell, StatusBadge } from "@medshift/ui-components";
-import { Calendar, Check, ChevronLeft, ChevronRight, Clock, Coins, Hourglass, MapPin, Star, Users, Wallet, X } from "lucide-react";
+import {
+  Button,
+  Card,
+  DashboardShell,
+  Input,
+  Label,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SimpleBarChart,
+  StatusBadge,
+  Textarea
+} from "@medshift/ui-components";
+import { Calendar, Check, ChevronLeft, ChevronRight, Clock, Coins, Filter, Hourglass, MapPin, Search, Star, Users, Wallet, X } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import { useDashboardNotifications } from "../use-dashboard-notifications";
 import { ShiftMap } from "./shift-map";
@@ -13,12 +32,15 @@ import { ShiftMap } from "./shift-map";
 type ViewMode = "list" | "map";
 type WorkerDashboardSection = "overview" | "shifts" | "work" | "reviews";
 type ShiftSearchSort = "DISTANCE" | "START_TIME" | "HOURLY_RATE";
+type ShiftSearchPeriod = "DAY" | "EVENING" | "NIGHT" | "WEEKEND";
 type WorkerShiftFilters = {
-  facilityType: "" | FacilityType;
+  facilityTypes: FacilityType[];
   maxShiftHours: string;
   minHourlyRate: string;
   radiusKm: string;
-  roleRequired: "" | ClinicalRole;
+  roles: ClinicalRole[];
+  search: string;
+  shiftTypes: ShiftSearchPeriod[];
   sort: ShiftSearchSort;
 };
 type WorkerOnboardingStatus = {
@@ -56,11 +78,13 @@ type ScheduleSlot = {
 };
 
 const initialShiftFilters: WorkerShiftFilters = {
-  facilityType: "",
+  facilityTypes: [],
   maxShiftHours: "",
   minHourlyRate: "",
   radiusKm: "",
-  roleRequired: "",
+  roles: [],
+  search: "",
+  shiftTypes: [],
   sort: "DISTANCE"
 };
 
@@ -91,6 +115,7 @@ export default function WorkerDashboardPage() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [shiftFilters, setShiftFilters] = useState<WorkerShiftFilters>(initialShiftFilters);
+  const [shiftFilterDraft, setShiftFilterDraft] = useState<WorkerShiftFilters>(initialShiftFilters);
 
   const allDashboardShifts = useMemo(() => mergeShifts(openShifts, workerShifts), [openShifts, workerShifts]);
   const selectedShift = useMemo(
@@ -107,7 +132,7 @@ export default function WorkerDashboardPage() {
   const hasSelectedShiftReview = selectedShift ? reviews.some((review) => review.shiftId === selectedShift.id) : false;
 
   const loadOpenShifts = useCallback(
-    async (token: string, profile?: WorkerProfileResponse | null, filters: WorkerShiftFilters = shiftFilters) => {
+    async (token: string, profile: WorkerProfileResponse | null | undefined, filters: WorkerShiftFilters) => {
       const [longitude, latitude] = profile?.location?.coordinates ?? [-114.0719, 51.0447];
       const radiusKm = filters.radiusKm || String(profile?.preferences?.maxDistanceKm ?? 25);
       const query = new URLSearchParams({
@@ -117,12 +142,20 @@ export default function WorkerDashboardPage() {
         sort: filters.sort
       });
 
-      if (filters.roleRequired) {
-        query.set("roleRequired", filters.roleRequired);
+      if (filters.search.trim()) {
+        query.set("search", filters.search.trim());
       }
 
-      if (filters.facilityType) {
-        query.set("facilityType", filters.facilityType);
+      if (filters.roles.length) {
+        query.set("roles", filters.roles.join(","));
+      }
+
+      if (filters.facilityTypes.length) {
+        query.set("facilityTypes", filters.facilityTypes.join(","));
+      }
+
+      if (filters.shiftTypes.length) {
+        query.set("shiftTypes", filters.shiftTypes.join(","));
       }
 
       if (filters.maxShiftHours) {
@@ -143,11 +176,11 @@ export default function WorkerDashboardPage() {
 
       return (await shiftsResponse.json()) as MatchedShiftSummary[];
     },
-    [apiUrl, shiftFilters]
+    [apiUrl]
   );
 
-  const loadWorkerDashboard = useCallback(async (filters: WorkerShiftFilters = shiftFilters) => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+  const loadWorkerDashboard = useCallback(async (filters: WorkerShiftFilters = initialShiftFilters) => {
+    const token = "cookie-session";
 
     if (!token) {
       setOpenShifts([]);
@@ -213,8 +246,24 @@ export default function WorkerDashboardPage() {
   }, [loadWorkerDashboard]);
 
   useEffect(() => {
+    if (activeSection !== "shifts" || !workerProfile) return undefined;
+    const timeout = window.setTimeout(() => {
+      setIsLoadingDashboard(true);
+      loadOpenShifts("cookie-session", workerProfile, shiftFilters)
+        .then((result) => {
+          setOpenShifts(result);
+          setSelectedShiftId((current) => result.some((shift) => shift.id === current) ? current : result[0]?.id ?? "");
+          setMessage(result.length ? `${result.length} matching shift${result.length === 1 ? "" : "s"} found.` : "No open shifts match this search.");
+        })
+        .catch(() => setMessage("Shift search could not be refreshed. Try again."))
+        .finally(() => setIsLoadingDashboard(false));
+    }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [activeSection, loadOpenShifts, shiftFilters.search, workerProfile]);
+
+  useEffect(() => {
     let socket: Socket | null = null;
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       return undefined;
@@ -222,9 +271,9 @@ export default function WorkerDashboardPage() {
 
     import("socket.io-client")
       .then(({ io }) => {
-        socket = io(`${apiUrl}/shifts`, { auth: { token }, transports: ["websocket"] });
+        socket = io(`${apiUrl}/shifts`, { auth: { token }, transports: ["websocket"], withCredentials: true });
         socket.on("shift.created", () => {
-          loadOpenShifts(token, workerProfile)
+          loadOpenShifts(token, workerProfile, shiftFilters)
             .then((result) => {
               setOpenShifts(result);
               setSelectedShiftId((current) => current || result[0]?.id || "");
@@ -249,16 +298,18 @@ export default function WorkerDashboardPage() {
   }, [apiUrl, loadNotifications, loadOpenShifts, workerProfile]);
 
   function applyShiftFilters() {
-    void loadWorkerDashboard(shiftFilters);
+    setShiftFilters(shiftFilterDraft);
+    void loadWorkerDashboard(shiftFilterDraft);
   }
 
   function resetShiftFilters() {
     setShiftFilters(initialShiftFilters);
+    setShiftFilterDraft(initialShiftFilters);
     void loadWorkerDashboard(initialShiftFilters);
   }
 
   async function applyForShift(shift: MatchedShiftSummary) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a worker to apply for live shifts.");
@@ -286,7 +337,7 @@ export default function WorkerDashboardPage() {
       setSelectedShiftId("");
       setMessage("Application submitted. The facility can review and assign from the marketplace.");
     } catch {
-      setMessage("That application could not be submitted. It may already be filled or require updated credentials.");
+      setMessage("That application could not be submitted. It may already be filled or require updated verification documents.");
     } finally {
       setIsAccepting(false);
     }
@@ -298,7 +349,7 @@ export default function WorkerDashboardPage() {
       return;
     }
 
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
     const comment = reviewComment.trim();
 
     if (!token) {
@@ -361,7 +412,7 @@ export default function WorkerDashboardPage() {
             <div>
               <span>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Profile required" : "Verification pending"}</span>
               <h3>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Complete onboarding to unlock live shifts." : "Your worker profile is under review."}</h3>
-              <p>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Finish profile, matching, availability, credentials, and consent." : "You can browse live data while acceptance stays locked until approval."}</p>
+              <p>{onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Finish your profile, matching preferences, availability, and required documents." : "You can browse live data while acceptance stays locked until approval."}</p>
             </div>
             <a className="dashboard-banner-action" href="/worker/onboarding">
               {onboardingStatus.verificationStatus === OnboardingStatus.Incomplete ? "Continue onboarding" : "Review onboarding"}
@@ -369,38 +420,19 @@ export default function WorkerDashboardPage() {
           </section>
         ) : null}
 
-        <section className="worker-dashboard-grid">
+        <section className={`worker-dashboard-grid${activeSection === "shifts" || activeSection === "reviews" ? " is-primary-workspace" : ""}`}>
           <div className="worker-dashboard-main-column">
             {activeSection === "overview" || activeSection === "work" ? (
-            <section className="work-overview-card" aria-label="Work overview">
+            <Card className="work-overview-card" aria-label="Work overview">
               <div className="work-overview-heading">
                 <div>
                   <h2>Work overview</h2>
                   <p>Current year <span>{dashboardMetrics.completedShifts} completed</span></p>
                 </div>
-                <button className="soft-select-button" type="button">Year</button>
+                <Button className="soft-select-button" type="button" variant="outline" size="sm">Year</Button>
               </div>
-              <div className="work-chart" aria-label="Completed shifts by month">
-                <div className="work-chart-scale" aria-hidden="true">
-                  <span>100</span>
-                  <span>75</span>
-                  <span>50</span>
-                  <span>25</span>
-                  <span>0</span>
-                </div>
-                <div className="work-chart-bars">
-                  {workOverview.map((month) => (
-                    <div className="work-chart-month" key={month.month}>
-                      <div className="work-bar-track" aria-hidden="true">
-                        {month.total ? <span style={{ height: `${month.total}%` }} /> : null}
-                        {month.completed ? <strong style={{ height: `${month.completed}%` }} /> : null}
-                      </div>
-                      <span>{month.month}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
+              <SimpleBarChart data={workOverview} dataKey="completed" nameKey="month" valueLabel="Completed hours" />
+            </Card>
             ) : null}
 
             {activeSection === "overview" ? (
@@ -444,7 +476,7 @@ export default function WorkerDashboardPage() {
             {activeSection === "reviews" || activeSection === "work" ? (
             <section className="worker-section-heading">
               <h2>Facility reviews</h2>
-              <button type="button">View all</button>
+              {activeSection === "work" ? <a href="/worker/reviews">View all</a> : <span>{reviewCards.length} records</span>}
             </section>
             ) : null}
 
@@ -482,57 +514,75 @@ export default function WorkerDashboardPage() {
                     <h2>Find shifts</h2>
                     <p>{openShifts.length} result{openShifts.length === 1 ? "" : "s"} near your search area</p>
                   </div>
-                  <button type="button" onClick={resetShiftFilters}>Reset</button>
                 </div>
-                <div className="worker-filter-grid">
-                  <label>
-                    Role
-                    <select value={shiftFilters.roleRequired} onChange={(event) => setShiftFilters((current) => ({ ...current, roleRequired: event.target.value as WorkerShiftFilters["roleRequired"] }))}>
-                      <option value="">Any role</option>
-                      {Object.values(ClinicalRole).map((role) => <option key={role} value={role}>{role}</option>)}
-                    </select>
+                <div className="worker-search-toolbar">
+                  <label className="worker-shift-search">
+                    <Search aria-hidden="true" />
+                    <Input
+                      aria-label="Search open shifts"
+                      value={shiftFilters.search}
+                      onChange={(event) => {
+                        const search = event.target.value;
+                        setShiftFilters((current) => ({ ...current, search }));
+                        setShiftFilterDraft((current) => ({ ...current, search }));
+                      }}
+                      placeholder="Search facility, city, role, or description"
+                    />
+                    {isLoadingDashboard ? <span className="worker-search-spinner" aria-label="Searching" /> : null}
                   </label>
-                  <label>
-                    Facility
-                    <select value={shiftFilters.facilityType} onChange={(event) => setShiftFilters((current) => ({ ...current, facilityType: event.target.value as WorkerShiftFilters["facilityType"] }))}>
-                      <option value="">Any facility</option>
-                      {Object.values(FacilityType).map((type) => <option key={type} value={type}>{formatFacilityType(type)}</option>)}
-                    </select>
-                  </label>
-                  <label>
-                    Radius km
-                    <input inputMode="numeric" min="1" max="250" value={shiftFilters.radiusKm} onChange={(event) => setShiftFilters((current) => ({ ...current, radiusKm: event.target.value }))} placeholder={String(workerProfile?.preferences?.maxDistanceKm ?? 25)} />
-                  </label>
-                  <label>
-                    Max hours
-                    <input inputMode="numeric" min="1" max="24" value={shiftFilters.maxShiftHours} onChange={(event) => setShiftFilters((current) => ({ ...current, maxShiftHours: event.target.value }))} placeholder="8" />
-                  </label>
-                  <label>
-                    Min pay
-                    <input inputMode="numeric" min="0" value={shiftFilters.minHourlyRate} onChange={(event) => setShiftFilters((current) => ({ ...current, minHourlyRate: event.target.value }))} placeholder="35" />
-                  </label>
-                  <label>
-                    Sort
-                    <select value={shiftFilters.sort} onChange={(event) => setShiftFilters((current) => ({ ...current, sort: event.target.value as ShiftSearchSort }))}>
-                      <option value="DISTANCE">Distance</option>
-                      <option value="START_TIME">Start time</option>
-                      <option value="HOURLY_RATE">Pay</option>
-                    </select>
-                  </label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" className="worker-filter-trigger">
+                        <Filter aria-hidden="true" /> Filters
+                        {countActiveFilters(shiftFilters) ? <span>{countActiveFilters(shiftFilters)}</span> : null}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="worker-filter-popover">
+                      <div className="worker-filter-popover-heading">
+                        <div><strong>Filter shifts</strong><small>Select all that apply</small></div>
+                        <button type="button" onClick={() => setShiftFilterDraft({ ...initialShiftFilters, search: shiftFilters.search })}>Clear all</button>
+                      </div>
+                      <FilterChecklist
+                        label="Clinical role"
+                        options={Object.values(ClinicalRole).map((value) => ({ label: value, value }))}
+                        selected={shiftFilterDraft.roles}
+                        onToggle={(value) => setShiftFilterDraft((current) => ({ ...current, roles: toggleFilterValue(current.roles, value as ClinicalRole) }))}
+                      />
+                      <FilterChecklist
+                        label="Facility type"
+                        options={Object.values(FacilityType).map((value) => ({ label: formatFacilityType(value), value }))}
+                        selected={shiftFilterDraft.facilityTypes}
+                        onToggle={(value) => setShiftFilterDraft((current) => ({ ...current, facilityTypes: toggleFilterValue(current.facilityTypes, value as FacilityType) }))}
+                      />
+                      <FilterChecklist
+                        label="Shift period"
+                        options={(["DAY", "EVENING", "NIGHT", "WEEKEND"] as ShiftSearchPeriod[]).map((value) => ({ label: formatFilterToken(value), value }))}
+                        selected={shiftFilterDraft.shiftTypes}
+                        onToggle={(value) => setShiftFilterDraft((current) => ({ ...current, shiftTypes: toggleFilterValue(current.shiftTypes, value as ShiftSearchPeriod) }))}
+                      />
+                      <div className="worker-filter-number-grid">
+                        <Label>Radius km<Input inputMode="numeric" min="1" max="250" value={shiftFilterDraft.radiusKm} onChange={(event) => setShiftFilterDraft((current) => ({ ...current, radiusKm: event.target.value }))} placeholder={String(workerProfile?.preferences?.maxDistanceKm ?? 25)} /></Label>
+                        <Label>Max hours<Input inputMode="numeric" min="1" max="24" value={shiftFilterDraft.maxShiftHours} onChange={(event) => setShiftFilterDraft((current) => ({ ...current, maxShiftHours: event.target.value }))} placeholder="8" /></Label>
+                        <Label>Min pay<Input inputMode="numeric" min="0" value={shiftFilterDraft.minHourlyRate} onChange={(event) => setShiftFilterDraft((current) => ({ ...current, minHourlyRate: event.target.value }))} placeholder="35" /></Label>
+                      </div>
+                      <Label>Sort by<Select value={shiftFilterDraft.sort} onValueChange={(value) => setShiftFilterDraft((current) => ({ ...current, sort: value as ShiftSearchSort }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DISTANCE">Distance</SelectItem><SelectItem value="START_TIME">Start time</SelectItem><SelectItem value="HOURLY_RATE">Pay</SelectItem></SelectContent></Select></Label>
+                      <div className="worker-filter-popover-actions">
+                        <Button type="button" variant="outline" onClick={resetShiftFilters}>Reset</Button>
+                        <Button type="button" onClick={applyShiftFilters}>Apply filters</Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
-                <div className="worker-filter-actions">
-                  <button className="dashboard-banner-action" type="button" onClick={applyShiftFilters}>Apply filters</button>
-                  {buildFilterChips(shiftFilters).map((chip) => <span key={chip}>{chip}</span>)}
-                </div>
+                {buildFilterChips(shiftFilters).length ? <div className="worker-filter-actions">{buildFilterChips(shiftFilters).map((chip) => <button key={chip.key} type="button" onClick={() => { const next = withoutFilterChip(chip.key, shiftFilters); setShiftFilters(next); setShiftFilterDraft(next); void loadWorkerDashboard(next); }}>{chip.label}<X aria-hidden="true" /></button>)}</div> : null}
               </section>
               <div className="worker-toolbar">
                 <div className="segmented-control" aria-label="Shift view">
-                  <button className={viewMode === "list" ? "active" : ""} type="button" onClick={() => setViewMode("list")}>
+                  <Button className={viewMode === "list" ? "active" : ""} type="button" variant="ghost" onClick={() => setViewMode("list")}>
                     List
-                  </button>
-                  <button className={viewMode === "map" ? "active" : ""} type="button" onClick={() => setViewMode("map")}>
+                  </Button>
+                  <Button className={viewMode === "map" ? "active" : ""} type="button" variant="ghost" onClick={() => setViewMode("map")}>
                     Map
-                  </button>
+                  </Button>
                 </div>
                 <span>{isLoadingDashboard ? "Loading live dashboard data..." : message || "Live board connected to your saved radius."}</span>
               </div>
@@ -663,14 +713,14 @@ export default function WorkerDashboardPage() {
                   </div>
                 </dl>
 
-                <button
+                <Button
                   className="auth-submit"
                   disabled={isAccepting || selectedShift.status !== ShiftStatus.Open || !approvedForLiveShifts}
                   type="button"
                   onClick={() => applyForShift(selectedShift)}
                 >
                   {selectedShift.status === ShiftStatus.Open ? (approvedForLiveShifts ? "Apply for shift" : "Onboarding required") : "Matched"}
-                </button>
+                </Button>
 
                 {selectedShift.status === ShiftStatus.Completed && !hasSelectedShiftReview ? (
                   <form className="worker-review-form" onSubmit={(event) => { event.preventDefault(); void submitReview(selectedShift); }}>
@@ -687,7 +737,7 @@ export default function WorkerDashboardPage() {
                         </button>
                       ))}
                     </div>
-                    <textarea
+                    <Textarea
                       maxLength={280}
                       name="facilityReview"
                       value={reviewComment}
@@ -695,7 +745,7 @@ export default function WorkerDashboardPage() {
                       placeholder="Add facility feedback"
                       rows={3}
                     />
-                    <button type="submit">Submit review</button>
+                    <Button type="submit">Submit review</Button>
                   </form>
                 ) : null}
                 {selectedShift.status === ShiftStatus.Completed && hasSelectedShiftReview ? (
@@ -725,14 +775,14 @@ function MetricPill({
   value: string;
 }) {
   return (
-    <article className="metric-pill">
+    <Card className="metric-pill">
       <span>{icon}</span>
       <div>
         <small>{label}</small>
         <strong>{value}</strong>
       </div>
       {trend ? <em className={tone}>{trend}</em> : null}
-    </article>
+    </Card>
   );
 }
 
@@ -750,7 +800,7 @@ function PayTile({
   value: string;
 }) {
   return (
-    <article className={featured ? "pay-tile featured" : "pay-tile"}>
+    <Card className={featured ? "pay-tile featured" : "pay-tile"}>
       <div>
         <span>{icon}</span>
         <div>
@@ -759,7 +809,7 @@ function PayTile({
         </div>
       </div>
       <p>{hint}</p>
-    </article>
+    </Card>
   );
 }
 
@@ -895,15 +945,66 @@ function buildEarnings(openShifts: MatchedShiftSummary[], workerShifts: MatchedS
   };
 }
 
-function buildFilterChips(filters: WorkerShiftFilters) {
+function FilterChecklist({ label, onToggle, options, selected }: {
+  label: string;
+  onToggle: (value: string) => void;
+  options: Array<{ label: string; value: string }>;
+  selected: string[];
+}) {
+  return (
+    <fieldset className="worker-filter-checklist">
+      <legend>{label}</legend>
+      <div>
+        {options.map((option) => (
+          <label key={option.value}>
+            <input checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} type="checkbox" />
+            <span><Check aria-hidden="true" /></span>
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function toggleFilterValue<T extends string>(selected: T[], value: T) {
+  return selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value];
+}
+
+function countActiveFilters(filters: WorkerShiftFilters) {
+  return filters.roles.length + filters.facilityTypes.length + filters.shiftTypes.length +
+    Number(Boolean(filters.radiusKm)) + Number(Boolean(filters.maxShiftHours)) + Number(Boolean(filters.minHourlyRate)) + Number(filters.sort !== "DISTANCE");
+}
+
+function buildFilterChips(filters: WorkerShiftFilters): Array<{ key: string; label: string }> {
   return [
-    filters.roleRequired ? `Role: ${filters.roleRequired}` : "",
-    filters.facilityType ? `Facility: ${formatFacilityType(filters.facilityType)}` : "",
-    filters.radiusKm ? `${filters.radiusKm} km` : "",
-    filters.maxShiftHours ? `Up to ${filters.maxShiftHours}h` : "",
-    filters.minHourlyRate ? `$${filters.minHourlyRate}+/hr` : "",
-    filters.sort !== "DISTANCE" ? `Sort: ${filters.sort === "START_TIME" ? "Start time" : "Pay"}` : ""
-  ].filter(Boolean);
+    ...filters.roles.map((value) => ({ key: `role:${value}`, label: value })),
+    ...filters.facilityTypes.map((value) => ({ key: `facility:${value}`, label: formatFacilityType(value) })),
+    ...filters.shiftTypes.map((value) => ({ key: `period:${value}`, label: formatFilterToken(value) })),
+    ...(filters.radiusKm ? [{ key: "radius", label: `${filters.radiusKm} km` }] : []),
+    ...(filters.maxShiftHours ? [{ key: "hours", label: `Up to ${filters.maxShiftHours}h` }] : []),
+    ...(filters.minHourlyRate ? [{ key: "rate", label: `$${filters.minHourlyRate}+/hr` }] : []),
+    ...(filters.sort !== "DISTANCE" ? [{ key: "sort", label: `Sort: ${filters.sort === "START_TIME" ? "Start time" : "Pay"}` }] : [])
+  ];
+}
+
+function withoutFilterChip(key: string, filters: WorkerShiftFilters): WorkerShiftFilters {
+  const [kind, value] = key.split(":");
+  const next = {
+    ...filters,
+    roles: kind === "role" ? filters.roles.filter((item) => item !== value) : filters.roles,
+    facilityTypes: kind === "facility" ? filters.facilityTypes.filter((item) => item !== value) : filters.facilityTypes,
+    shiftTypes: kind === "period" ? filters.shiftTypes.filter((item) => item !== value) : filters.shiftTypes,
+    radiusKm: key === "radius" ? "" : filters.radiusKm,
+    maxShiftHours: key === "hours" ? "" : filters.maxShiftHours,
+    minHourlyRate: key === "rate" ? "" : filters.minHourlyRate,
+    sort: key === "sort" ? "DISTANCE" as const : filters.sort
+  };
+  return next;
+}
+
+function formatFilterToken(value: string) {
+  return value.toLowerCase().split("_").map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
 }
 
 function mergeShifts(primary: MatchedShiftSummary[], secondary: MatchedShiftSummary[]) {

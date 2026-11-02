@@ -14,6 +14,14 @@ export const AccountStatus = {
 
 export type AccountStatus = (typeof AccountStatus)[keyof typeof AccountStatus];
 
+export const SessionClientType = {
+  Web: "WEB",
+  Admin: "ADMIN",
+  Mobile: "MOBILE"
+} as const;
+
+export type SessionClientType = (typeof SessionClientType)[keyof typeof SessionClientType];
+
 export const ClinicalRole = {
   Hca: "HCA",
   Rn: "RN",
@@ -126,6 +134,21 @@ export const VerificationDocumentStatus = {
 
 export type VerificationDocumentStatus = (typeof VerificationDocumentStatus)[keyof typeof VerificationDocumentStatus];
 
+export const WorkerDocumentCategory = {
+  GovernmentId: "GOVERNMENT_ID",
+  ProfessionalCertificate: "PROFESSIONAL_CERTIFICATE",
+  BackgroundCheck: "BACKGROUND_CHECK",
+  Other: "OTHER"
+} as const;
+
+export type WorkerDocumentCategory = (typeof WorkerDocumentCategory)[keyof typeof WorkerDocumentCategory];
+
+export const RequiredWorkerDocumentCategories: WorkerDocumentCategory[] = [
+  WorkerDocumentCategory.GovernmentId,
+  WorkerDocumentCategory.ProfessionalCertificate,
+  WorkerDocumentCategory.BackgroundCheck
+];
+
 export const ShiftApplicationStatus = {
   Applied: "APPLIED",
   UnderReview: "UNDER_REVIEW",
@@ -199,10 +222,58 @@ export const NotificationType = {
   MarketplaceDispute: "MARKETPLACE_DISPUTE",
   OnboardingApproved: "ONBOARDING_APPROVED",
   OnboardingRejected: "ONBOARDING_REJECTED",
-  ReviewAvailable: "REVIEW_AVAILABLE"
+  ReviewAvailable: "REVIEW_AVAILABLE",
+  SecurityAlert: "SECURITY_ALERT"
 } as const;
 
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
+export const NotificationCategory = {
+  ShiftOpportunities: "SHIFT_OPPORTUNITIES",
+  ShiftUpdates: "SHIFT_UPDATES",
+  ScheduleAndTimesheets: "SCHEDULE_AND_TIMESHEETS",
+  ReviewsAndDisputes: "REVIEWS_AND_DISPUTES",
+  AccountAndSecurity: "ACCOUNT_AND_SECURITY"
+} as const;
+
+export type NotificationCategory = (typeof NotificationCategory)[keyof typeof NotificationCategory];
+
+export interface NotificationChannelPreference {
+  inApp: boolean;
+  email: boolean;
+}
+
+export type NotificationPreferences = Record<NotificationCategory, NotificationChannelPreference>;
+
+export const TwoFactorMethod = {
+  Totp: "TOTP",
+  Email: "EMAIL"
+} as const;
+
+export type TwoFactorMethod = (typeof TwoFactorMethod)[keyof typeof TwoFactorMethod];
+
+export interface TwoFactorChallengeResponse {
+  twoFactorRequired: true;
+  challengeId: string;
+  method: TwoFactorMethod;
+  expiresAt: string;
+  maskedEmail?: string;
+}
+
+export interface TwoFactorStatus {
+  enabled: boolean;
+  method?: TwoFactorMethod;
+  recoveryCodesRemaining: number;
+}
+
+export interface TrustedDeviceSummary {
+  id: string;
+  clientType: SessionClientType;
+  label: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  current?: boolean;
+}
 
 export interface GeoPoint {
   type: "Point";
@@ -221,10 +292,15 @@ export interface AuthTokenPayload {
   sub: string;
   email: string;
   role: UserRole;
+  sid: string;
+  iat?: number;
+  exp?: number;
 }
 
 export interface AuthResponse {
   accessToken: string;
+  refreshToken?: string;
+  csrfToken?: string;
   user: {
     id: string;
     email: string;
@@ -248,6 +324,7 @@ export interface ShiftSummary {
   title?: string;
   breakMinutes?: number;
   caregiversRequired?: number;
+  activeAssignmentCount?: number;
   payAmount?: number;
   currency?: string;
   payType?: PayType;
@@ -307,6 +384,8 @@ export interface ShiftAssignmentSummary {
   invitationId?: string;
   status: ShiftAssignmentStatus;
   confirmedAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
 }
 
 export interface AttendanceEventSummary {
@@ -317,6 +396,10 @@ export interface AttendanceEventSummary {
   eventType: AttendanceEventType;
   occurredAt: string;
   location?: GeoPoint;
+  verification?: {
+    status: "VERIFIED" | "OUTSIDE_GEOFENCE" | "MISSING";
+    distanceMeters?: number;
+  };
   notes?: string;
 }
 
@@ -342,6 +425,7 @@ export interface DisputeSummary {
   shiftId?: string;
   timesheetId?: string;
   reviewId?: string;
+  assignmentId?: string;
   openedBy: string;
   status: DisputeStatus;
   reason: string;
@@ -377,15 +461,20 @@ export interface ShiftMetrics {
 }
 
 export type ShiftSearchSort = "DISTANCE" | "START_TIME" | "HOURLY_RATE";
+export type ShiftSearchPeriod = "DAY" | "EVENING" | "NIGHT" | "WEEKEND";
 
 export interface ShiftSearchQuery {
   facilityType?: FacilityType;
+  facilityTypes?: FacilityType[];
   latitude?: number;
   longitude?: number;
   maxShiftHours?: number;
   minHourlyRate?: number;
   radiusKm?: number;
   roleRequired?: ClinicalRole;
+  roles?: ClinicalRole[];
+  search?: string;
+  shiftTypes?: ShiftSearchPeriod[];
   sort?: ShiftSearchSort;
   startAfter?: string;
   startBefore?: string;
@@ -416,7 +505,7 @@ export interface WorkerSearchResult {
     preferredShiftTypes: string[];
     maxDistanceKm: number;
   };
-  credentials: {
+  documents: {
     total: number;
     verified: number;
   };
@@ -431,6 +520,7 @@ export interface WorkerSearchResult {
 export interface ReviewSummary {
   id: string;
   shiftId: string;
+  assignmentId?: string;
   reviewerId: string;
   revieweeId: string;
   rating: number;

@@ -1,13 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, PipelineStage, Types } from "mongoose";
-import { OnboardingStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
+import { OnboardingStatus, ShiftAssignmentStatus, ShiftStatus, UserRole } from "@medshift/shared-types";
 import { AuthUser } from "../auth/auth-user";
 import { FacilityProfile, FacilityProfileDocument } from "../database/schemas/facility-profile.schema";
 import { Shift, ShiftDocument } from "../database/schemas/shift.schema";
+import { ShiftAssignment, ShiftAssignmentDocument } from "../database/schemas/marketplace.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
 import { User, UserDocument } from "../database/schemas/user.schema";
 import { MatchingService } from "../matching/matching.service";
+import { MarketplaceService } from "../marketplace/marketplace.service";
 import { NotificationService } from "../notifications/notification.service";
 import { ShiftsGateway } from "../realtime/shifts.gateway";
 import { CreateShiftDto } from "./dto/create-shift.dto";
@@ -22,10 +24,12 @@ type ShiftWithFacility = Shift & {
 export class ShiftsService {
   constructor(
     @InjectModel(Shift.name) private readonly shifts: Model<ShiftDocument>,
+    @InjectModel(ShiftAssignment.name) private readonly assignments: Model<ShiftAssignmentDocument>,
     @InjectModel(FacilityProfile.name) private readonly facilityProfiles: Model<FacilityProfileDocument>,
     @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
     @InjectModel(User.name) private readonly users: Model<UserDocument>,
     private readonly matchingService: MatchingService,
+    private readonly marketplaceService: MarketplaceService,
     private readonly notificationService: NotificationService,
     private readonly shiftsGateway: ShiftsGateway
   ) {}
@@ -92,10 +96,16 @@ export class ShiftsService {
 
   async findMineForWorker(currentUser: AuthUser) {
     const worker = await this.resolveWorkerForDashboard(currentUser);
+    const assignments = await this.assignments.find({
+      workerId: worker._id,
+      status: { $in: [ShiftAssignmentStatus.Confirmed, ShiftAssignmentStatus.InProgress, ShiftAssignmentStatus.Completed] }
+    }).exec();
+    if (!assignments.length) return [];
+    const assignmentByShift = new Map(assignments.map((assignment) => [assignment.shiftId.toString(), assignment]));
     const pipeline: PipelineStage[] = [
       {
         $match: {
-          matchedWorkerId: worker._id,
+          _id: { $in: assignments.map((assignment) => assignment.shiftId) },
           status: {
             $in: [
               ShiftStatus.Matched,
@@ -137,7 +147,10 @@ export class ShiftsService {
     ];
     const shifts = await this.shifts.aggregate<ShiftWithFacility>(pipeline);
 
-    return shifts.map((shift) => this.serializeMatchedShift(shift));
+    return shifts.map((shift) => {
+      const assignment = assignmentByShift.get(shift._id.toString());
+      return { ...this.serializeMatchedShift(shift), assignmentId: assignment?.id, assignmentStatus: assignment?.status };
+    });
   }
 
   async update(currentUser: AuthUser, id: string, dto: UpdateShiftDto) {
@@ -210,6 +223,7 @@ export class ShiftsService {
     }
 
     if (dto.status !== undefined) {
+      this.assertValidStatusTransition(previousStatus, dto.status, currentUser.role);
       if (previousStatus === ShiftStatus.Open && dto.status === ShiftStatus.Matched && !shift.filledAt) {
         shift.filledAt = new Date();
       }
@@ -234,6 +248,8 @@ export class ShiftsService {
   async remove(currentUser: AuthUser, id: string) {
     const shift = await this.findDocument(id);
     await this.assertCanManage(currentUser, shift);
+    const assignmentExists = await this.assignments.exists({ shiftId: shift._id });
+    if (assignmentExists) throw new BadRequestException("Assigned shifts cannot be deleted; cancel the shift instead");
     await shift.deleteOne();
 
     return { deleted: true };
@@ -246,17 +262,9 @@ export class ShiftsService {
       throw new NotFoundException("Shift not found");
     }
 
-    const shift = await this.shifts
-      .findOneAndUpdate(
-        { _id: id, status: ShiftStatus.Open },
-        { status: ShiftStatus.Matched, matchedWorkerId: worker._id, filledAt: new Date() },
-        { new: true }
-      )
-      .exec();
-
-    if (!shift) {
-      throw new BadRequestException("Shift is not available for acceptance");
-    }
+    await this.marketplaceService.quickAccept(currentUser, id);
+    const shift = await this.shifts.findById(id).exec();
+    if (!shift) throw new NotFoundException("Shift not found");
 
     const serialized = this.serialize(shift);
     await this.sendShiftConfirmation(shift, worker);
@@ -358,7 +366,9 @@ export class ShiftsService {
 
     await this.notificationService.sendShiftConfirmation({
       workerEmail: workerUser?.email,
+      workerUserId: worker.userId,
       facilityEmail: facilityUser?.email,
+      facilityUserId: facility?.userId,
       facilityName: facility?.name,
       roleRequired: shift.roleRequired,
       startTime: shift.startTime,
@@ -443,6 +453,18 @@ export class ShiftsService {
     }
   }
 
+  private assertValidStatusTransition(previous: ShiftStatus, next: ShiftStatus, role: UserRole) {
+    if (previous === next || role === UserRole.Admin) return;
+    const allowed = new Map<ShiftStatus, ShiftStatus[]>([
+      [ShiftStatus.Open, [ShiftStatus.Cancelled, ShiftStatus.Expired]],
+      [ShiftStatus.Assigned, [ShiftStatus.InProgress, ShiftStatus.Cancelled, ShiftStatus.NoShow]],
+      [ShiftStatus.InProgress, [ShiftStatus.TimesheetSubmitted, ShiftStatus.Disputed]],
+      [ShiftStatus.TimesheetSubmitted, [ShiftStatus.Completed, ShiftStatus.Disputed]],
+      [ShiftStatus.Disputed, [ShiftStatus.Completed, ShiftStatus.Cancelled]]
+    ]);
+    if (!allowed.get(previous)?.includes(next)) throw new BadRequestException(`Shift cannot transition from ${previous} to ${next}`);
+  }
+
   private serialize(shift: ShiftDocument) {
     const object = shift.toObject({ versionKey: false });
 
@@ -464,6 +486,7 @@ export class ShiftsService {
       title: shift.title,
       breakMinutes: shift.breakMinutes,
       caregiversRequired: shift.caregiversRequired,
+      activeAssignmentCount: shift.activeAssignmentCount,
       payAmount: shift.payAmount,
       currency: shift.currency,
       payType: shift.payType,

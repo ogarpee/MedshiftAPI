@@ -3,9 +3,10 @@
 import { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CircleCheck, Eye, EyeOff, ShieldCheck, Users } from "lucide-react";
-import { AccountStatus, UserRole } from "@medshift/shared-types";
+import { AccountStatus, TwoFactorMethod, UserRole } from "@medshift/shared-types";
 import { MedShiftLogo } from "@medshift/ui-components";
 import { useToast } from "../toast-provider";
+import { apiFetch as fetch } from "../session-fetch";
 import styles from "./auth-form.module.css";
 
 type AuthMode = "login" | "register";
@@ -27,7 +28,14 @@ interface AuthApiResult {
   message?: string | string[];
   registrationOtpRequired?: boolean;
   registrationToken?: string;
+  retryAfterSeconds?: number;
   user?: AuthUser;
+  verificationEmailSent?: boolean;
+  twoFactorRequired?: boolean;
+  challengeId?: string;
+  method?: TwoFactorMethod;
+  expiresAt?: string;
+  maskedEmail?: string;
 }
 
 interface OnboardingRouteStatus {
@@ -69,16 +77,17 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   const [registrationStep, setRegistrationStep] = useState<RegistrationStep>("email");
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [registrationToken, setRegistrationToken] = useState("");
-  const [message, setMessage] = useState("");
-  const [resendMessage, setResendMessage] = useState("");
-  const [verificationEmail, setVerificationEmail] = useState("");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isResending, setIsResending] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState<AuthApiResult | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [trustDevice, setTrustDevice] = useState(true);
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
-  const adminUrl = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3001", []);
+  const adminUrl = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_URL || "/admin", []);
   const endpoint = useMemo(() => `${apiUrl}/auth/${mode}`, [apiUrl, mode]);
   const hasApiUrl = apiUrl.trim().length > 0;
   const otp = otpDigits.join("");
@@ -110,22 +119,17 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
     const validationMessage = validateAuthForm();
 
     if (validationMessage) {
-      setMessage(validationMessage);
       notify(validationMessage, "error");
       return;
     }
 
     if (!hasApiUrl) {
       const configMessage = getMissingApiUrlMessage();
-      setMessage(configMessage);
       notify(configMessage, "error");
       return;
     }
 
     setIsSubmitting(true);
-    setMessage("");
-    setResendMessage("");
-    setVerificationEmail("");
     setUser(null);
 
     try {
@@ -135,19 +139,24 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
 
       if (!response.ok) {
         if (getAuthErrorCode(result) === "EMAIL_VERIFICATION_REQUIRED") {
-          setVerificationEmail(result.email ?? email);
+          notify(formatAuthError(result), result.verificationEmailSent ? "success" : "info");
+          return;
         }
 
-        setMessage(formatAuthError(result));
         notify(formatAuthError(result), "error");
         setIsSubmitting(false);
         return;
       }
 
+      if (result.twoFactorRequired && result.challengeId) {
+        setTwoFactorChallenge(result);
+        setTwoFactorCode("");
+        notify(result.method === TwoFactorMethod.Email ? "Security code sent to your email." : "Enter the code from your authenticator app.", "info");
+        return;
+      }
+
       if (result.emailVerificationRequired) {
-        setVerificationEmail(result.user?.email ?? email);
-        setMessage(formatAuthError(result));
-        notify("Check your inbox to verify your email.", "success");
+        notify(formatAuthError(result), "success");
         return;
       }
 
@@ -155,7 +164,6 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
         setRegistrationStep("otp");
         setOtpDigits(["", "", "", "", "", ""]);
         lastSubmittedOtpRef.current = "";
-        setMessage(formatAuthError(result));
         notify("Verification code sent.", "success");
         return;
       }
@@ -163,20 +171,16 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
       if (mode === "register" && result.registrationToken) {
         setRegistrationToken(result.registrationToken);
         setRegistrationStep("complete");
-        setMessage(formatAuthError(result));
         notify("Email verified. Complete your account.", "success");
         return;
       }
 
-      if (result.accessToken && result.user) {
-        window.localStorage.setItem("medshift.accessToken", result.accessToken);
+      if (result.user) {
         window.localStorage.setItem("medshift.authUser", JSON.stringify(result.user));
         setUser(result.user);
         if (mode === "login") {
-          setMessage("");
           setIsRedirecting(true);
           const redirectHref = await getPostLoginHref(result.user.role, {
-            accessToken: result.accessToken,
             adminUrl,
             apiUrl
           });
@@ -191,7 +195,6 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
       }
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Check that the API server is running and NEXT_PUBLIC_API_URL is correct.";
-      setMessage(errorMessage);
       notify(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
@@ -199,6 +202,13 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   }
 
   async function submitAuthStep() {
+    if (mode === "login" && twoFactorChallenge?.challengeId) {
+      return fetch(`${apiUrl}/auth/2fa/challenge/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: twoFactorChallenge.challengeId, code: twoFactorCode.trim(), trustDevice })
+      });
+    }
     const normalizedEmail = email.trim().toLowerCase();
 
     if (mode === "login") {
@@ -233,29 +243,25 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   }
 
   async function handleResendVerification() {
-    const targetEmail = (verificationEmail || email).trim().toLowerCase();
+    const targetEmail = email.trim().toLowerCase();
 
     if (!targetEmail || !isValidEmail(targetEmail)) {
-      setResendMessage("Enter a valid email address first.");
       notify("Enter a valid email address first.", "error");
       return;
     }
 
     if (mode === "register" && role === UserRole.Facility && !isFacilityWorkEmail(targetEmail)) {
-      setResendMessage("Use your facility work email address to register a facility account.");
       notify("Use your facility work email address to register a facility account.", "error");
       return;
     }
 
     if (!hasApiUrl) {
       const configMessage = getMissingApiUrlMessage();
-      setResendMessage(configMessage);
       notify(configMessage, "error");
       return;
     }
 
     setIsResending(true);
-    setResendMessage("");
 
     try {
       const response = await fetch(mode === "register" ? `${apiUrl}/auth/register/start` : `${apiUrl}/auth/resend-verification`, {
@@ -265,15 +271,24 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
       });
       const result = await readAuthResponse(response);
 
-      setResendMessage(formatAuthError(result));
       notify(formatAuthError(result), response.ok ? "success" : "error");
     } catch {
       const errorMessage = "Unable to reach the MedShift API. Try again after checking the API server.";
-      setResendMessage(errorMessage);
       notify(errorMessage, "error");
     } finally {
       setIsResending(false);
     }
+  }
+
+  async function resendTwoFactorCode() {
+    if (!twoFactorChallenge?.challengeId) return;
+    setIsResending(true);
+    try {
+      const response = await fetch(`${apiUrl}/auth/2fa/challenge/resend`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ challengeId: twoFactorChallenge.challengeId }) });
+      const result = await readAuthResponse(response);
+      notify(response.ok ? (result.message as string ?? "Security code sent.") : formatAuthError(result), response.ok ? "success" : "error");
+    } catch { notify("Security code could not be resent.", "error"); }
+    finally { setIsResending(false); }
   }
 
   function handleOtpChange(index: number, value: string, target: HTMLInputElement) {
@@ -309,6 +324,10 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
   }
 
   function validateAuthForm() {
+    if (mode === "login" && twoFactorChallenge) {
+      if (useRecoveryCode ? twoFactorCode.trim().length < 8 : !/^\d{6}$/.test(twoFactorCode)) return useRecoveryCode ? "Enter a valid recovery code." : "Enter the six-digit security code.";
+      return "";
+    }
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
@@ -345,8 +364,8 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
         </div>
 
         <div className={styles.heading}>
-          <h1>{isRegistrationSuccess ? "Congratulations" : heading}</h1>
-          <p>{mode === "register" ? getRegistrationStepCopy(registrationStep, email, supportingCopy) : supportingCopy}</p>
+          <h1>{isRegistrationSuccess ? "Congratulations" : twoFactorChallenge ? "Security check" : heading}</h1>
+          <p>{twoFactorChallenge ? (useRecoveryCode ? "Enter one of your unused recovery codes." : twoFactorChallenge.method === TwoFactorMethod.Email ? `Enter the code sent to ${twoFactorChallenge.maskedEmail ?? "your email"}.` : "Open your authenticator app and enter the current code.") : mode === "register" ? getRegistrationStepCopy(registrationStep, email, supportingCopy) : supportingCopy}</p>
         </div>
 
         {isRegistrationSuccess ? (
@@ -377,6 +396,23 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
           </div>
         ) : (
           <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
+            {twoFactorChallenge ? (
+              <>
+                <label>
+                  {useRecoveryCode ? "Recovery code" : "Security code"}
+                  <input autoComplete="one-time-code" autoFocus inputMode={useRecoveryCode ? "text" : "numeric"} maxLength={useRecoveryCode ? 20 : 6} onChange={(event) => setTwoFactorCode(useRecoveryCode ? event.target.value.toUpperCase() : event.target.value.replace(/\D/g, ""))} placeholder={useRecoveryCode ? "XXXX-XXXX" : "000000"} value={twoFactorCode} />
+                </label>
+                <label className={styles.trustDevice}>
+                  <input checked={trustDevice} onChange={(event) => setTrustDevice(event.target.checked)} type="checkbox" />
+                  <span><strong>Trust this device for 30 days</strong><small>Only use this on a personal device.</small></span>
+                </label>
+                <div className={styles.challengeActions}>
+                  {twoFactorChallenge.method === TwoFactorMethod.Email && !useRecoveryCode ? <button onClick={() => void resendTwoFactorCode()} type="button">Resend code</button> : null}
+                  <button onClick={() => { setUseRecoveryCode((current) => !current); setTwoFactorCode(""); }} type="button">{useRecoveryCode ? "Use security code" : "Use a recovery code"}</button>
+                  <button onClick={() => { setTwoFactorChallenge(null); setTwoFactorCode(""); }} type="button">Back to sign in</button>
+                </div>
+              </>
+            ) : null}
             {mode === "register" && registrationStep === "email" ? (
               <fieldset className={styles.accountTypeGroup}>
                 <legend>Account type</legend>
@@ -401,7 +437,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
               </fieldset>
             ) : null}
 
-            {mode === "register" && registrationStep === "otp" ? (
+            {!twoFactorChallenge && mode === "register" && registrationStep === "otp" ? (
               <div className={styles.otpGroup} aria-label="Verification code">
                 {otpDigits.map((digit, index) => (
                   <input
@@ -422,7 +458,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
                   />
                 ))}
               </div>
-            ) : (
+            ) : !twoFactorChallenge ? (
               <label>
                 {mode === "register" && role === UserRole.Facility ? "Work email" : "Email"}
                 <input
@@ -437,9 +473,9 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
                   required
                 />
               </label>
-            )}
+            ) : null}
 
-            {mode === "login" || registrationStep === "complete" ? (
+            {!twoFactorChallenge && (mode === "login" || registrationStep === "complete") ? (
               <label>
                 Password
                 <span className={styles.passwordField}>
@@ -472,7 +508,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
             ) : null}
 
             <button className={styles.submit} type="submit" disabled={isSubmitDisabled || isRedirecting}>
-              {isRedirecting ? "Opening your workspace..." : isSubmitting ? "Working..." : submitText}
+              {isRedirecting ? "Opening your workspace..." : isSubmitting ? "Working..." : twoFactorChallenge ? "Verify and sign in" : submitText}
             </button>
           </form>
         )}
@@ -488,7 +524,6 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
                 setRegistrationStep("email");
                 setOtpDigits(["", "", "", "", "", ""]);
                 lastSubmittedOtpRef.current = "";
-                setMessage("");
               }}
               type="button"
             >
@@ -497,7 +532,7 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
           </div>
         ) : null}
 
-        {!isOtpStep && !isRegistrationSuccess ? (
+        {!twoFactorChallenge && !isOtpStep && !isRegistrationSuccess ? (
           <div className={styles.alternate}>
             {mode === "login" ? (
               <>
@@ -511,17 +546,6 @@ export function AuthForm({ aside, eyebrow, heading, mode, submitLabel, supportin
           </div>
         ) : null}
 
-        {message ? <p className={styles.message}>{message}</p> : null}
-        {verificationEmail ? (
-          <div className={styles.verificationNotice}>
-            <strong>{verificationEmail}</strong>
-            <span>Email verification is required before sign in.</span>
-            <button className={styles.secondaryButton} type="button" onClick={handleResendVerification} disabled={isResending}>
-              {isResending ? "Sending..." : "Resend verification email"}
-            </button>
-            {resendMessage ? <span>{resendMessage}</span> : null}
-          </div>
-        ) : null}
         {user && mode !== "login" && !isRegistrationSuccess ? (
           <div className={styles.summary}>
             <strong>{user.email}</strong>
@@ -632,9 +656,9 @@ function getDashboardHref(role: UserRole, adminUrl: string) {
   return "/worker";
 }
 
-async function getPostLoginHref(role: UserRole, options: { accessToken: string; adminUrl: string; apiUrl: string }) {
+async function getPostLoginHref(role: UserRole, options: { adminUrl: string; apiUrl: string }) {
   if (role === UserRole.Admin) {
-    return withAccessTokenHash(options.adminUrl, options.accessToken);
+    return options.adminUrl;
   }
 
   const dashboardHref = getDashboardHref(role, options.adminUrl);
@@ -642,9 +666,7 @@ async function getPostLoginHref(role: UserRole, options: { accessToken: string; 
   const statusPath = role === UserRole.Facility ? "facility-profiles/onboarding-status" : "worker-profiles/onboarding-status";
 
   try {
-    const response = await fetch(`${options.apiUrl}/${statusPath}`, {
-      headers: { Authorization: `Bearer ${options.accessToken}` }
-    });
+    const response = await fetch(`${options.apiUrl}/${statusPath}`);
 
     if (!response.ok) {
       return onboardingHref;
@@ -655,11 +677,4 @@ async function getPostLoginHref(role: UserRole, options: { accessToken: string; 
   } catch {
     return dashboardHref;
   }
-}
-
-function withAccessTokenHash(href: string, accessToken: string) {
-  const redirectUrl = new URL(href, window.location.origin);
-  redirectUrl.hash = `access_token=${encodeURIComponent(accessToken)}`;
-
-  return redirectUrl.toString();
 }

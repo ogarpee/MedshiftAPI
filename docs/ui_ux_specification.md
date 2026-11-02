@@ -36,7 +36,7 @@ Derived from the MedShift marketing site:
 ### 2.4 Toasts & Action Feedback
 - Use a shared Next.js-compatible toast system, such as `sonner`, `react-hot-toast`, or an equivalent in-house component, for non-blocking action feedback.
 - Every user-triggered action must expose loading, success, and error states. Examples include registration, login, resend verification, forgot password, reset password, profile save, shift post, shift accept, credential approval, review submission, and waitlist signup.
-- Pair toasts with inline form messages when the user must correct input or understand a persistent auth state.
+- Auth surfaces use toasts for transient validation, success, and API error results. Keep only structural step instructions, loading labels, and persistent success/recovery actions in the card.
 - Do not use native `alert()`, `confirm()`, or blocking browser prompts in product workflows.
 - Toasts should use concise text, accessible live-region semantics, and MedShift visual styling aligned with the navy/gold palette.
 
@@ -61,27 +61,28 @@ Derived from the MedShift marketing site:
    - After successful account creation, replace the form with a congratulations message, concise instructions for role-specific verification, and a primary button to continue to profile completion.
    - The completed registration flow sends a welcome email; the on-screen success state should not require the user to wait for email delivery.
 2. **Login With Unverified Email**:
-   - When the API returns a verification-required response, show a clear inline message instead of a generic error.
-   - Provide a resend verification action from the same form state.
+   - After correct credentials, the API automatically requests a new verification email when the 60-second cooldown allows it and continues to block sign-in.
+   - Show the sent/recently-sent result as a toast. Do not add an inline verification notice, email card, or manual resend button to login.
    - Successful sign-in routes workers to the worker dashboard, facilities to the facility dashboard, and admins to the admin dashboard.
    - On the public homepage, signed-in users see a compact profile/avatar menu instead of Login and Join Now. The menu provides dashboard navigation and logout.
 3. **Verification Result Page**:
    - Successful verification confirms the account is verified and provides a primary sign-in action.
    - Expired or invalid links explain the issue and provide a resend verification action.
+   - Verification and resend API results appear as toasts rather than duplicate inline messages.
 4. **Forgot Password**:
    - The login page includes a forgot-password link.
    - The forgot-password page accepts an email address and always shows a generic confirmation after submit to avoid account enumeration.
    - The recovery flow proceeds in three distinct steps: email, OTP, then set password.
    - The OTP step prompts only for the 6-digit code and verifies it with the API before showing password fields.
-   - The confirmation state uses toast and inline feedback to tell the user to check their inbox if the account exists.
+   - The confirmation state uses toast feedback to tell the user to check their inbox if the account exists.
 5. **Reset Password**:
    - Reset recovery uses the same time-limited email OTP pattern as registration rather than a link token.
    - The form requires a new password that satisfies password policy and a matching confirmation field.
    - Successful reset shows a toast, clears the form, and provides a primary sign-in action.
-   - Invalid or expired codes show inline recovery copy and a resend-code action.
+   - Invalid or expired codes show toast feedback while retaining the resend-code action and structural recovery instructions.
 6. **Visual Treatment**:
    - Use the existing auth page split layout, MedShift logo, navy/gold palette, and restrained form states.
-   - Verification messages should be concise, accessible, and placed near the form action that resolves the issue.
+   - Verification toasts should be concise and accessible; recovery actions remain in the relevant form.
    - Password reset messages should avoid revealing whether an email address belongs to an account.
 
 ### 3.2 Healthcare Professional (Worker) Portal
@@ -93,18 +94,32 @@ Derived from the MedShift marketing site:
    - **Header**: User profile summary, current earnings, upcoming shift reminder.
    - **Map/List Toggle**: View available shifts as a list of cards or pins on an interactive Mapbox map when `NEXT_PUBLIC_MAPBOX_TOKEN` or `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is configured, with a coordinate fallback if Mapbox is unavailable.
    - **Shift Card UI**: Displays Facility Name, Role, Date & Time, Location, and Hourly Rate.
+   - **Operational Width**: Find Shifts and Reviews use the full dashboard workspace rather than inheriting the overview sidebar columns. Shift and review records render as full-width desktop rows and stack into compact cards on smaller screens.
+   - **Search and Filters**: Find Shifts uses a full-width search field with a single Filters control. Web opens an accessible popover and Flutter opens a bottom sheet; both provide checked multi-select role, facility, and shift-period groups, compact numeric/sort controls, Apply/Clear actions, removable chips, retained results during refresh, and a 350 ms text-search debounce.
+   - **Mobile Card Rhythm**: Flutter worker screens use consistent 16 px page padding and 12–14 px card gaps. Overview metrics use equal-width responsive columns and primary workflow cards always consume the available width without fixed-width leftovers.
+   - **Shared Onboarding Guidance**: Flutter places the current onboarding status below the app bar across worker tabs other than Profile, with Continue, Update, or Review actions for incomplete, rejected, or pending profiles. Profile uses one clickable status card for every state, including approved, and routes to saved progress or the populated Review step without showing a duplicate banner.
 2. **Shift Details View**:
    - Full-page modal or detailed view.
    - Prominent "Accept Shift" primary button.
    - Includes facility rating and map preview.
-3. **Profile & Credentials**:
-   - Status indicators for credential verification (Pending vs. Verified).
-   - A required onboarding flow captures legal name, professional role, location/radius, availability, credentials, and background-check consent.
+3. **Profile & Documents**:
+   - Status indicators show document verification as Pending, Verified, or Rejected.
+   - A required onboarding flow captures legal name, professional role, location/radius, availability, and private verification documents.
    - Onboarding should use a standalone focused setup layout rather than the shared dashboard shell.
-   - Onboarding uses a step-based workflow with a progress rail, one primary task per step, and a draft-saved state after every step transition.
+   - Onboarding uses a step-based workflow with a progress rail and one primary task per step. Every field, selection, document, and active-step change saves immediately on the device and synchronizes to the authenticated worker's server draft, with visible Saving, Saved, device-only, and retry states.
+   - Save and continue disables during its ordered save, stores the latest snapshot before advancing, and may continue with a Saved on this device state when the network is unavailable. The web progress rail shows concise save state only and never renders raw API/JSON errors or a Retry loading profile action.
+   - Flutter onboarding uses a bounded skeleton during remote hydration, then renders the best available device, draft, or profile state. Optional synchronization failures use concise inline guidance; if an expected canonical profile cannot load, local editing remains available but final submission is disabled.
    - Location/radius steps use an interactive Mapbox map when configured and show editable coordinates beside the map. If `NEXT_PUBLIC_GOOGLE_PLACES_API_KEY` is configured, users can search an address to prefill coordinates and reposition the map pin. If Mapbox or Google Places cannot load, manual coordinate entry must remain available.
-   - Credential upload uses a Cloudinary-backed file picker with upload progress, success/error feedback, and a visible uploaded-document link before submission.
-   - Worker settings in the dashboard shell let authenticated workers update the same setup data after onboarding, including legal name, professional role, matching location/radius, availability, credentials, and background-check consent.
+   - Step 4 is titled Documents and contains upload-only cards for government ID, professional certificate/licence, background-check document, and optional additional documents. It has no credential-type, manual URL, or consent inputs.
+   - Upload cards support PDF/JPG/PNG/WEBP files up to 10 MB, progress, retry, replace, remove, and authorized preview states, with no more than 10 active documents.
+   - The Review step shows complete Identity, Service Area, Availability, and Documents sections. Each section has an Edit action; documents show category, filename, format, size, upload date, verification status, rejection reason, and secure Preview action.
+   - Existing incomplete, pending, rejected, and approved profiles reopen prefilled. When no unfinished draft exists, submitted profiles open directly on Review. Submission actions read Submit for review, Resubmit for review, or Save changes according to profile state.
+   - Final submission is independent of cached profile IDs. If an expected profile cannot be hydrated, the form must show Retry and block blank/default submission. Draft synchronization errors display the API's message and a Retry sync action while preserving device progress; successful retries and final saves remain on the populated Review step.
+   - Worker settings in the dashboard shell expose the same categorized document manager; changing required documents returns approved onboarding to pending review.
+   - Flutter Profile renders canonical identity, service area, availability, documents, and verification status independently of draft synchronization, with skeleton, offline-device, incomplete, error/retry, and loaded states.
+   - Flutter Profile and web worker Settings include independently loaded Notifications and Security sections. Optional notification categories use clear in-app/email switches with optimistic save and rollback; account and security alerts display Always on.
+   - Security settings guide workers through authenticator QR/manual-key setup or email-code setup, show recovery codes once, list trusted devices, and require explicit confirmation credentials for method changes, disabling, and recovery-code regeneration. Flutter presents password, 2FA, recovery-code, device, and session actions in consistent keyboard-safe bottom drawers; one-time recovery codes cannot be dismissed until acknowledged.
+   - Login replaces the password form with a focused second-factor step when required. It supports email resend, recovery-code entry, and a default-selected “Trust this device for 30 days” control without creating a session before verification.
    - The shift board should show an in-content onboarding banner with a Continue onboarding action while the worker profile is still incomplete. Once the worker has completed onboarding and entered review/approval, the banner should not show again.
 
 ### 3.3 Healthcare Facility Portal
@@ -119,6 +134,7 @@ Derived from the MedShift marketing site:
    - 1-click "Publish to Network" action.
 3. **Worker Match View**:
    - When a worker accepts, facility views a concise "Worker Profile Card" (Avatar, Name, Role, Rating).
+   - Worker search, roster, and review routes use the full dashboard workspace; review queues must not remain constrained to an unused half-width insight column.
 4. **Facility Onboarding**:
    - A required onboarding flow captures facility name, care setting, service address/geolocation, primary contact details, and billing/readiness details.
    - Onboarding should use a standalone focused setup layout rather than the shared dashboard shell.

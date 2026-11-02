@@ -125,6 +125,10 @@ export class CreateDisputeDto {
   @IsMongoId()
   reviewId?: string;
 
+  @IsOptional()
+  @IsMongoId()
+  assignmentId?: string;
+
   @IsString()
   reason!: string;
 }

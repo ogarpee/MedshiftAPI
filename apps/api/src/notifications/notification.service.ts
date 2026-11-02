@@ -14,6 +14,7 @@ import {
 } from "@medshift/shared-types";
 import { Notification, NotificationDocument } from "../database/schemas/notification.schema";
 import { WorkerProfile, WorkerProfileDocument } from "../database/schemas/worker-profile.schema";
+import { NotificationPreferencesService } from "./notification-preferences.service";
 
 type EmailPayload = {
   to: string;
@@ -46,7 +47,9 @@ type ContactSyncResult = {
 
 type ShiftEmailPayload = {
   workerEmail?: string;
+  workerUserId?: string | Types.ObjectId;
   facilityEmail?: string;
+  facilityUserId?: string | Types.ObjectId;
   roleRequired: ClinicalRole;
   startTime: Date | string;
   endTime: Date | string;
@@ -144,7 +147,8 @@ export class NotificationService {
   constructor(
     private readonly config: ConfigService,
     @InjectModel(Notification.name) private readonly notifications: Model<NotificationDocument>,
-    @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>
+    @InjectModel(WorkerProfile.name) private readonly workerProfiles: Model<WorkerProfileDocument>,
+    private readonly preferences: NotificationPreferencesService
   ) {}
 
   async listForUser(userId: string, limit = 20) {
@@ -191,6 +195,7 @@ export class NotificationService {
   }
 
   async createInAppNotification(payload: InAppNotificationPayload) {
+    if (!(await this.preferences.permits(payload.userId, payload.type, "inApp"))) return null;
     const notification = await this.notifications.create({
       body: payload.body,
       href: payload.href,
@@ -201,6 +206,33 @@ export class NotificationService {
     });
 
     return this.serializeNotification(notification);
+  }
+
+  async sendTwoFactorCode(email: string, otp: string, expiresInMinutes: number) {
+    return this.sendEmail({
+      to: email,
+      subject: "Your MedShift security code",
+      text: `Your MedShift security code is ${otp}. It expires in ${expiresInMinutes} minutes.`,
+      html: this.renderEmailTemplate({
+        eyebrow: "Two-factor authentication",
+        title: "Confirm it is you",
+        body: ["Enter this code in MedShift to finish the security check.", `This code expires in ${expiresInMinutes} minutes.`],
+        code: otp,
+        footerNote: "Never share this code. MedShift support will not ask for it."
+      })
+    });
+  }
+
+  async sendSecurityAlert(payload: { userId: string | Types.ObjectId; email: string; title: string; body: string }) {
+    await Promise.all([
+      this.createInAppNotification({ userId: payload.userId, type: NotificationType.SecurityAlert, title: payload.title, body: payload.body, href: "/worker/settings" }),
+      this.sendEmail({
+        to: payload.email,
+        subject: payload.title,
+        text: payload.body,
+        html: this.renderEmailTemplate({ eyebrow: "Account security", title: payload.title, body: [payload.body], footerNote: "If you did not make this change, reset your password and contact MedShift support." })
+      })
+    ]);
   }
 
   async notifyMatchingWorkersForShift(payload: MatchingShiftNotificationPayload) {
@@ -256,7 +288,7 @@ export class NotificationService {
     startTime: Date | string;
     workerUserId?: string | Types.ObjectId;
   }) {
-    const notifications: Array<Promise<NotificationSummary>> = [];
+    const notifications: Array<Promise<NotificationSummary | null>> = [];
     const formattedStart = this.formatDate(payload.startTime);
 
     if (payload.facilityUserId) {
@@ -311,7 +343,7 @@ export class NotificationService {
   }
 
   async notifyReviewAvailable(payload: ReviewAvailableNotificationPayload) {
-    const notifications: Array<Promise<NotificationSummary>> = [];
+    const notifications: Array<Promise<NotificationSummary | null>> = [];
     const formattedStart = this.formatDate(payload.startTime);
 
     if (payload.workerUserId) {
@@ -347,7 +379,7 @@ export class NotificationService {
     const audience = role === UserRole.Worker ? "healthcare professional" : "facility partner";
     const nextStep =
       role === UserRole.Worker
-        ? "Complete your worker profile and upload your credentials so MedShift can verify you for live shifts."
+        ? "Complete your worker profile and upload your required documents so MedShift can verify you for live shifts."
         : "Complete your facility profile so MedShift can review your registration before live shift posting is enabled.";
 
     await this.sendEmail({
@@ -536,7 +568,7 @@ export class NotificationService {
     const facilityName = payload.facilityName ?? "your facility";
 
     await Promise.all([
-      payload.workerEmail
+      payload.workerEmail && (!payload.workerUserId || await this.preferences.permits(payload.workerUserId, NotificationType.ShiftAccepted, "email"))
         ? this.sendEmail({
             to: payload.workerEmail,
             subject: "Shift confirmed",
@@ -552,7 +584,7 @@ export class NotificationService {
             })
           })
         : Promise.resolve(),
-      payload.facilityEmail
+      payload.facilityEmail && (!payload.facilityUserId || await this.preferences.permits(payload.facilityUserId, NotificationType.ShiftAccepted, "email"))
         ? this.sendEmail({
             to: payload.facilityEmail,
             subject: "Worker matched for your shift",

@@ -93,12 +93,15 @@ class MyWorkScreen extends ConsumerWidget {
                 )
               else
                 ...state.timesheets.map(
-                  (timesheet) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.receipt_long_outlined),
-                      title: Text(readableEnum(timesheet.status.name)),
-                      subtitle: Text(
-                        '${timesheet.workedMinutes} minutes · shift ${timesheet.shiftId}',
+                  (timesheet) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.receipt_long_outlined),
+                        title: Text(readableEnum(timesheet.status.name)),
+                        subtitle: Text(
+                          '${timesheet.workedMinutes} minutes · shift ${timesheet.shiftId}',
+                        ),
                       ),
                     ),
                   ),

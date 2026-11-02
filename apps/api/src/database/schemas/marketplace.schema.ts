@@ -84,6 +84,12 @@ export class ShiftAssignment {
 
   @Prop({ default: Date.now })
   confirmedAt!: Date;
+
+  @Prop()
+  completedAt?: Date;
+
+  @Prop()
+  cancelledAt?: Date;
 }
 
 @Schema({ _id: false })
@@ -93,6 +99,15 @@ class AttendanceLocation {
 
   @Prop({ type: [Number], required: true })
   coordinates!: [number, number];
+}
+
+@Schema({ _id: false })
+class AttendanceVerification {
+  @Prop({ enum: ["VERIFIED", "OUTSIDE_GEOFENCE", "MISSING"] })
+  status!: "VERIFIED" | "OUTSIDE_GEOFENCE" | "MISSING";
+
+  @Prop({ min: 0 })
+  distanceMeters?: number;
 }
 
 @Schema({ collection: "attendance_events", timestamps: true })
@@ -114,6 +129,9 @@ export class AttendanceEvent {
 
   @Prop({ type: AttendanceLocation })
   location?: AttendanceLocation;
+
+  @Prop({ type: AttendanceVerification })
+  verification?: AttendanceVerification;
 
   @Prop()
   notes?: string;
@@ -172,8 +190,14 @@ export class Dispute {
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "Review" })
   reviewId?: Types.ObjectId;
 
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: "ShiftAssignment" })
+  assignmentId?: Types.ObjectId;
+
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: "User", required: true })
   openedBy!: Types.ObjectId;
+
+  @Prop({ type: [{ type: MongooseSchema.Types.ObjectId, ref: "User" }], default: [] })
+  participantUserIds!: Types.ObjectId[];
 
   @Prop({ enum: DisputeStatus, default: DisputeStatus.Open })
   status!: DisputeStatus;
@@ -219,3 +243,6 @@ ShiftInvitationSchema.index({ shiftId: 1, workerId: 1 }, { unique: true });
 ShiftAssignmentSchema.index({ shiftId: 1, workerId: 1 }, { unique: true });
 TimesheetSchema.index({ shiftId: 1, workerId: 1 }, { unique: true });
 AttendanceEventSchema.index({ location: "2dsphere" });
+AttendanceEventSchema.index({ workerId: 1, shiftId: 1, occurredAt: 1 });
+ShiftAssignmentSchema.index({ workerId: 1, status: 1, confirmedAt: -1 });
+DisputeSchema.index({ participantUserIds: 1, status: 1, createdAt: -1 });

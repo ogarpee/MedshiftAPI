@@ -1,9 +1,34 @@
 "use client";
 
+import { apiFetch as fetch } from "../session-fetch";
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ClinicalRole, GeoPoint, NotificationSummary, OnboardingStatus, ReviewSummary, ShiftMetrics, ShiftStatus, ShiftSummary, WorkerSearchResult } from "@medshift/shared-types";
-import { DashboardShell, StatusBadge } from "@medshift/ui-components";
+import {
+  Button,
+  DashboardShell,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusBadge,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea
+} from "@medshift/ui-components";
 import {
   Calendar,
   ChevronLeft,
@@ -123,7 +148,7 @@ export default function FacilityDashboardPage() {
   const defaultShiftLocation = facilityProfile?.location ?? { type: "Point" as const, coordinates: [-114.0719, 51.0447] as [number, number] };
 
   const loadFacilityDashboard = useCallback(async () => {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setShifts([]);
@@ -183,7 +208,7 @@ export default function FacilityDashboardPage() {
 
   useEffect(() => {
     let socket: Socket | null = null;
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
     const facilityId = facilityProfile?.id ?? onboardingStatus?.profileId;
 
     if (!token || !facilityId) {
@@ -192,7 +217,7 @@ export default function FacilityDashboardPage() {
 
     import("socket.io-client")
       .then(({ io }) => {
-        socket = io(`${apiUrl}/shifts`, { auth: { token }, transports: ["websocket"] });
+        socket = io(`${apiUrl}/shifts`, { auth: { token }, transports: ["websocket"], withCredentials: true });
         socket.on("shift.accepted", (shift: FacilityShiftSummary) => {
           setShifts((current) => current.map((item) => (item.id === shift.id ? { ...item, ...shift } : item)));
           setMessage("A worker accepted one of your shifts. Dashboard updated.");
@@ -209,7 +234,7 @@ export default function FacilityDashboardPage() {
   }, [apiUrl, facilityProfile?.id, loadNotifications, onboardingStatus?.profileId]);
 
   async function searchWorkers() {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setWorkerSearchMessage("Sign in as a facility to search live workers.");
@@ -301,7 +326,7 @@ export default function FacilityDashboardPage() {
       return;
     }
 
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
     const payload = {
       roleRequired,
       startTime: new Date(startTimestamp).toISOString(),
@@ -373,7 +398,7 @@ export default function FacilityDashboardPage() {
   async function submitReview(shift: FacilityShiftSummary) {
     const rating = reviewRatings[shift.id] ?? 5;
     const comment = (reviewComments[shift.id] ?? "").trim();
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a facility to submit worker reviews.");
@@ -432,7 +457,7 @@ export default function FacilityDashboardPage() {
   }
 
   async function updateShiftStatus(shift: FacilityShiftSummary, status: ShiftStatus) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a facility to update shift status.");
@@ -460,7 +485,7 @@ export default function FacilityDashboardPage() {
   }
 
   async function removeShift(shift: FacilityShiftSummary) {
-    const token = window.localStorage.getItem("medshift.accessToken");
+    const token = "cookie-session";
 
     if (!token) {
       setMessage("Sign in as a facility to remove shifts.");
@@ -481,16 +506,12 @@ export default function FacilityDashboardPage() {
     setMessage("Shift could not be removed.");
   }
 
-  function scrollToSection(sectionId: string) {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   return (
     <DashboardShell
       actions={
-        <button className="button-primary" disabled={!approvedForPosting} type="button" onClick={openCreateShiftModal}>
+        <Button className="button-primary" disabled={!approvedForPosting} type="button" onClick={openCreateShiftModal}>
           Post shift
-        </button>
+        </Button>
       }
       className="facility-page"
       eyebrow={<StatusBadge tone="navy">Facility roster</StatusBadge>}
@@ -536,20 +557,20 @@ export default function FacilityDashboardPage() {
               <StatusBadge tone="green">{metrics.activeShifts} active</StatusBadge>
             </div>
             <div className="facility-shift-table-wrap">
-              <table className="facility-shift-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Role</th>
-                    <th scope="col">Window</th>
-                    <th scope="col">Description</th>
-                    <th scope="col">Rate</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="facility-shift-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">Role</TableHead>
+                    <TableHead scope="col">Window</TableHead>
+                    <TableHead scope="col">Description</TableHead>
+                    <TableHead scope="col">Rate</TableHead>
+                    <TableHead scope="col">Status</TableHead>
+                    <TableHead scope="col">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {shifts.map((shift) => (
-                    <tr
+                    <TableRow
                       className={getFacilityShiftRowClass(shift, selectedReviewShiftId)}
                       key={shift.id}
                       onClick={() => {
@@ -558,78 +579,78 @@ export default function FacilityDashboardPage() {
                         }
                       }}
                     >
-                      <td>
+                      <TableCell>
                         <div className="facility-shift-role-cell">
                           <strong>{formatRoleLabel(shift.roleRequired)}</strong>
                           <span>{formatShortDate(shift.startTime)}</span>
                         </div>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="facility-shift-window-cell">
                           <strong>{formatTimeRange(shift.startTime, shift.endTime)}</strong>
                           <span>{calculateFacilityShiftHours(shift)} hr shift</span>
                         </div>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="facility-shift-description-cell">
                           <strong>{shift.description || "No description"}</strong>
                           <span>{shift.matchedWorkerId ? "Worker matched" : "Awaiting match"}</span>
                         </div>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="facility-shift-rate-cell">
                           <strong>${shift.hourlyRate}/hr</strong>
                           <span>${calculateFacilityShiftPay(shift)} est.</span>
                         </div>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <StatusBadge tone={shift.status === ShiftStatus.Open ? "gold" : shift.status === ShiftStatus.Cancelled ? "red" : "green"}>{formatStatusLabel(shift.status)}</StatusBadge>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         <div className="facility-table-actions">
                           {shift.status === ShiftStatus.Matched ? (
-                            <button type="button" onClick={(event) => { event.stopPropagation(); void updateShiftStatus(shift, ShiftStatus.InProgress); }}>
+                            <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void updateShiftStatus(shift, ShiftStatus.InProgress); }}>
                               Start
-                            </button>
+                            </Button>
                           ) : null}
                           {shift.status === ShiftStatus.InProgress ? (
-                            <button type="button" onClick={(event) => { event.stopPropagation(); void updateShiftStatus(shift, ShiftStatus.Completed); }}>
+                            <Button type="button" size="sm" onClick={(event) => { event.stopPropagation(); void updateShiftStatus(shift, ShiftStatus.Completed); }}>
                               Complete
-                            </button>
+                            </Button>
                           ) : null}
                           {shift.status === ShiftStatus.Open || shift.status === ShiftStatus.Matched ? (
-                            <button type="button" onClick={(event) => { event.stopPropagation(); void updateShiftStatus(shift, ShiftStatus.Cancelled); }}>
+                            <Button type="button" size="sm" variant="secondary" onClick={(event) => { event.stopPropagation(); void updateShiftStatus(shift, ShiftStatus.Cancelled); }}>
                               <X aria-hidden="true" /> Cancel
-                            </button>
+                            </Button>
                           ) : null}
                           {shift.status === ShiftStatus.Open ? (
-                            <button type="button" onClick={(event) => { event.stopPropagation(); openEditShiftModal(shift); }}>
+                            <Button type="button" size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); openEditShiftModal(shift); }}>
                               <Pencil aria-hidden="true" /> Edit
-                            </button>
+                            </Button>
                           ) : null}
                           {shift.status === ShiftStatus.Completed ? (
-                            <button disabled={reviewShiftIds.has(shift.id)} type="button" onClick={(event) => { event.stopPropagation(); setSelectedReviewShiftId(shift.id); }}>
+                            <Button disabled={reviewShiftIds.has(shift.id)} type="button" size="sm" onClick={(event) => { event.stopPropagation(); setSelectedReviewShiftId(shift.id); }}>
                               {reviewShiftIds.has(shift.id) ? "Reviewed" : "Review"}
-                            </button>
+                            </Button>
                           ) : null}
                           {shift.status === ShiftStatus.Cancelled ? (
-                            <button className="danger" type="button" onClick={(event) => { event.stopPropagation(); void removeShift(shift); }}>
+                            <Button className="danger" type="button" size="sm" variant="destructive" onClick={(event) => { event.stopPropagation(); void removeShift(shift); }}>
                               <Trash2 aria-hidden="true" /> Remove
-                            </button>
+                            </Button>
                           ) : null}
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
                   {!shifts.length ? (
-                    <tr>
-                      <td className="facility-table-empty" colSpan={6}>
+                    <TableRow>
+                      <TableCell className="facility-table-empty" colSpan={6}>
                         Post your first shift to start building the roster.
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : null}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </section>
           ) : null}
@@ -643,38 +664,47 @@ export default function FacilityDashboardPage() {
                   <h2>Find workers</h2>
                   <p>{workerSearchMessage}</p>
                 </div>
-                <button type="button" onClick={searchWorkers} disabled={isSearchingWorkers}>{isSearchingWorkers ? "Searching..." : "Search"}</button>
+                <Button type="button" onClick={searchWorkers} disabled={isSearchingWorkers}>{isSearchingWorkers ? "Searching..." : "Search"}</Button>
               </div>
               <div className="facility-worker-filter-grid">
-                <label>
+                <Label>
                   Role
-                  <select value={workerFilters.clinicalRole} onChange={(event) => setWorkerFilters((current) => ({ ...current, clinicalRole: event.target.value as WorkerSearchFilters["clinicalRole"] }))}>
-                    <option value="">Any</option>
-                    {Object.values(ClinicalRole).map((role) => <option key={role} value={role}>{role}</option>)}
-                  </select>
-                </label>
-                <label>
+                  <Select value={workerFilters.clinicalRole || "any"} onValueChange={(value) => setWorkerFilters((current) => ({ ...current, clinicalRole: value === "any" ? "" : value as WorkerSearchFilters["clinicalRole"] }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any</SelectItem>
+                      {Object.values(ClinicalRole).map((role) => <SelectItem key={role} value={role}>{role}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Label>
+                <Label>
                   Radius
-                  <input inputMode="numeric" value={workerFilters.radiusKm} onChange={(event) => setWorkerFilters((current) => ({ ...current, radiusKm: event.target.value }))} />
-                </label>
-                <label>
+                  <Input inputMode="numeric" value={workerFilters.radiusKm} onChange={(event) => setWorkerFilters((current) => ({ ...current, radiusKm: event.target.value }))} />
+                </Label>
+                <Label>
                   Day
-                  <select value={workerFilters.availableDay} onChange={(event) => setWorkerFilters((current) => ({ ...current, availableDay: event.target.value }))}>
-                    <option value="">Any day</option>
-                    {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => <option key={day} value={day}>{formatEnumLabel(day)}</option>)}
-                  </select>
-                </label>
-                <label>
+                  <Select value={workerFilters.availableDay || "any"} onValueChange={(value) => setWorkerFilters((current) => ({ ...current, availableDay: value === "any" ? "" : value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any day</SelectItem>
+                      {["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"].map((day) => <SelectItem key={day} value={day}>{formatEnumLabel(day)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Label>
+                <Label>
                   Shift
-                  <select value={workerFilters.shiftType} onChange={(event) => setWorkerFilters((current) => ({ ...current, shiftType: event.target.value }))}>
-                    <option value="">Any shift</option>
-                    {["DAY", "EVENING", "NIGHT", "WEEKEND"].map((type) => <option key={type} value={type}>{formatEnumLabel(type)}</option>)}
-                  </select>
-                </label>
-                <label>
+                  <Select value={workerFilters.shiftType || "any"} onValueChange={(value) => setWorkerFilters((current) => ({ ...current, shiftType: value === "any" ? "" : value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any shift</SelectItem>
+                      {["DAY", "EVENING", "NIGHT", "WEEKEND"].map((type) => <SelectItem key={type} value={type}>{formatEnumLabel(type)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Label>
+                <Label>
                   Min rating
-                  <input inputMode="decimal" value={workerFilters.minRating} onChange={(event) => setWorkerFilters((current) => ({ ...current, minRating: event.target.value }))} placeholder="4.5" />
-                </label>
+                  <Input inputMode="decimal" value={workerFilters.minRating} onChange={(event) => setWorkerFilters((current) => ({ ...current, minRating: event.target.value }))} placeholder="4.5" />
+                </Label>
               </div>
               <div className="facility-worker-results">
                 {workerResults.map((worker) => (
@@ -682,9 +712,9 @@ export default function FacilityDashboardPage() {
                     <div>
                       <strong>{worker.firstName} {worker.lastName}</strong>
                       <span>{worker.title} · {worker.distanceKm ?? "Nearby"} km · {worker.stats.averageRating.toFixed(1)}★</span>
-                      <small>{worker.credentials.verified}/{worker.credentials.total} credentials verified · {worker.stats.totalShiftsCompleted} shifts</small>
+                      <small>{worker.documents.verified}/{worker.documents.total} documents verified · {worker.stats.totalShiftsCompleted} shifts</small>
                     </div>
-                    <button type="button" onClick={() => postShiftForWorker(worker)}>Post matching shift</button>
+                    <Button type="button" size="sm" onClick={() => postShiftForWorker(worker)}>Post matching shift</Button>
                   </article>
                 ))}
                 {!workerResults.length ? <div className="worker-empty-state">No searched workers yet.</div> : null}
@@ -739,7 +769,7 @@ export default function FacilityDashboardPage() {
                   <h2>Worker review queue</h2>
                   <p>Completed matches that need feedback.</p>
                 </div>
-                <button type="button" onClick={() => scrollToSection("facility-shifts")}>Open table</button>
+                <Button asChild variant="outline"><a href="/facility/shifts">Open shift table</a></Button>
               </div>
               <div className="facility-review-list">
                 {reviewCards.map((review) => (
@@ -761,34 +791,30 @@ export default function FacilityDashboardPage() {
         </section>
       </section>
 
-      {isModalOpen ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="post-shift-modal" id="post-shift" role="dialog" aria-modal="true" aria-labelledby="post-shift-title">
-            <div className="modal-heading">
-              <h2 id="post-shift-title">{editingShiftId ? "Edit shift" : "Post a shift"}</h2>
-              <button type="button" onClick={closeShiftModal} aria-label="Close post shift modal">
-                ×
-              </button>
-            </div>
+      <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) closeShiftModal(); }}>
+        <DialogContent className="post-shift-modal" id="post-shift">
+            <DialogHeader>
+              <DialogTitle id="post-shift-title">{editingShiftId ? "Edit shift" : "Post a shift"}</DialogTitle>
+              <DialogDescription>Publish live staffing needs to approved MedShift workers.</DialogDescription>
+            </DialogHeader>
             <form className="post-shift-form" onSubmit={handleSubmit}>
-              <label>
+              <Label>
                 Role
-                <select
-                  aria-label="Clinical role"
-                  name="roleRequired"
-                  required
-                  value={roleRequired}
-                  onChange={(event) => setRoleRequired(event.target.value as ClinicalRole)}
-                >
-                  <option value={ClinicalRole.Hca}>HCA</option>
-                  <option value={ClinicalRole.Rn}>RN</option>
-                  <option value={ClinicalRole.Lpn}>LPN</option>
-                  <option value={ClinicalRole.Psw}>PSW</option>
-                </select>
-              </label>
-              <label>
+                <Select value={roleRequired} onValueChange={(value) => setRoleRequired(value as ClinicalRole)}>
+                  <SelectTrigger aria-label="Clinical role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ClinicalRole.Hca}>HCA</SelectItem>
+                    <SelectItem value={ClinicalRole.Rn}>RN</SelectItem>
+                    <SelectItem value={ClinicalRole.Lpn}>LPN</SelectItem>
+                    <SelectItem value={ClinicalRole.Psw}>PSW</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Label>
+              <Label>
                 Start
-                <input
+                <Input
                   name="startTime"
                   onChange={(event) => setStartTime(event.target.value)}
                   placeholder="Select start date and time"
@@ -796,10 +822,10 @@ export default function FacilityDashboardPage() {
                   type="datetime-local"
                   value={startTime}
                 />
-              </label>
-              <label>
+              </Label>
+              <Label>
                 End
-                <input
+                <Input
                   name="endTime"
                   onChange={(event) => setEndTime(event.target.value)}
                   placeholder="Select end date and time"
@@ -807,10 +833,10 @@ export default function FacilityDashboardPage() {
                   type="datetime-local"
                   value={endTime}
                 />
-              </label>
-              <label>
+              </Label>
+              <Label>
                 Hourly rate
-                <input
+                <Input
                   inputMode="decimal"
                   max="250"
                   min="1"
@@ -822,10 +848,10 @@ export default function FacilityDashboardPage() {
                   type="number"
                   value={hourlyRate}
                 />
-              </label>
-              <label className="wide-field">
+              </Label>
+              <Label className="wide-field">
                 Description
-                <textarea
+                <Textarea
                   maxLength={240}
                   minLength={12}
                   name="description"
@@ -835,25 +861,20 @@ export default function FacilityDashboardPage() {
                   rows={3}
                   value={description}
                 />
-              </label>
-              <button className="auth-submit wide-field" type="submit">{editingShiftId ? "Save changes" : "Publish to network"}</button>
+              </Label>
+              <Button className="auth-submit wide-field" type="submit">{editingShiftId ? "Save changes" : "Publish to network"}</Button>
             </form>
-          </section>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
 
-      {selectedReviewShift ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="post-shift-modal facility-review-modal" role="dialog" aria-modal="true" aria-labelledby="review-shift-title">
-            <div className="modal-heading">
-              <div>
-                <span>Completed shift review</span>
-                <h2 id="review-shift-title">{formatRoleLabel(selectedReviewShift.roleRequired)} · {formatShortDate(selectedReviewShift.startTime)}</h2>
-              </div>
-              <button type="button" onClick={() => setSelectedReviewShiftId("")} aria-label="Close review modal">
-                ×
-              </button>
-            </div>
+      <Dialog open={Boolean(selectedReviewShift)} onOpenChange={(open) => { if (!open) setSelectedReviewShiftId(""); }}>
+        <DialogContent className="post-shift-modal facility-review-modal">
+          {selectedReviewShift ? (
+            <>
+            <DialogHeader>
+              <DialogDescription>Completed shift review</DialogDescription>
+              <DialogTitle id="review-shift-title">{formatRoleLabel(selectedReviewShift.roleRequired)} · {formatShortDate(selectedReviewShift.startTime)}</DialogTitle>
+            </DialogHeader>
             <p>{selectedReviewShift.description || "Add feedback for the matched worker."}</p>
             <form className="review-inline-form facility-review-modal-form" onSubmit={(event) => { event.preventDefault(); void submitReview(selectedReviewShift); }}>
               <div className="star-row" aria-label="Worker rating">
@@ -869,18 +890,19 @@ export default function FacilityDashboardPage() {
                   </button>
                 ))}
               </div>
-              <input
+              <Input
                 maxLength={280}
                 name={`review-${selectedReviewShift.id}`}
                 value={reviewComments[selectedReviewShift.id] ?? ""}
                 onChange={(event) => setReviewComments((current) => ({ ...current, [selectedReviewShift.id]: event.target.value }))}
                 placeholder="Add worker feedback"
               />
-              <button type="submit">Submit review</button>
+              <Button type="submit">Submit review</Button>
             </form>
-          </section>
-        </div>
-      ) : null}
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </DashboardShell>
   );
 }

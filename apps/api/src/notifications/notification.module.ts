@@ -5,6 +5,8 @@ import { DatabaseSchemasModule } from "../database/database-schemas.module";
 import { NotificationController } from "./notification.controller";
 import { NotificationService } from "./notification.service";
 import { NotificationsController } from "./notifications.controller";
+import { NotificationPreferencesController } from "./notification-preferences.controller";
+import { NotificationPreferencesService } from "./notification-preferences.service";
 import { WaitlistService } from "./waitlist.service";
 
 @Module({
@@ -20,8 +22,8 @@ import { WaitlistService } from "./waitlist.service";
       })
     })
   ],
-  controllers: [NotificationController, NotificationsController],
-  providers: [NotificationService, WaitlistService],
-  exports: [NotificationService]
+  controllers: [NotificationController, NotificationsController, NotificationPreferencesController],
+  providers: [NotificationService, NotificationPreferencesService, WaitlistService],
+  exports: [NotificationService, NotificationPreferencesService]
 })
 export class NotificationModule {}

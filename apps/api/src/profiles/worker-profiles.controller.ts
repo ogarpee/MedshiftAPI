@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { UserRole } from "@medshift/shared-types";
 import { AuthRequest } from "../auth/auth-request";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -7,16 +7,21 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import { CreateWorkerProfileDto } from "./dto/create-worker-profile.dto";
 import { UpdateWorkerProfileDto } from "./dto/update-worker-profile.dto";
 import { WorkerProfilesService } from "./worker-profiles.service";
+import { SaveWorkerOnboardingDraftDto } from "./dto/save-worker-onboarding-draft.dto";
+import { WorkerOnboardingDraftsService } from "./worker-onboarding-drafts.service";
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("worker-profiles")
 export class WorkerProfilesController {
-  constructor(private readonly workerProfilesService: WorkerProfilesService) {}
+  constructor(
+    private readonly workerProfilesService: WorkerProfilesService,
+    private readonly workerOnboardingDraftsService: WorkerOnboardingDraftsService
+  ) {}
 
-  @Roles(UserRole.Worker, UserRole.Admin)
+  @Roles(UserRole.Worker)
   @Post()
   create(@Req() request: AuthRequest, @Body() dto: CreateWorkerProfileDto) {
-    return this.workerProfilesService.create(request.user, dto);
+    return this.workerProfilesService.saveMine(request.user, dto);
   }
 
   @Roles(UserRole.Admin)
@@ -35,6 +40,30 @@ export class WorkerProfilesController {
   @Get("onboarding-status")
   getOnboardingStatus(@Req() request: AuthRequest) {
     return this.workerProfilesService.getOnboardingStatus(request.user);
+  }
+
+  @Roles(UserRole.Worker)
+  @Put("me")
+  saveMe(@Req() request: AuthRequest, @Body() dto: CreateWorkerProfileDto) {
+    return this.workerProfilesService.saveMine(request.user, dto);
+  }
+
+  @Roles(UserRole.Worker)
+  @Get("onboarding-draft")
+  getOnboardingDraft(@Req() request: AuthRequest) {
+    return this.workerOnboardingDraftsService.findMine(request.user);
+  }
+
+  @Roles(UserRole.Worker)
+  @Put("onboarding-draft")
+  saveOnboardingDraft(@Req() request: AuthRequest, @Body() dto: SaveWorkerOnboardingDraftDto) {
+    return this.workerOnboardingDraftsService.saveMine(request.user, dto);
+  }
+
+  @Roles(UserRole.Worker)
+  @Delete("onboarding-draft")
+  clearOnboardingDraft(@Req() request: AuthRequest) {
+    return this.workerOnboardingDraftsService.clearMine(request.user);
   }
 
   @Roles(UserRole.Worker, UserRole.Admin)

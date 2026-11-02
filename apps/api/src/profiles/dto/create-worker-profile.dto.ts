@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -12,7 +13,7 @@ import {
   Min,
   ValidateNested
 } from "class-validator";
-import { BackgroundCheckStatus, ClinicalRole } from "@medshift/shared-types";
+import { BackgroundCheckStatus, ClinicalRole, WorkerDocumentCategory } from "@medshift/shared-types";
 import { GeoPointDto } from "./geo-point.dto";
 
 class CredentialDto {
@@ -46,13 +47,47 @@ class CredentialDto {
 }
 
 class WorkerDocumentDto {
-  @IsOptional()
   @IsString()
-  type?: string;
+  id!: string;
+
+  @IsEnum(WorkerDocumentCategory)
+  category!: WorkerDocumentCategory;
 
   @IsOptional()
   @IsString()
   documentUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  cloudinaryPublicId?: string;
+
+  @IsOptional()
+  @IsString()
+  resourceType?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryType?: string;
+
+  @IsOptional()
+  @IsNumber()
+  version?: number;
+
+  @IsOptional()
+  @IsString()
+  format?: string;
+
+  @IsOptional()
+  @IsString()
+  originalFilename?: string;
+
+  @IsOptional()
+  @IsNumber()
+  bytes?: number;
+
+  @IsOptional()
+  @IsDateString()
+  uploadedAt?: string;
 }
 
 class WorkerAvailabilityWindowDto {
@@ -178,6 +213,7 @@ export class CreateWorkerProfileDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(10)
   @ValidateNested({ each: true })
   @Type(() => WorkerDocumentDto)
   documents?: WorkerDocumentDto[];

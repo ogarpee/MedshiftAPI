@@ -1,11 +1,12 @@
 services:
   mongo:
     image: mongo:7
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     restart: unless-stopped
     volumes:
       - medshift_mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }\" | grep 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -18,13 +19,18 @@ services:
     env_file:
       - .env.production
     environment:
-      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/medshift}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/medshift?replicaSet=rs0}
       PORT: 4000
     depends_on:
       mongo:
         condition: service_healthy
     expose:
       - "4000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   web:
     build:
@@ -37,7 +43,6 @@ services:
         NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: ${NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}
         NEXT_PUBLIC_GOOGLE_PLACES_API_KEY: ${NEXT_PUBLIC_GOOGLE_PLACES_API_KEY}
         NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ${NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}
-        NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ${NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET}
     restart: unless-stopped
     depends_on:
       - api
@@ -60,9 +65,12 @@ services:
     image: nginx:1.27-alpine
     restart: unless-stopped
     depends_on:
-      - api
-      - web
-      - admin
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+      admin:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"

@@ -14,7 +14,27 @@ jobs:
   checks:
     name: Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/medshift_ci
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret-ci-only-secret
+      WEB_ORIGIN: http://localhost:3000
+      ADMIN_ORIGIN: http://localhost:3001
+      SOCKET_ORIGINS: http://localhost:3000,http://localhost:3001
+      ALLOW_DEV_OTPS: "true"
+      CLOUDINARY_CLOUD_NAME: medshift-ci
+      CLOUDINARY_API_KEY: ci-cloudinary-key
+      CLOUDINARY_API_SECRET: ci-cloudinary-secret
 
     steps:
       - name: Checkout
@@ -31,6 +51,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -45,6 +71,24 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Seed launch test administrator
+        run: pnpm --filter @medshift/api seed:admin
+
+      - name: Launch MVP API journey
+        run: pnpm test:e2e
+
+      - name: Migration dry run
+        run: |
+          pnpm --filter @medshift/api migrate:launch:dry
+          pnpm --filter @medshift/api migrate:worker-documents:dry
+
+      - name: Flutter checks
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
 
       - name: Validate production compose config
         run: |

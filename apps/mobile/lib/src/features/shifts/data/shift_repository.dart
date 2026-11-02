@@ -20,10 +20,17 @@ class ShiftRepository {
         'longitude': location.longitude,
         'latitude': location.latitude,
         'radiusKm': filters.radiusKm ?? radiusKm,
-        if (filters.roleRequired != null)
-          'roleRequired': clinicalRoleToApi(filters.roleRequired!),
-        if (filters.facilityType != null)
-          'facilityType': facilityTypeToApi(filters.facilityType!),
+        if (filters.search.trim().isNotEmpty) 'search': filters.search.trim(),
+        if (filters.roles.isNotEmpty)
+          'roles': filters.roles.map(clinicalRoleToApi).join(','),
+        if (filters.facilityTypes.isNotEmpty)
+          'facilityTypes': filters.facilityTypes
+              .map(facilityTypeToApi)
+              .join(','),
+        if (filters.shiftTypes.isNotEmpty)
+          'shiftTypes': filters.shiftTypes
+              .map(shiftSearchPeriodToApi)
+              .join(','),
         if (filters.maxShiftHours != null)
           'maxShiftHours': filters.maxShiftHours,
         if (filters.minHourlyRate != null)

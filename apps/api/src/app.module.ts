@@ -13,6 +13,7 @@ import { NotificationModule } from "./notifications/notification.module";
 import { RealtimeModule } from "./realtime/realtime.module";
 import { ReviewsModule } from "./reviews/reviews.module";
 import { ShiftsModule } from "./shifts/shifts.module";
+import { UploadsModule } from "./uploads/uploads.module";
 
 @Module({
   imports: [
@@ -36,7 +37,8 @@ import { ShiftsModule } from "./shifts/shifts.module";
     MatchingModule,
     MarketplaceModule,
     ReviewsModule,
-    ShiftsModule
+    ShiftsModule,
+    UploadsModule
   ],
   controllers: [HealthController]
 })

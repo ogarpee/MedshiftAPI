@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Badge } from "./badge";
 
 interface StatusBadgeProps {
   children: ReactNode;
@@ -6,5 +7,9 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ children, tone = "gold" }: StatusBadgeProps) {
-  return <span className={`status-badge status-badge-${tone}`}>{children}</span>;
+  return (
+    <Badge className={`status-badge status-badge-${tone}`} variant={tone}>
+      {children}
+    </Badge>
+  );
 }
